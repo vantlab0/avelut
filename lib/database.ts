@@ -1,6 +1,5 @@
 /**
  * App-wide database API (Supabase Realtime WebSockets).
- * Also resolved as alias for 'firebase/database' in vite.config.ts.
  */
 export {
   db,

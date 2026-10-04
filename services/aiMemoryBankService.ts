@@ -109,7 +109,7 @@ export async function getAIMemoryBank(userId: string, userProfile?: UserProfile)
     return cached;
   }
 
-  // 2. Fallback to Firebase Realtime DB if available
+  // 2. Fallback to Supabase Realtime DB if available
   try {
     if (uid !== 'anon') {
       const snap = await get(dbRef(db, `ai_memory_banks/${uid}`));

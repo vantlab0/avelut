@@ -1,6 +1,6 @@
 /**
  * Consolidated Pure Supabase Backend API for Avelut.
- * Provides Realtime Database, Authentication, and Storage bridges without any Firebase SDK dependencies.
+ * Provides Realtime Database, Authentication, and Storage.
  */
 
 import { supabaseAuthService } from '../services/supabaseAuthService';
@@ -33,8 +33,6 @@ export type AuthUser = {
   delete?: () => Promise<void>;
 };
 
-// Aliased for seamless migration
-export type FirebaseUser = AuthUser;
 
 const auth = {
   get currentUser(): AuthUser | null {
@@ -90,7 +88,6 @@ const createUserWithEmailAndPassword = async (_a: any, email: string, pass: stri
 const signOut = async (_a?: any) => {
   await supabaseAuthService.signOut();
 };
-const firebaseSignOut = signOut;
 
 const sendPasswordResetEmail = async (_a: any, email: string) => {
   const res = await supabaseAuthService.sendPasswordReset(email);
@@ -115,7 +112,6 @@ const signInAnonymously = async () => {
 };
 
 export type StorageService = { app: { name: string } };
-export type FirebaseStorage = StorageService;
 
 const storage: StorageService = { app: { name: 'supabase-storage' } };
 
@@ -234,7 +230,6 @@ export {
   signInWithPopup,
   sendPasswordResetEmail,
   signOut,
-  firebaseSignOut,
   dbRef as ref,
   dbRef,
   onValue,
@@ -264,5 +259,4 @@ export {
   storageRef,
   httpsCallable,
   type DbRef,
-  type StorageService,
 };

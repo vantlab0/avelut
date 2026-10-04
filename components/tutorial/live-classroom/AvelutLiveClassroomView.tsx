@@ -951,7 +951,7 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
             isRecording={isTalking}
             isTeacherSpeaking={teacherState === 'speaking'}
             onMicClick={handleMicClick}
-            disabled={teacherState === 'connecting'}
+            disabled={teacherState === 'closed' || teacherState === 'error'}
           />
         </footer>
       )}

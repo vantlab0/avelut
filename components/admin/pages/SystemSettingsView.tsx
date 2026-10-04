@@ -431,7 +431,7 @@ export const SystemSettingsView: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Google/Firebase Auth */}
+                        {/* Google Auth */}
                         <div className="space-y-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                             <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                 <i className="bi bi-google text-rose-500"></i> Google Auth & Identity

@@ -643,7 +643,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             if (!window.confirm("Are you sure you want to permanently delete this user? Their data will be removed. This cannot be undone.")) return;
             try {
                 const userRef = dbRef(db, `users/${uid}`);
-                // Note: client-side cannot delete Firebase Auth user. We mark as deleted/remove db node.
+                // Note: client-side cannot delete Auth user directly. We mark as deleted/remove db node.
                 await update(userRef, { status: 'deleted', is_activated: false });
                 addToast("User data marked as deleted.", "success");
                 void fetchUsers();
@@ -2371,7 +2371,7 @@ FORMAT:
                     const file = pdfFiles[index];
                     setAdminUploadProgress({ status: `Uploading ${index + 1}/${pdfFiles.length} to storage...`, percent: 10 + (index * 5) });
 
-                    // 1. Upload to Firebase Storage
+                    // 1. Upload to Supabase Storage
                     const uploadToken = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
                         ? crypto.randomUUID()
                         : `${Date.now()}_${typeof performance !== 'undefined' ? performance.now().toString().replace('.', '_') : '0'}_${index}_${file.lastModified}_${file.size}`;

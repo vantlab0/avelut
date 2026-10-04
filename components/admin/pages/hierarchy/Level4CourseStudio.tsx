@@ -219,7 +219,7 @@ export const Level4CourseStudio: React.FC<Level4CourseStudioProps> = ({
         setExtractionProgress(20);
 
         try {
-            // 1. Upload to Firebase Storage
+            // 1. Upload to Supabase Storage
             const uploadToken = `${Date.now()}_${file.name}`;
             const fRef = storageRef(storage, `syllabi/${deptId}/${courseId}/${uploadToken}`);
             const uploadResult = await uploadBytes(fRef, file);

@@ -43,7 +43,7 @@ export const History: React.FC<HistoryProps> = ({ userProfile }) => {
       }
     }).catch(console.warn);
 
-    // 2. Fetch fresh from network/firebase in background and update inline
+    // 2. Fetch fresh from network/backend in background and update inline
     fetchHistory(userProfile.uid)
       .then((data) => {
         if (data && data.length > 0) {

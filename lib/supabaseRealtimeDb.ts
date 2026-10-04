@@ -1,6 +1,6 @@
 /**
  * Path-style realtime DB API backed by Supabase (Postgres + Realtime WebSockets).
- * Replaces firebase/database for Messenger, notifications, presence, typing.
+ * Used for Messenger, notifications, presence, and typing.
  *
  * Typing uses Realtime broadcast channels (no row writes → lower cost).
  * Messages / chats / notifications use tables + postgres_changes WebSockets.
@@ -309,7 +309,7 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
 
       // Send OneSignal push notification to the recipient
       try {
-        const apiBase = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() 
+        const apiBase = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() 
           ? 'https://www.avelut.xyz' 
           : '';
           

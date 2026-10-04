@@ -1152,7 +1152,8 @@ export const Chat: React.FC<ChatProps> = ({
         });
 
         const conversationsRef = dbRef(db, `chat_conversations/${userProfile.uid}/${currentConvoId}`);
-        await set(conversationsRef, {
+        // Fire-and-forget: do NOT await this — it blocks the AI call by a database roundtrip
+        void set(conversationsRef, {
           title: initialTitle,
           created_at: now,
           last_updated_at: now,
@@ -1300,34 +1301,17 @@ export const Chat: React.FC<ChatProps> = ({
 
       const historyContents = messages
         .filter((m) => (m.text && m.text.trim()) || m.image_url || (m.attachments && m.attachments.length > 0))
-        .slice(-10)
+        // Keep last 6 messages for context — smaller window = faster API calls
+        .slice(-6)
         .map((m) => {
           const parts: any[] = [];
-          if (m.attachments && m.attachments.length > 0) {
-            m.attachments.forEach((att) => {
-              const dataUrlMatch = att.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-              if (dataUrlMatch) {
-                parts.push({
-                  inlineData: {
-                    mimeType: dataUrlMatch[1],
-                    data: dataUrlMatch[2],
-                  },
-                });
-              }
-            });
-          } else if (m.image_url) {
-            const dataUrlMatch = m.image_url.match(/^data:([^;]+);base64,(.+)$/);
-            if (dataUrlMatch) {
-              parts.push({
-                inlineData: {
-                  mimeType: dataUrlMatch[1],
-                  data: dataUrlMatch[2],
-                },
-              });
-            }
-          }
+          // ⚡ SPEED: Strip base64 image data from older history messages to reduce payload size.
+          // We only include image data in the CURRENT user turn (appended below), not in history.
           if (m.text && m.text.trim()) {
             parts.push({ text: m.text });
+          } else if (m.image_url || (m.attachments && m.attachments.length > 0)) {
+            // Placeholder for messages that only had images (keep them in history as text)
+            parts.push({ text: '[Image]' });
           }
           return {
             role: m.sender === 'user' ? 'user' : 'assistant',

@@ -190,7 +190,7 @@ Return only JSON with keys: title, message, version_name.`;
                             <span>Play Store Update Control</span>
                         </h3>
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                            Set the minimum version code in Firebase. The app checks this every time it opens.
+                            Set the minimum version code. The app checks this every time it opens.
                         </p>
                     </div>
                     <button

@@ -175,8 +175,9 @@ class RpmRateLimiter {
   }
 }
 
-// Global rate limiter singleton
-const globalRateLimiter = new RpmRateLimiter(10);
+// Global rate limiter singleton — 60 RPM matches Alibaba DashScope tier limits
+// (the old 10 RPM was artificially throttling chat requests by up to 6 seconds)
+const globalRateLimiter = new RpmRateLimiter(60);
 
 /**
  * Safe helper to extract text from an AI model response.

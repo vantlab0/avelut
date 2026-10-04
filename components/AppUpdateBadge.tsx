@@ -4,8 +4,17 @@ import { useOTAUpdater } from '../hooks/useOTAUpdater';
 export const AppUpdateBadge: React.FC<{ className?: string }> = ({ className = '' }) => {
     const { updateStatus, newVersion, downloadProgress, restartToUpdate } = useOTAUpdater();
 
+    // Always-visible idle state — app is up to date
     if (updateStatus === 'idle') {
-        return null;
+        return (
+            <div
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400 text-xs font-medium select-none ${className}`}
+                title="App is up to date"
+            >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="font-semibold">Up to date</span>
+            </div>
+        );
     }
 
     if (updateStatus === 'checking') {
@@ -43,7 +52,7 @@ export const AppUpdateBadge: React.FC<{ className?: string }> = ({ className = '
             <button
                 type="button"
                 onClick={restartToUpdate}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black dark:bg-white text-white dark:text-black text-xs font-semibold cursor-pointer transition-colors hover:bg-neutral-800 dark:hover:bg-neutral-200 select-none ${className}`}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black dark:bg-white text-white dark:text-black text-xs font-semibold cursor-pointer transition-colors hover:bg-neutral-800 dark:hover:bg-neutral-200 select-none animate-pulse ${className}`}
                 title="Update ready. Tap to restart."
             >
                 <i className="bi bi-arrow-repeat text-xs" />

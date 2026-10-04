@@ -10,5 +10,4 @@ export {
   getDownloadURL,
   deleteObject,
   type StorageService,
-  type FirebaseStorage,
 } from './backend';

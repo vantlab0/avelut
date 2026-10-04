@@ -81,7 +81,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ userProfile }) => {
             snapshot.forEach((child) => {
                 data.push({ user_id: child.key, ...child.val() });
             });
-            // Firebase sorts ascending by child, so we reverse for descending leaderboard
+            // Realtime db sorts ascending by child, so we reverse for descending leaderboard
             const sortedData = data.sort((a, b) => (b.xp || 0) - (a.xp || 0));
             
             writeCachedJson(cacheKey, sortedData);

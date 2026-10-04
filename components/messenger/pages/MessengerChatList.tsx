@@ -7,7 +7,7 @@ import { StreakBadge } from '../../StreakBadge';
 
 export interface MessengerChatListProps {
   userProfile: UserProfile;
-  firebaseUser: any;
+  authUser?: any;
   activeChats: any[];
   chatSearchQuery: string;
   setChatSearchQuery: (query: string) => void;
@@ -29,7 +29,7 @@ export interface MessengerChatListProps {
 }
 
 export const MessengerChatList: React.FC<MessengerChatListProps> = ({
-  userProfile, firebaseUser, activeChats, chatSearchQuery, setChatSearchQuery,
+  userProfile, authUser, activeChats, chatSearchQuery, setChatSearchQuery,
   selectedChatIds, setSelectedChatIds, suppressNextChatOpenRef, chatRowLongPressTimerRef,
   setActiveChat, pinnedChatIds, mutedChatIds, unreadCountsRef, showSelectedMenu,
   setShowSelectedMenu, selectedMenuRef, togglePinChats, toggleMuteChats,

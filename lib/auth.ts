@@ -7,7 +7,6 @@ export {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
-  firebaseSignOut,
   sendPasswordResetEmail,
   updateProfile,
   signInAnonymously,
@@ -15,5 +14,4 @@ export {
   signInWithPopup,
   signInWithCustomToken,
   type AuthUser,
-  type FirebaseUser,
 } from './backend';

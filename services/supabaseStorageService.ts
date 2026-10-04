@@ -1,7 +1,7 @@
 /**
  * supabaseStorageService.ts — Centralized Supabase Storage Service
  *
- * Replaces Firebase Cloud Storage for:
+ * Handles storage for:
  * - Profile Avatars (bucket: 'profile_avatars')
  * - Course Materials & Textbooks (bucket: 'materials')
  * - Visual Solver Solution Shares & Images (bucket: 'solution_shares')

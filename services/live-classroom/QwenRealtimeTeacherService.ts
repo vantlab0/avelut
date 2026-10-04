@@ -584,7 +584,7 @@ export class QwenRealtimeTeacherService {
       Boolean((import.meta as any).env?.DEV);
 
     const DEFAULT_CLOUDFLARE_PROXY =
-      'wss://avelut-realtime-proxy.davidowei984.workers.dev/qwen-realtime';
+      'wss://realtime.avelut.xyz/qwen-realtime';
 
     const DEFAULT_LOCAL_PROXY =
       'ws://localhost:3001/qwen-realtime';

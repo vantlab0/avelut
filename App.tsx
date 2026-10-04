@@ -367,9 +367,31 @@ const App: React.FC = () => {
     useGlobalRefresh();
 
     useEffect(() => {
+        // Initialize OneSignal on BOTH native and web
         if (Capacitor.isNativePlatform()) {
+            // Native: use the Capacitor plugin
             OneSignal.initialize("805fdff6-e515-4ace-ad01-f2dcec4f0a37");
-            OneSignal.Notifications.requestPermission(true);
+            OneSignal.Notifications.requestPermission(true).then((granted: boolean) => {
+                console.log('[OneSignal] Native permission granted:', granted);
+            }).catch((e: any) => console.warn('[OneSignal] Native permission error:', e));
+        } else if (typeof window !== 'undefined') {
+            // Web: use the OneSignal Web SDK loaded asynchronously
+            const initWebOneSignal = async () => {
+                try {
+                    if ((window as any).OneSignal) {
+                        await (window as any).OneSignal.init({
+                            appId: '805fdff6-e515-4ace-ad01-f2dcec4f0a37',
+                            notifyButton: { enable: false },
+                            allowLocalhostAsSecureOrigin: true,
+                        });
+                        (window as any).OneSignal.Slidedown.promptPush();
+                        console.log('[OneSignal] Web SDK initialized');
+                    }
+                } catch (e) {
+                    console.warn('[OneSignal] Web init error:', e);
+                }
+            };
+            initWebOneSignal();
         }
     }, []);
 
@@ -479,7 +501,7 @@ const App: React.FC = () => {
                     timeSpentRef.current = newTimeSpent;
                     xpRef.current = newXp;
 
-                    updateProfile(user, {
+                    update(dbRef(db, `users/${user.uid}`), {
                         time_spent_in_app: newTimeSpent,
                         xp: newXp
                     }).catch(() => {});

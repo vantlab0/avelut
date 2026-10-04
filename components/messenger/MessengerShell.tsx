@@ -26,7 +26,7 @@ import { AvelutMessageInput } from "../messenger/AvelutMessageInput";
 import { ForwardModal } from "../messenger/ForwardModal";
 
 export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: string | null; onNavigate?: (tab: string) => void; setCustomHeaderConfig?: (config: any) => void }> = ({ userProfile, initialChatId = null, onNavigate, setCustomHeaderConfig }) => {
-      const [firebaseUser, setAuthUser] = useState<AuthUser | null>(auth.currentUser);
+      const [authUser, setAuthUser] = useState<AuthUser | null>(auth.currentUser);
       const [activeChat, setActiveChat] = useState<{ chatId: string, otherUser: UserProfile } | null>(null);
       const [chats, setChats] = useState<any[]>(() => ensureArray(readCachedJson<any[]>(getMessengerCacheKey(userProfile.uid, 'chats'), [])));
       const [allUsers, setAllUsers] = useState<UserProfile[]>(() => ensureArray<UserProfile>(readCachedJson<UserProfile[]>(getMessengerCacheKey(userProfile.uid, 'all_users'), [])));
@@ -120,7 +120,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
 
       // Listen to typing status for active chat
       useEffect(() => {
-        if (!activeChat || !firebaseUser) return;
+        if (!activeChat || !authUser) return;
         const typingRef = dbRef(db, `chat_meta_data/${activeChat.chatId}/typing`);
         const unsub = onValue(typingRef, (snap) => {
           if (snap.exists()) {
@@ -134,11 +134,11 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           }
         });
         return () => unsub();
-      }, [activeChat, firebaseUser]);
+      }, [activeChat, authUser]);
 
       const updateTypingStatus = (status: 'typing' | 'recording' | null) => {
-        if (!activeChat || !firebaseUser) return;
-        const typingRef = dbRef(db, `chat_meta_data/${activeChat.chatId}/typing/${firebaseUser.uid}`);
+        if (!activeChat || !authUser) return;
+        const typingRef = dbRef(db, `chat_meta_data/${activeChat.chatId}/typing/${authUser.uid}`);
         if (status) {
           set(typingRef, status).catch(console.error);
         } else {
@@ -179,7 +179,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
       const handleTypingStatus = (status: 'typing' | 'recording' | 'idle') => {
-        if (!firebaseUser || !activeChat) return;
+        if (!authUser || !activeChat) return;
         if (status === 'idle') {
           void updateTypingStatus(null);
           return;
@@ -211,9 +211,9 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const handleBlockUser = async () => {
-        if (!firebaseUser || !activeChat) return;
+        if (!authUser || !activeChat) return;
         try {
-          const dbRefPath = `users/${firebaseUser.uid}/blocked_users/${activeChat.otherUser.uid}`;
+          const dbRefPath = `users/${authUser.uid}/blocked_users/${activeChat.otherUser.uid}`;
           await set(dbRef(db, dbRefPath), true);
           addToast("User has been blocked.", "success");
           setShowUserOptions(false);
@@ -224,13 +224,13 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const handleReportSubmit = async () => {
-        if (!firebaseUser || !activeChat) return;
+        if (!authUser || !activeChat) return;
         try {
           const reportId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
           const reportRef = dbRef(db, `reports/${reportId}`);
           await set(reportRef, {
             id: reportId,
-            reporter_uid: firebaseUser.uid,
+            reporter_uid: authUser.uid,
             reported_uid: activeChat.otherUser.uid,
             chat_id: activeChat.chatId,
             reason: reportReason,
@@ -304,7 +304,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
 
       // Fetch all users for discovery search
       useEffect(() => {
-        if (!firebaseUser) return;
+        if (!authUser) return;
         const usersRef = dbRef(db, 'users');
         const unsub = onValue(usersRef, (snapshot) => {
           if (snapshot.exists()) {
@@ -327,7 +327,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           }
         });
         return () => unsub();
-      }, [firebaseUser]);
+      }, [authUser]);
 
       const safeChats = useMemo(() => ensureArray(chats), [chats]);
       const safeAllUsers = useMemo(() => ensureArray<UserProfile>(allUsers), [allUsers]);
@@ -395,10 +395,10 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         if (!findFriendsSearchQuery.trim()) return [];
         const q = findFriendsSearchQuery.toLowerCase();
         return safeAllUsers.filter(u =>
-          u.uid !== firebaseUser?.uid &&
+          u.uid !== authUser?.uid &&
           ((u?.display_name || '').toLowerCase().includes(q) || (u?.department_id || '').toLowerCase().includes(q))
         );
-      }, [safeAllUsers, firebaseUser?.uid, findFriendsSearchQuery]);
+      }, [safeAllUsers, authUser?.uid, findFriendsSearchQuery]);
 
       const pendingIncomingCount = incomingUsersList.length;
       const pendingSentCount = sentUsersList.length;
@@ -419,7 +419,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       const selectedChatUser = activeChat?.otherUser || createFallbackChatUser(activeChat?.chatId || '');
 
       const openChatWithUser = useCallback(async (otherUser: UserProfile) => {
-        if (!firebaseUser || !otherUser?.uid) return;
+        if (!authUser || !otherUser?.uid) return;
 
         try {
           const chatId = await ensureDirectChat(otherUser.uid);
@@ -429,7 +429,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           const errMsg = error?.message || 'Could not open this chat.';
           addToast(errMsg, 'error');
         }
-      }, [addToast, firebaseUser]);
+      }, [addToast, authUser]);
 
       useEffect(() => {
         const unsub = onAuthStateChanged(auth, user => {
@@ -440,8 +440,8 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       }, []);
 
       useEffect(() => {
-        if (!firebaseUser) return;
-        const partnersRef = dbRef(db, `study_partners/${firebaseUser.uid}`);
+        if (!authUser) return;
+        const partnersRef = dbRef(db, `study_partners/${authUser.uid}`);
         const unsubscribePartners = onValue(partnersRef, async (snap) => {
           const data = snap.val() || {};
           setStudyPartners(data);
@@ -454,7 +454,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           }
         });
 
-        const requestsRef = dbRef(db, `partner_requests/${firebaseUser.uid}`);
+        const requestsRef = dbRef(db, `partner_requests/${authUser.uid}`);
         const unsubscribeRequests = onValue(requestsRef, (snap) => {
           setPartnerRequests(snap.val() || {});
         });
@@ -463,7 +463,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           off(partnersRef, 'value', unsubscribePartners);
           off(requestsRef, 'value', unsubscribeRequests);
         };
-      }, [firebaseUser]);
+      }, [authUser]);
 
       useEffect(() => {
         const handleVisibilityChange = () => setIsAppActive(document.visibilityState === 'visible');
@@ -482,9 +482,9 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       }, []);
 
       useEffect(() => {
-        if (!firebaseUser) return;
+        if (!authUser) return;
 
-        const presenceRef = dbRef(db, `users/${firebaseUser.uid}`);
+        const presenceRef = dbRef(db, `users/${authUser.uid}`);
         const connectedRef = dbRef(db, '.info/connected');
         let activeConnection = false;
 
@@ -519,11 +519,11 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           off(connectedRef, 'value', unsubscribeConnected);
           syncPresence(false);
         };
-      }, [firebaseUser, isAppActive]);
+      }, [authUser, isAppActive]);
 
       useEffect(() => {
-        if (!firebaseUser) return;
-        const userChatsRef = dbRef(db, `user_chats/${firebaseUser.uid}`);
+        if (!authUser) return;
+        const userChatsRef = dbRef(db, `user_chats/${authUser.uid}`);
         const unsubscribeChats = onValue(userChatsRef, (snap) => {
           const rawVal = snap.val() || {};
           setChats(prevChats => {
@@ -556,7 +556,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
               if (
                 hasIncomingUnread &&
                 lastSenderId &&
-                lastSenderId !== firebaseUser.uid &&
+                lastSenderId !== authUser.uid &&
                 lastMessageTimestamp > lastNotifiedTimestamp
               ) {
                 lastNotificationTimestampRef.current[chat.id] = lastMessageTimestamp;
@@ -572,27 +572,27 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         });
         return unsubscribeChats;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [firebaseUser]);
+      }, [authUser]);
 
       useEffect(() => {
-        if (!firebaseUser) return;
+        if (!authUser) return;
         writeCachedJson(getMessengerCacheKey(userProfile.uid, 'chats'), safeChats);
-      }, [safeChats, firebaseUser, userProfile.uid]);
+      }, [safeChats, authUser, userProfile.uid]);
 
       useEffect(() => {
-        if (!firebaseUser || !safeAllUsers.length) return;
+        if (!authUser || !safeAllUsers.length) return;
         writeCachedJson(getMessengerCacheKey(userProfile.uid, 'all_users'), safeAllUsers);
-      }, [safeAllUsers, firebaseUser, userProfile.uid]);
+      }, [safeAllUsers, authUser, userProfile.uid]);
 
       useEffect(() => {
-        if (!firebaseUser) return;
+        if (!authUser) return;
         writeCachedJson(getMessengerCacheKey(userProfile.uid, 'study_partners'), safeStudyPartners);
-      }, [safeStudyPartners, firebaseUser, userProfile.uid]);
+      }, [safeStudyPartners, authUser, userProfile.uid]);
 
       useEffect(() => {
-        if (!firebaseUser) return;
+        if (!authUser) return;
         writeCachedJson(getMessengerCacheKey(userProfile.uid, 'partner_requests'), safePartnerRequests);
-      }, [safePartnerRequests, firebaseUser, userProfile.uid]);
+      }, [safePartnerRequests, authUser, userProfile.uid]);
 
       const pendingFetches = useRef<Set<string>>(new Set());
 
@@ -638,7 +638,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       }, [safeChats, userMap, fetchedUserProfiles, userProfile.uid]);
 
       useEffect(() => {
-        if (!initialChatId || !firebaseUser) return;
+        if (!initialChatId || !authUser) return;
         const nextChat = safeChats.find(chat => chat?.id === initialChatId);
         if (nextChat) {
           const resolvedUser = userMap.get(nextChat.otherUserId) || fetchedUserProfiles[nextChat.otherUserId] || nextChat.otherUser;
@@ -660,7 +660,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
               addToast(error?.message || 'Could not open this chat.', 'error');
             });
         }
-      }, [initialChatId, safeChats, activeChat, userMap, fetchedUserProfiles, firebaseUser, addToast]);
+      }, [initialChatId, safeChats, activeChat, userMap, fetchedUserProfiles, authUser, addToast]);
 
       useEffect(() => {
         if (!activeChat) {
@@ -683,7 +683,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
             if (safePrev.length > 0) {
               const lastPrev = safePrev[safePrev.length - 1];
               const lastNew = cloudMsgs[cloudMsgs.length - 1];
-              if (lastNew && lastNew.id !== lastPrev.id && lastNew.senderId !== firebaseUser?.uid && lastNew.timestamp > lastPrev.timestamp) {
+              if (lastNew && lastNew.id !== lastPrev.id && lastNew.senderId !== authUser?.uid && lastNew.timestamp > lastPrev.timestamp) {
                 playReceiveSound();
               }
             }
@@ -693,18 +693,18 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           setOptimisticMessages(prev => ensureArray(prev).filter(opt => !cloudMsgs.some(cloud => cloud.id === opt.id)));
 
           setTimeout(() => scrollToBottom(cached.length === 0 ? ('instant' as ScrollBehavior) : 'smooth'), 40);
-          if (firebaseUser) {
-            void set(dbRef(db, `user_chats/${firebaseUser.uid}/${activeChat.chatId}/unreadCount`), 0)
+          if (authUser) {
+            void set(dbRef(db, `user_chats/${authUser.uid}/${activeChat.chatId}/unreadCount`), 0)
               .catch(console.error);
           }
         });
         return unsubscribeMessages;
-      }, [activeChat, firebaseUser, userProfile.uid, scrollToBottom]);
+      }, [activeChat, authUser, userProfile.uid, scrollToBottom]);
 
       useEffect(() => {
-        if (!firebaseUser || !activeChat) return;
+        if (!authUser || !activeChat) return;
         writeCachedJson(getMessengerCacheKey(userProfile.uid, `messages_${activeChat.chatId}`), ensureArray(messages));
-      }, [activeChat, firebaseUser, messages, userProfile.uid]);
+      }, [activeChat, authUser, messages, userProfile.uid]);
 
       const combinedMessageStream = useMemo(() => {
         const msgs = ensureArray(messages);
@@ -713,11 +713,11 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       }, [messages, optimisticMessages]);
 
       const handleDeleteChatThread = async (chat: any) => {
-        if (!firebaseUser || !chat?.id || !chat?.otherUserId) return;
+        if (!authUser || !chat?.id || !chat?.otherUserId) return;
         const confirmed = window.confirm(`Delete this chat with ${chat.otherUser?.display_name || 'this user'}?`);
         if (!confirmed) return;
         try {
-          await remove(dbRef(db, `user_chats/${firebaseUser.uid}/${chat.id}`));
+          await remove(dbRef(db, `user_chats/${authUser.uid}/${chat.id}`));
           if (activeChat?.chatId === chat.id) {
             setActiveChat(null);
             setMessages([]);
@@ -791,7 +791,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
 
       const handleDeleteMessageAction = (forEveryone = true) => {
         const target = deleteConfirmTarget || messageActionTarget;
-        if (!target || !activeChat || !firebaseUser) return;
+        if (!target || !activeChat || !authUser) return;
 
         setDeleteConfirmTarget(null);
         closeMessageActions();
@@ -818,10 +818,10 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const reactToMessage = async (emoji: string) => {
-        if (!messageActionTarget || !activeChat || !firebaseUser) return;
+        if (!messageActionTarget || !activeChat || !authUser) return;
         try {
-          const reactionPath = dbRef(db, `messages/${activeChat.chatId}/${messageActionTarget.id}/reactions/${firebaseUser.uid}`);
-          const currentReaction = messageActionTarget.reactions?.[firebaseUser.uid];
+          const reactionPath = dbRef(db, `messages/${activeChat.chatId}/${messageActionTarget.id}/reactions/${authUser.uid}`);
+          const currentReaction = messageActionTarget.reactions?.[authUser.uid];
           if (currentReaction === emoji) {
             await remove(reactionPath);
           } else {
@@ -836,12 +836,12 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const quickReactToMessage = async (msg: any, emoji: string) => {
-        if (!activeChat || !firebaseUser || !msg?.id || msg?.isUploading) return;
+        if (!activeChat || !authUser || !msg?.id || msg?.isUploading) return;
         try {
           const existingReactions = (msg.reactions && typeof msg.reactions === 'object') ?
             msg.reactions as Record<string, string> : {};
-          const reactionPath = dbRef(db, `messages/${activeChat.chatId}/${msg.id}/reactions/${firebaseUser.uid}`);
-          if (existingReactions[firebaseUser.uid] === emoji) {
+          const reactionPath = dbRef(db, `messages/${activeChat.chatId}/${msg.id}/reactions/${authUser.uid}`);
+          if (existingReactions[authUser.uid] === emoji) {
             await remove(reactionPath);
             addToast('Reaction removed.', 'info');
           } else {
@@ -867,7 +867,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
        * Unified media-send pipeline:
        *   1. Convert ANY source (File / Blob / data: / blob: / http(s): / Capacitor content:// or file://)
        *      into a real Blob BEFORE anything else - a raw content:// or file:// URI is never
-       *      handed to Firebase Storage.
+       *      handed to Supabase Storage.
        *   2. Show a local "Sending..." bubble (Blob is retained on the bubble for retry).
        *   3. Upload with retries + hard timeout, then require a permanent http(s) download URL.
        *   4. For images, verify the returned URL actually loads before marking the message sent.
@@ -879,7 +879,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         caption: string,
         opts: { preConfigureType?: 'image' | 'file'; fileName?: string } = {}
       ) => {
-        if (!activeChat || !firebaseUser) return;
+        if (!activeChat || !authUser) return;
 
         let sourceBlob: SourceBlob;
         try {
@@ -941,7 +941,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
 
         const pendingMessage: any = {
           id: tempId,
-          senderId: firebaseUser.uid,
+          senderId: authUser.uid,
           text: pendingText,
           type: fileType,
           timestamp: localTimestamp,
@@ -976,7 +976,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                 burnAfterDownload: true,
                 fileName,
                 contentType: rawMime || undefined,
-                userId: firebaseUser.uid,
+                userId: authUser.uid,
               });
               if (r2Res.success && r2Res.url) {
                 permanentUrl = r2Res.url;
@@ -986,7 +986,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
             }
           }
 
-          // 2. Resilient fallback to Firebase / Supabase Storage
+          // 2. Resilient fallback to Supabase Storage
           if (!permanentUrl) {
             permanentUrl = await uploadBlobWithRetry(
               storage,
@@ -1019,7 +1019,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const handleFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!activeChat || !e.target.files || e.target.files.length === 0 || !firebaseUser) return;
+        if (!activeChat || !e.target.files || e.target.files.length === 0 || !authUser) return;
         const selectedFiles = Array.from(e.target.files);
         for (const file of selectedFiles) {
           await uploadAndSendMedia(file as File, '');
@@ -1028,13 +1028,13 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const handleImageSendWithCaption = async (source: any, caption: string = '', mimeType?: string) => {
-        if (!activeChat || !firebaseUser) return;
+        if (!activeChat || !authUser) return;
         void mimeType;
         await uploadAndSendMedia(source, caption || '', { preConfigureType: 'image' });
       };
 
       const retryFailedUpload = async (msg: any) => {
-        if (!activeChat || !firebaseUser || !msg?.blob || msg?.type === undefined) return;
+        if (!activeChat || !authUser || !msg?.blob || msg?.type === undefined) return;
         const tempId = msg.id;
         let localPreviewUrl = msg.localPreviewUrl;
         if (!localPreviewUrl && msg.blob) {
@@ -1101,7 +1101,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           (recorder as any).shouldSave = true;
 
           recorder.onstop = async () => {
-            if ((recorder as any).shouldSave && firebaseUser) {
+            if ((recorder as any).shouldSave && authUser) {
               const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
               if (blob.size > 1000) {
                 const localTimestamp = Date.now();
@@ -1110,7 +1110,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
 
                 const pendingMessage: any = {
                   id: tempId,
-                  senderId: firebaseUser.uid,
+                  senderId: authUser.uid,
                   text: `[Voice Note](${blobLocalUrl})`,
                   type: 'voice',
                   timestamp: localTimestamp,
@@ -1176,7 +1176,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const sendMsg = async (text: string, type = 'text', extraData: Record<string, any> = {}) => {
-        if ((!text.trim() && type === 'text') || !activeChat || !firebaseUser) {
+        if ((!text.trim() && type === 'text') || !activeChat || !authUser) {
           addToast('Open a chat first, then send a message.', 'info');
           return;
         }
@@ -1191,14 +1191,14 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           const msgRef = push(dbRef(db, `messages/${chatId}`));
           const clientTimestamp = Date.now();
           optimisticId = msgRef.key || `${clientTimestamp}`;
-          const data: any = { senderId: firebaseUser.uid, text, type, timestamp: serverTimestamp(), ...extraData };
+          const data: any = { senderId: authUser.uid, text, type, timestamp: serverTimestamp(), ...extraData };
 
           if (replyingTo) {
             data.replyTo = {
               id: replyingTo.id,
               text: replyingTo.type === 'text' ? replyingTo.text : `[${replyingTo.type}]`,
               senderId: replyingTo.senderId,
-              senderName: replyingTo.senderId === firebaseUser.uid ? 'You' : activeChat.otherUser.display_name
+              senderName: replyingTo.senderId === authUser.uid ? 'You' : activeChat.otherUser.display_name
             };
             setReplyingTo(null);
           }
@@ -1216,23 +1216,23 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const sendPartnerRequest = async (targetUser: UserProfile) => {
-        if (!firebaseUser || !userProfile) return;
+        if (!authUser || !userProfile) return;
         try {
-          const myRequestRef = dbRef(db, `partner_requests/${firebaseUser.uid}/${targetUser.uid}`);
-          const theirRequestRef = dbRef(db, `partner_requests/${targetUser.uid}/${firebaseUser.uid}`);
+          const myRequestRef = dbRef(db, `partner_requests/${authUser.uid}/${targetUser.uid}`);
+          const theirRequestRef = dbRef(db, `partner_requests/${targetUser.uid}/${authUser.uid}`);
 
           const now = Date.now();
           await set(myRequestRef, {
             status: 'sent',
             senderName: userProfile.display_name || 'User',
-            senderId: firebaseUser.uid,
+            senderId: authUser.uid,
             receiverId: targetUser.uid,
             timestamp: now
           });
           await set(theirRequestRef, {
             status: 'received',
             senderName: userProfile.display_name || 'User',
-            senderId: firebaseUser.uid,
+            senderId: authUser.uid,
             receiverId: targetUser.uid,
             timestamp: now
           });
@@ -1254,15 +1254,15 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const acceptPartnerRequest = async (targetUser: UserProfile) => {
-        if (!firebaseUser || !userProfile) return;
+        if (!authUser || !userProfile) return;
         try {
-          const myRequestRef = dbRef(db, `partner_requests/${firebaseUser.uid}/${targetUser.uid}`);
-          const theirRequestRef = dbRef(db, `partner_requests/${targetUser.uid}/${firebaseUser.uid}`);
+          const myRequestRef = dbRef(db, `partner_requests/${authUser.uid}/${targetUser.uid}`);
+          const theirRequestRef = dbRef(db, `partner_requests/${targetUser.uid}/${authUser.uid}`);
           await remove(myRequestRef);
           await remove(theirRequestRef);
 
-          const myPartnerRef = dbRef(db, `study_partners/${firebaseUser.uid}/${targetUser.uid}`);
-          const theirPartnerRef = dbRef(db, `study_partners/${targetUser.uid}/${firebaseUser.uid}`);
+          const myPartnerRef = dbRef(db, `study_partners/${authUser.uid}/${targetUser.uid}`);
+          const theirPartnerRef = dbRef(db, `study_partners/${targetUser.uid}/${authUser.uid}`);
           await set(myPartnerRef, true);
           await set(theirPartnerRef, true);
 
@@ -1283,10 +1283,10 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const declinePartnerRequest = async (targetUser: UserProfile) => {
-        if (!firebaseUser) return;
+        if (!authUser) return;
         try {
-          const myRequestRef = dbRef(db, `partner_requests/${firebaseUser.uid}/${targetUser.uid}`);
-          const theirRequestRef = dbRef(db, `partner_requests/${targetUser.uid}/${firebaseUser.uid}`);
+          const myRequestRef = dbRef(db, `partner_requests/${authUser.uid}/${targetUser.uid}`);
+          const theirRequestRef = dbRef(db, `partner_requests/${targetUser.uid}/${authUser.uid}`);
           await remove(myRequestRef);
           await remove(theirRequestRef);
           addToast(`Declined request from ${targetUser.display_name}`, 'info');
@@ -1296,10 +1296,10 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const cancelPartnerRequest = async (targetUser: UserProfile) => {
-        if (!firebaseUser) return;
+        if (!authUser) return;
         try {
-          const myRequestRef = dbRef(db, `partner_requests/${firebaseUser.uid}/${targetUser.uid}`);
-          const theirRequestRef = dbRef(db, `partner_requests/${targetUser.uid}/${firebaseUser.uid}`);
+          const myRequestRef = dbRef(db, `partner_requests/${authUser.uid}/${targetUser.uid}`);
+          const theirRequestRef = dbRef(db, `partner_requests/${targetUser.uid}/${authUser.uid}`);
           await remove(myRequestRef);
           await remove(theirRequestRef);
           addToast(`Cancelled request to ${targetUser.display_name}`, 'info');
@@ -1309,13 +1309,13 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       };
 
       const forwardMessageToUsers = async (text: string, type = 'text', recipientUserIds: string[]) => {
-        if (!firebaseUser) return;
+        if (!authUser) return;
         try {
           for (const recipientId of recipientUserIds) {
             const chatId = await ensureDirectChat(recipientId);
             const msgRef = push(dbRef(db, `messages/${chatId}`));
             await set(msgRef, {
-              senderId: firebaseUser.uid,
+              senderId: authUser.uid,
               text,
               type,
               timestamp: serverTimestamp(),
@@ -1433,10 +1433,10 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                       <button
                         type="button"
                         onClick={() => {
-                          if (firebaseUser) {
+                          if (authUser) {
                             const updates: Record<string, any> = {};
                             selectedChatIds.forEach(id => {
-                              updates[`user_chats/${firebaseUser.uid}/${id}/unreadCount`] = 1;
+                              updates[`user_chats/${authUser.uid}/${id}/unreadCount`] = 1;
                             });
                             update(dbRef(db), updates).catch(console.error);
                           }
@@ -1451,11 +1451,11 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                       <button
                         type="button"
                         onClick={async () => {
-                          if (firebaseUser) {
+                          if (authUser) {
                             for (const chatId of selectedChatIds) {
                               const chat = chats.find(c => c.id === chatId);
                               if (chat?.otherUser?.uid) {
-                                await set(dbRef(db, `users/${firebaseUser.uid}/blocked_users/${chat.otherUser.uid}`), true);
+                                await set(dbRef(db, `users/${authUser.uid}/blocked_users/${chat.otherUser.uid}`), true);
                               }
                             }
                             addToast('User blocked.', 'success');
@@ -1936,7 +1936,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1 min-w-0">
-                          {c.last_message?.senderId === firebaseUser?.uid && (
+                          {c.last_message?.senderId === authUser?.uid && (
                             <DoubleCheckIcon color={c.last_message?.isRead ? "#3B82F6" : "#8696a0"} />
                           )}
 
@@ -2000,7 +2000,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                       </p>
                     </div>
                   ) : combinedMessageStream.map((msg) => {
-                    const isMe = msg.senderId === firebaseUser?.uid;
+                    const isMe = msg.senderId === authUser?.uid;
                     const rawText = typeof msg.text === 'string' ? msg.text : '';
                     let imageUrl = '';
                     if (msg.type === 'image') {
@@ -2240,7 +2240,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                   {replyingTo && (
                     <div className="flex items-center justify-between mb-2 p-2 bg-neutral-100 dark:bg-[#111111] rounded-lg border-l-4 border-[#3B82F6]">
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#3B82F6] dark:text-white">Replying to {replyingTo.senderId === firebaseUser?.uid ? 'You' : activeChat.otherUser.display_name}</p>
+                        <p className="text-xs font-bold text-[#3B82F6] dark:text-white">Replying to {replyingTo.senderId === authUser?.uid ? 'You' : activeChat.otherUser.display_name}</p>
                         <p className="text-xs text-neutral-600 dark:text-[#A3A3A3] truncate max-w-[200px] sm:max-w-[300px]">
                           {replyingTo.type === 'text' ? replyingTo.text : `[${replyingTo.type}]`}
                         </p>
@@ -2254,7 +2254,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                     <div className="p-3 text-center text-sm font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl">
                       {isBlocked ? "You have blocked this user." : "This user is unavailable."}
                     </div>
-                  ) : studyPartners[selectedChatUser.uid] === true || selectedChatUser.uid === firebaseUser?.uid ? (
+                  ) : studyPartners[selectedChatUser.uid] === true || selectedChatUser.uid === authUser?.uid ? (
                     <AvelutMessageInput
                       inputRef={textInputRef}
                       onSend={(text) => sendMsg(text, 'text')}
@@ -2347,7 +2347,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
 
                       {/* Targeted Message Highlight Preview */}
                       {(() => {
-                        const isMe = messageActionTarget.senderId === firebaseUser?.uid;
+                        const isMe = messageActionTarget.senderId === authUser?.uid;
                         const rawText = typeof messageActionTarget.text === 'string' ? messageActionTarget.text : '';
                         let imageUrl = '';
                         if (messageActionTarget.type === 'image') {
@@ -2467,7 +2467,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                           <i className="bi bi-share-fill text-base text-slate-500 dark:text-[#A3A3A3]"></i>
                         </button>
 
-                        {messageActionTarget.senderId === firebaseUser?.uid && (
+                        {messageActionTarget.senderId === authUser?.uid && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -2525,11 +2525,11 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                   <button
                     type="button"
                     onClick={async () => {
-                      if (!firebaseUser) return;
+                      if (!authUser) return;
                       try {
                         await Promise.all(
                           selectedChatIds.map((chatId) =>
-                            remove(dbRef(db, `user_chats/${firebaseUser.uid}/${chatId}`))
+                            remove(dbRef(db, `user_chats/${authUser.uid}/${chatId}`))
                           )
                         );
                         if (activeChat && selectedChatIds.includes(activeChat.chatId)) {
@@ -2570,7 +2570,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                 </h3>
 
                 <div className="flex flex-col items-end gap-3.5 mt-2">
-                  {deleteConfirmTarget.senderId === firebaseUser?.uid && (
+                  {deleteConfirmTarget.senderId === authUser?.uid && (
                     <button
                       type="button"
                       onClick={() => handleDeleteMessageAction(true)}

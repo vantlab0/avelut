@@ -134,7 +134,7 @@ export const PaymentsAndUsageView: React.FC<PaymentsAndUsageViewProps> = ({
     void fetchSupabaseUsage();
   }, [fetchSupabaseUsage]);
 
-  // Merge legacy Firebase-style logs with Supabase rows
+  // Merge cached logs with Supabase rows
   const allUsage: NormalizedUsageRow[] = useMemo(() => {
     const fromProps = (propsAiLogs || []).map(normalizeUsageRow);
     const map = new Map<string, NormalizedUsageRow>();
