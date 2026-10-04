@@ -4,17 +4,9 @@ import { useOTAUpdater } from '../hooks/useOTAUpdater';
 export const AppUpdateBadge: React.FC<{ className?: string }> = ({ className = '' }) => {
     const { updateStatus, newVersion, downloadProgress, restartToUpdate } = useOTAUpdater();
 
-    // Always-visible idle state — app is up to date
+    // Do not show banner when app is up to date
     if (updateStatus === 'idle') {
-        return (
-            <div
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400 text-xs font-medium select-none ${className}`}
-                title="App is up to date"
-            >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span className="font-semibold">Up to date</span>
-            </div>
-        );
+        return null;
     }
 
     if (updateStatus === 'checking') {

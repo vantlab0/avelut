@@ -140,25 +140,19 @@ export const Header: React.FC<HeaderProps> = ({
         )}
       </div>
 
-      {/* Center Slot: Always show OTA badge, or page title when not OTA-related */}
+      {/* Center Slot: Show update badge when downloading/ready, or page title */}
       <div className="flex-1 flex items-center justify-center min-w-0 px-2 pointer-events-none [&>*]:pointer-events-auto">
-        {/* Always render AppUpdateBadge — it shows 'Up to date' when idle */}
-        {!isAiPage ? (
-          updateStatus !== 'idle' ? (
-            <AppUpdateBadge />
-          ) : title ? (
-            title
-          ) : hideTitle ? null : React.isValidElement(currentPageLabel) ? (
-            currentPageLabel
-          ) : typeof currentPageLabel === 'string' ? (
-            <h1 className="text-base sm:text-[17px] font-semibold text-neutral-900 dark:text-white tracking-tight truncate max-w-[200px] sm:max-w-md text-center">
-              {currentPageLabel}
-            </h1>
-          ) : null
-        ) : (
-          // On AI chat page: show OTA badge always (never null)
+        {updateStatus !== 'idle' ? (
           <AppUpdateBadge />
-        )}
+        ) : title ? (
+          title
+        ) : hideTitle ? null : React.isValidElement(currentPageLabel) ? (
+          currentPageLabel
+        ) : typeof currentPageLabel === 'string' ? (
+          <h1 className="text-base sm:text-[17px] font-semibold text-neutral-900 dark:text-white tracking-tight truncate max-w-[200px] sm:max-w-md text-center">
+            {currentPageLabel}
+          </h1>
+        ) : null}
       </div>
 
       {/* Right Slot: Combined Pill Control + Optional Update Badge */}

@@ -111,6 +111,7 @@ export class QwenRealtimeTeacherService {
   private isStarting = false;
   private isSessionUpdated = false;
   private retriedWithDefaultVoice = false;
+  private currentVoice: string = typeof window !== 'undefined' ? (localStorage.getItem('avelut_live_classroom_voice') || 'Katerina') : 'Katerina';
   private currentModel = QWEN_REALTIME_MODEL;
   private boardController = avelutBoardController;
   private hasReceivedAudioInCurrentResponse = false;
@@ -1226,10 +1227,12 @@ export class QwenRealtimeTeacherService {
     liveLogger.log(`[QwenRealtime] turn_detection mode: ${this.turnDetectionMode}`);
 
     // Voice selection
-    let selectedVoice = overrideVoice || this.appSettings?.alibaba_voice_name || 'Katerina';
+    const savedVoice = typeof window !== 'undefined' ? localStorage.getItem('avelut_live_classroom_voice') : null;
+    let selectedVoice = overrideVoice || this.currentVoice || savedVoice || this.appSettings?.alibaba_voice_name || 'Katerina';
     if (selectedVoice === 'Cherry' || selectedVoice === 'Catherine' || !selectedVoice) {
       selectedVoice = 'Katerina';
     }
+    this.currentVoice = selectedVoice;
     liveLogger.log('[QwenRealtime] Session voice:', selectedVoice);
 
     this.sendJson({
@@ -1245,6 +1248,24 @@ export class QwenRealtimeTeacherService {
         tools: this.getTools(),
       },
     });
+  }
+
+  public getVoice(): string {
+    return this.currentVoice;
+  }
+
+  public setVoice(voice: string): void {
+    if (!voice || voice === this.currentVoice) return;
+    this.currentVoice = voice;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('avelut_live_classroom_voice', voice);
+      } catch {}
+    }
+    liveLogger.log('[QwenRealtime] Switching teacher voice to:', voice);
+    if (this.ws && (this.state === 'connected' || this.state === 'speaking' || this.state === 'listening' || this.state === 'drawing')) {
+      this.sendSessionInit(voice);
+    }
   }
 
   /**

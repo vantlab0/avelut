@@ -26,7 +26,29 @@ import {
   Send,
   AlertCircle,
   RotateCcw,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
+
+export interface AlibabaVoiceOption {
+  id: string;
+  name: string;
+  gender: string;
+  desc: string;
+}
+
+export const ALIBABA_FLASH_VOICES: AlibabaVoiceOption[] = [
+  { id: 'Katerina', name: 'Katerina', gender: 'Female', desc: 'Engaging, expressive & articulate (Default)' },
+  { id: 'Ethan', name: 'Ethan', gender: 'Male', desc: 'Conversational, friendly & warm' },
+  { id: 'Harry', name: 'Harry', gender: 'Male', desc: 'Energetic, dynamic & confident' },
+  { id: 'Luna', name: 'Luna', gender: 'Female', desc: 'Gentle, calm & sweet' },
+  { id: 'Mason', name: 'Mason', gender: 'Male', desc: 'Academic, professional & clear' },
+  { id: 'Stella', name: 'Stella', gender: 'Female', desc: 'Lively, bright & cheerful' },
+  { id: 'Dylan', name: 'Dylan', gender: 'Male', desc: 'Relaxed, natural & easygoing' },
+  { id: 'Serena', name: 'Serena', gender: 'Female', desc: 'Supportive, patient & encouraging' },
+  { id: 'Zhiyan', name: 'Zhiyan (知言)', gender: 'Female', desc: 'Standard natural multilingual' },
+  { id: 'Zhidong', name: 'Zhidong (知栋)', gender: 'Male', desc: 'Warm professional multilingual' },
+];
 import { ExcalidrawLiveBoard } from './ExcalidrawLiveBoard';
 import {
   QwenRealtimeTeacherService,
@@ -320,6 +342,40 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
   const [activeFormula, setActiveFormula] = useState<string | null>(null);
+
+  const [selectedVoice, setSelectedVoice] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('avelut_live_classroom_voice') || 'Katerina';
+    }
+    return 'Katerina';
+  });
+  const [showVoiceMenu, setShowVoiceMenu] = useState(false);
+  const voiceMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (voiceMenuRef.current && !voiceMenuRef.current.contains(e.target as Node)) {
+        setShowVoiceMenu(false);
+      }
+    };
+    if (showVoiceMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showVoiceMenu]);
+
+  const handleVoiceChange = useCallback((voiceId: string) => {
+    setSelectedVoice(voiceId);
+    setShowVoiceMenu(false);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('avelut_live_classroom_voice', voiceId);
+      } catch {}
+    }
+    if (serviceRef.current) {
+      serviceRef.current.setVoice(voiceId);
+    }
+  }, []);
 
   const [teachingPlan, setTeachingPlan] = useState<TeachingPlan | null>(null);
   const serviceRef = useRef<QwenRealtimeTeacherService | null>(null);
@@ -834,8 +890,73 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
           </div>
         </div>
 
-        {/* Right: teacher state pill */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+        {/* Right: voice selector + teacher state pill */}
+        <div className="flex items-center gap-2 pointer-events-auto shrink-0">
+          {/* Voice Selector Dropdown */}
+          <div className="relative" ref={voiceMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowVoiceMenu(prev => !prev)}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full ${
+                isDark
+                  ? 'bg-[#18181B]/80 hover:bg-[#27272A] border-white/10 hover:border-white/20 text-white'
+                  : 'bg-white/90 hover:bg-slate-100 border-slate-200 hover:border-slate-300 text-slate-800'
+              } text-xs font-semibold backdrop-blur-md shadow-md border transition-all active:scale-95 cursor-pointer`}
+              title="Change teacher voice (Alibaba Flash Realtime)"
+            >
+              <Volume2 className="w-3.5 h-3.5 text-[#38BDF8]" />
+              <span className="max-w-[70px] sm:max-w-[100px] truncate">{selectedVoice}</span>
+              <ChevronDown className={`w-3.5 h-3.5 opacity-60 transition-transform duration-200 ${showVoiceMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showVoiceMenu && (
+              <div
+                className={`absolute right-0 top-full mt-2 w-64 sm:w-72 max-h-80 overflow-y-auto rounded-2xl ${
+                  isDark
+                    ? 'bg-[#18181B]/95 border-white/10 text-white'
+                    : 'bg-white/95 border-slate-200 text-slate-900'
+                } border shadow-2xl backdrop-blur-xl p-1.5 z-50 animate-in fade-in zoom-in-95`}
+              >
+                <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider opacity-50 border-b border-white/5 dark:border-white/10 mb-1 flex items-center justify-between">
+                  <span>Alibaba Realtime Voices</span>
+                  <span className="text-[9px] font-medium text-[#38BDF8]">Flash Model</span>
+                </div>
+                {ALIBABA_FLASH_VOICES.map((v) => {
+                  const isSelected = v.id === selectedVoice;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => handleVoiceChange(v.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-all text-xs cursor-pointer ${
+                        isSelected
+                          ? isDark
+                            ? 'bg-[#38BDF8]/20 text-[#38BDF8] font-bold'
+                            : 'bg-sky-50 text-sky-700 font-bold'
+                          : isDark
+                            ? 'text-white/80 hover:bg-white/10 hover:text-white'
+                            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold">{v.name}</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+                            isDark ? 'bg-white/10 text-white/70' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {v.gender}
+                          </span>
+                        </div>
+                        <p className="text-[11px] opacity-60 truncate mt-0.5">{v.desc}</p>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-[#38BDF8] shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <TeacherStatePill state={teacherState} />
         </div>
       </header>
