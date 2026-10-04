@@ -583,15 +583,25 @@ export class QwenRealtimeTeacherService {
       typeof import.meta !== 'undefined' &&
       Boolean((import.meta as any).env?.DEV);
 
-    const DEFAULT_CLOUDFLARE_PROXY =
+    const isNative =
+      typeof window !== 'undefined' &&
+      Boolean((window as any).Capacitor?.isNativePlatform?.());
+
+    const isLocalHost =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    const DEFAULT_REALTIME_PROXY =
       'wss://realtime.avelut.xyz/qwen-realtime';
 
     const DEFAULT_LOCAL_PROXY =
       'ws://localhost:3001/qwen-realtime';
 
+    const useLocal = isDev && isLocalHost && !isNative;
+
     const proxyBase = (
       (import.meta as any).env?.VITE_QWEN_PROXY_URL ||
-      (isDev ? DEFAULT_LOCAL_PROXY : DEFAULT_CLOUDFLARE_PROXY)
+      (useLocal ? DEFAULT_LOCAL_PROXY : DEFAULT_REALTIME_PROXY)
     ).trim();
 
     wsUrl = proxyBase.includes('?') ? `${proxyBase}&${modelParam}` : `${proxyBase}?${modelParam}`;

@@ -57,7 +57,14 @@ const httpServer = createServer((req, res) => {
 });
 
 // ── WebSocket proxy server ───────────────────────────────────────────────────
-const wss = new WebSocketServer({ server: httpServer, path: '/qwen-realtime' });
+// Support both root "/" and "/qwen-realtime" for flexible client connections
+const wss = new WebSocketServer({ noServer: true });
+
+httpServer.on('upgrade', (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, (clientSocket) => {
+    wss.emit('connection', clientSocket, req);
+  });
+});
 
 wss.on('connection', (clientSocket, req) => {
   const clientIp = req.socket.remoteAddress || 'unknown';
