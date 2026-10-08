@@ -1677,7 +1677,9 @@ const App: React.FC = () => {
       { target: 'body', title: "🎉 You're all set!", content: 'Enjoy exploring your learning journey. Tap "Finish" to start!', placement: 'center' },
     ];
 
-    if (!userProfile && (isAuthChecking || isLoading || (isProfileLoading && user))) {
+    // Always show the app skeleton while auth/session/profile are resolving.
+    // Never flash a blank screen on first launch.
+    if (isAuthChecking || isLoading || (!userProfile && isProfileLoading)) {
         return <div key="app-loader-state"><AppLoader /></div>;
     }
 
