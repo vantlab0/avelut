@@ -83,7 +83,7 @@ export async function saveLocalConversation(
 
   const sql = `
     INSERT OR REPLACE INTO conversations (id, user_id, title, created_at, last_updated_at, sync_status, is_deleted)
-    VALUES (?, ?, ?, ?, ?, ?, 0)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `;
 
   await runStatement(sql, [
@@ -128,7 +128,7 @@ export async function saveLocalMessage(
 
   const sql = `
     INSERT OR REPLACE INTO messages (id, conversation_id, user_id, sender, text, attachments_json, image_url, timestamp, sync_status, is_deleted)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   await runStatement(sql, [

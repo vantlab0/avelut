@@ -170,12 +170,57 @@ export const clearDeliveredNotifications = async (): Promise<void> => {
   }
 };
 
-export async function showMessengerNotification() {
-  // Deprecated. We now send remote push notifications using OneSignal from lib/supabaseRealtimeDb.ts
-}
+export async function sendTestNotification(): Promise<{ success: boolean; message: string }> {
+  try {
+    const apiBase = typeof window !== 'undefined' && Capacitor.isNativePlatform() 
+      ? 'https://www.avelut.xyz' 
+      : '';
+    const uid = typeof window !== 'undefined' 
+      ? (window.localStorage?.getItem('avelut_last_uid') || '') 
+      : '';
+    if (!uid) {
+      return { success: false, message: 'Please log in before sending a test notification.' };
+    }
 
-export async function sendTestNotification() {
-   // Deprecated. Test from OneSignal dashboard.
+    if (isNative()) {
+      try {
+        await OneSignal.Notifications.requestPermission(true);
+        await OneSignal.login(uid);
+      } catch (err) {
+        console.warn('[OneSignal] Registration error before test push:', err);
+      }
+    }
+
+    const res = await fetch(`${apiBase}/api/notifications`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'send',
+        targetUserId: uid,
+        title: 'Avelut Test Notification',
+        message: 'Push notifications are configured and working on this device!',
+        data: { route: 'chat' },
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.success === false) {
+      return {
+        success: false,
+        message: data.reason || data.error?.errors?.[0] || 'Notification delivery failed.',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Test notification sent! Check your notification tray.',
+    };
+  } catch (e: any) {
+    return {
+      success: false,
+      message: e?.message || 'Failed to dispatch test notification.',
+    };
+  }
 }
 
 export const initNativeNotifications = async (
@@ -190,23 +235,42 @@ export const initNativeNotifications = async (
 
   await requestLocalNotificationPermission();
 
+  try {
+    await OneSignal.login(user.uid);
+  } catch (err) {
+    console.warn('[OneSignal] Login error in initNativeNotifications:', err);
+  }
+
   if (listenersAttached) return;
   listenersAttached = true;
 
   try {
-      OneSignal.Notifications.addEventListener('click', (event) => {
-          const extra = event.notification.additionalData;
-          if (extra && extra.route) {
-              if (navigationHandlers.setActiveItem) {
-                  navigationHandlers.setActiveItem(extra.route as string);
-              }
-          }
-          if (extra && extra.chatId) {
-              if (navigationHandlers.setPendingChatId) {
-                  navigationHandlers.setPendingChatId(extra.chatId as string);
-              }
-          }
-      });
+    // Show heads-up notification banner even when the app is actively foregrounded
+    OneSignal.Notifications.addEventListener('foregroundWillDisplay', (event: any) => {
+      try {
+        if (event?.notification?.display) {
+          event.notification.display();
+        } else if (event?.getNotification?.()?.display) {
+          event.getNotification().display();
+        }
+      } catch (err) {
+        console.warn('[OneSignal] Foreground display error:', err);
+      }
+    });
+
+    OneSignal.Notifications.addEventListener('click', (event: any) => {
+      const extra = (event?.notification?.additionalData || event?.notification?.rawPayload?.custom?.a) as any;
+      if (extra && extra.route) {
+        if (navigationHandlers.setActiveItem) {
+          navigationHandlers.setActiveItem(extra.route as string);
+        }
+      }
+      if (extra && extra.chatId) {
+        if (navigationHandlers.setPendingChatId) {
+          navigationHandlers.setPendingChatId(extra.chatId as string);
+        }
+      }
+    });
   } catch (e) {
     console.warn('[OneSignal] Listener error:', e);
   }

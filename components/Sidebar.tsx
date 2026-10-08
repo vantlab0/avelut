@@ -4,7 +4,7 @@ import { navigationItems, adminNavigationItems } from '../constants';
 import { Avatar } from './Avatar';
 import { VerificationBadge } from './VerificationBadge';
 import { useToast } from '../hooks/useToast';
-import { deleteLocalConversation, getLocalMessages } from '../services/chatStorageService';
+import { deleteLocalConversation, getLocalMessages, renameLocalConversation } from '../services/chatStorageService';
 import { Capacitor } from '@capacitor/core';
 
 export interface SidebarProps {
@@ -84,14 +84,14 @@ const LinkRow: React.FC<{
   <button
     type="button"
     onClick={onClick}
-    className={`w-full flex items-center gap-3 px-3 py-3 text-left transition-colors cursor-pointer select-none group relative ${
+    className={`w-full flex items-center gap-3.5 px-4 py-3.5 sm:py-4 text-left transition-colors cursor-pointer select-none group relative ${
       active
         ? 'bg-neutral-100 dark:bg-[#1C1C1C] text-neutral-900 dark:text-white font-medium'
         : 'bg-transparent text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-[#1a1a1a]'
     }`}
   >
     <span
-      className={`flex-shrink-0 w-6 h-6 flex items-center justify-center transition-colors ${
+      className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center transition-colors [&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-6.5 sm:[&>svg]:h-6.5 ${
         active
           ? 'text-neutral-900 dark:text-white'
           : 'text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white'
@@ -99,7 +99,7 @@ const LinkRow: React.FC<{
     >
       {icon}
     </span>
-    <span className="text-[16px] sm:text-[17px] truncate flex-1 tracking-tight font-medium leading-none">
+    <span className="text-[17px] sm:text-[18px] truncate flex-1 tracking-tight font-semibold leading-none">
       {label}
     </span>
     {badgeLabel ? (
@@ -122,19 +122,18 @@ interface ActiveMenuState {
 }
 
 /**
- * Responsive 3-Dot Options Context Menu:
- * Floating popover on desktop, bottom sheet on mobile (<640px).
+ * Responsive Options Context Menu:
+ * Slick design, neutral background, rounded corners popup positioned right above/by the chat item.
  */
 const ChatContextMenu: React.FC<{
   menuState: ActiveMenuState;
   onClose: () => void;
   onTogglePin: (convoId: string) => void;
   onShare: (convo: ChatConversation) => void;
-  onForward: (convo: ChatConversation) => void;
-  onDelete: (convoId: string) => void;
-}> = ({ menuState, onClose, onTogglePin, onShare, onForward, onDelete }) => {
+  onRename: (convo: ChatConversation) => void;
+  onRequestDelete: (convo: ChatConversation) => void;
+}> = ({ menuState, onClose, onTogglePin, onShare, onRename, onRequestDelete }) => {
   const { convo, isPinned, anchorY = 200, anchorX = 200 } = menuState;
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Dismiss on Escape key
@@ -146,13 +145,15 @@ const ChatContextMenu: React.FC<{
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // Compute desktop popover position
+  // Compute popover position: neatly above the chat to be deleted if room, otherwise below
   const desktopStyle = useMemo<React.CSSProperties>(() => {
-    const top = Math.min(anchorY - 20, window.innerHeight - 260);
-    const left = Math.min(anchorX + 10, window.innerWidth - 230);
+    const menuHeight = 185;
+    const isAbove = anchorY > 210;
+    const top = isAbove ? Math.max(16, anchorY - menuHeight) : Math.min(anchorY + 8, window.innerHeight - menuHeight - 16);
+    const left = Math.min(Math.max(12, anchorX - 160), window.innerWidth - 225);
     return {
-      top: `${Math.max(16, top)}px`,
-      left: `${Math.max(16, left)}px`,
+      top: `${top}px`,
+      left: `${left}px`,
     };
   }, [anchorY, anchorX]);
 
@@ -168,18 +169,18 @@ const ChatContextMenu: React.FC<{
         ref={menuRef}
         onClick={(e) => e.stopPropagation()}
         style={desktopStyle}
-        className="z-[161] absolute w-56 rounded-2xl p-1.5 space-y-0.5 bg-white dark:bg-[#1C1C1C] border border-neutral-200 dark:border-neutral-800 transition-all"
+        className="z-[161] absolute w-52 rounded-2xl p-1.5 space-y-0.5 bg-white dark:bg-[#1E1E22] border border-neutral-200/90 dark:border-white/10 shadow-xl transition-all animate-in fade-in zoom-in-95 duration-150"
       >
-        {/* Action 1: Pin / Unpin */}
+        {/* Action 1: Pin / Unpin — Neutral colors */}
         <button
           type="button"
           onClick={() => {
             onTogglePin(convo.id);
             onClose();
           }}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs sm:text-sm font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-800 dark:text-neutral-200 cursor-pointer`}
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-xs sm:text-sm font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-900 dark:text-neutral-100 cursor-pointer"
         >
-          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-[#0066FF] dark:text-[#38BDF8]">
+          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
             {isPinned ? (
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
                 <path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.283.284-.53.5-.664.672C10.553 2.82 10.5 3 10.5 3.5V5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1.077l-1.423 7.115a.5.5 0 0 1-.49.405.5.5 0 0 1-.49-.405L6.577 7H5.5a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h1V3.5c0-.5-.053-.68-.19-.849-.134-.172-.38-.388-.664-.672C4.342 1.174 4 0.68 4 .5a.5.5 0 0 1 .146-.354z"/>
@@ -190,97 +191,60 @@ const ChatContextMenu: React.FC<{
               </svg>
             )}
           </div>
-          <div className="flex-1 min-w-0">
-            <span className="block truncate">{isPinned ? 'Unpin Chat' : 'Pin Chat'}</span>
-          </div>
+          <span className="block truncate text-neutral-900 dark:text-neutral-100">{isPinned ? 'Unpin chat' : 'Pin chat'}</span>
         </button>
 
-        {/* Action 2: Share Chat */}
+        {/* Action 2: Share Chat — Neutral colors */}
         <button
           type="button"
           onClick={() => {
             onShare(convo);
             onClose();
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs sm:text-sm font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-800 dark:text-neutral-200 cursor-pointer"
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-xs sm:text-sm font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-900 dark:text-neutral-100 cursor-pointer"
         >
-          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-emerald-500">
+          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
             </svg>
           </div>
-          <div className="flex-1 min-w-0">
-            <span className="block truncate">Share Chat</span>
-            
-          </div>
+          <span className="block truncate text-neutral-900 dark:text-neutral-100">Share chat</span>
         </button>
 
-        {/* Action 3: Forward Chat */}
+        {/* Action 3: Rename Chat — Neutral colors */}
         <button
           type="button"
           onClick={() => {
-            onForward(convo);
             onClose();
+            onRename(convo);
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs sm:text-sm font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-800 dark:text-neutral-200 cursor-pointer"
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-xs sm:text-sm font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-900 dark:text-neutral-100 cursor-pointer"
         >
-          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-indigo-500">
+          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
             </svg>
           </div>
-          <div className="flex-1 min-w-0">
-            <span className="block truncate">Forward Chat</span>
-            
-          </div>
+          <span className="block truncate text-neutral-900 dark:text-neutral-100">Rename</span>
         </button>
 
-        {/* Action 4: Delete Chat with Confirmation State */}
-        {!confirmDelete ? (
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs sm:text-sm font-medium transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-600/80 dark:text-rose-400 cursor-pointer"
-          >
-            <div className="w-5 h-5 flex items-center justify-center shrink-0 text-rose-500">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="block truncate">Delete Chat</span>
-              
-            </div>
-          </button>
-        ) : (
-          <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 rounded-xl space-y-2 border border-rose-200 dark:border-rose-900/50 animate-fade-in">
-            <p className="text-[12px] font-semibold text-rose-700 dark:text-rose-300 leading-tight">
-              Delete this chat?
-            </p>
-            <p className="text-[11px] text-rose-600/80 dark:text-rose-400">
-              This action cannot be undone.
-            </p>
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(false)}
-                className="flex-1 py-1.5 px-2.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-[11px] font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onDelete(convo.id);
-                  onClose();
-                }}
-                className="flex-1 py-1.5 px-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition-colors cursor-pointer"
-              >
-                Delete
-              </button>
-            </div>
+        {/* Action 4: Delete Chat — Red text & icon */}
+        <div className="border-t border-neutral-100 dark:border-white/10 my-0.5" />
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            onRequestDelete(convo);
+          }}
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-xs sm:text-sm font-semibold transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-500 cursor-pointer"
+        >
+          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-rose-600 dark:text-rose-500">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+            </svg>
           </div>
-        )}
+          <span className="block truncate text-rose-600 dark:text-rose-500">Delete chat</span>
+        </button>
       </div>
     </div>
   );
@@ -381,8 +345,30 @@ const SidebarPanel: React.FC<{
     setPinnedIds(getStoredPinnedIds(userProfile?.uid));
   }, [userProfile?.uid]);
 
-  // Context menu state
+  // Context menu state & modal confirmation states
   const [activeMenu, setActiveMenu] = useState<ActiveMenuState | null>(null);
+  const [convoToDelete, setConvoToDelete] = useState<ChatConversation | null>(null);
+  const [convoToRename, setConvoToRename] = useState<ChatConversation | null>(null);
+  const [renameTitle, setRenameTitle] = useState('');
+
+  const handleSaveRename = useCallback(async () => {
+    if (!convoToRename) return;
+    const trimmed = renameTitle.trim();
+    if (!trimmed) {
+      addToast('Please enter a chat title.', 'warning');
+      return;
+    }
+    try {
+      const uid = userProfile?.uid || 'anon';
+      await renameLocalConversation(convoToRename.id, trimmed, uid);
+      convoToRename.title = trimmed;
+      addToast('Chat renamed', 'success');
+      setConvoToRename(null);
+    } catch (err) {
+      console.error('[Sidebar] Failed to rename chat:', err);
+      addToast('Failed to rename chat.', 'error');
+    }
+  }, [convoToRename, renameTitle, userProfile?.uid, addToast]);
 
   const togglePinChat = useCallback(
     (convoId: string) => {
@@ -796,16 +782,111 @@ const SidebarPanel: React.FC<{
         </div>
       )}
 
-      {/* Floating Context Menu / Bottom Sheet */}
+      {/* Floating Context Menu / Dropdown */}
       {activeMenu && (
         <ChatContextMenu
           menuState={activeMenu}
           onClose={() => setActiveMenu(null)}
           onTogglePin={togglePinChat}
           onShare={handleShareChat}
-          onForward={handleForwardChat}
-          onDelete={handleDeleteChat}
+          onRename={(convo) => {
+            setConvoToRename(convo);
+            setRenameTitle(convo.title || '');
+          }}
+          onRequestDelete={(convo) => {
+            setConvoToDelete(convo);
+          }}
         />
+      )}
+
+      {/* Centered Modal: Delete Chat Confirmation */}
+      {convoToDelete && (
+        <div
+          className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm select-none animate-in fade-in duration-150"
+          onClick={() => setConvoToDelete(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#18181B] border border-neutral-200/80 dark:border-white/10 p-6 shadow-2xl space-y-4 text-center animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-500/15 flex items-center justify-center text-rose-600 dark:text-rose-400">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+              </svg>
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-bold text-neutral-900 dark:text-white">Delete Chat?</h3>
+              <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400">
+                Are you sure you want to delete <span className="font-semibold text-neutral-800 dark:text-neutral-200">"{convoToDelete.title || 'New Chat'}"</span>? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConvoToDelete(null)}
+                className="flex-1 py-3 px-4 rounded-2xl bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-sm font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const id = convoToDelete.id;
+                  setConvoToDelete(null);
+                  handleDeleteChat(id);
+                }}
+                className="flex-1 py-3 px-4 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold shadow-md shadow-rose-600/20 transition-colors cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Centered Modal: Rename Chat */}
+      {convoToRename && (
+        <div
+          className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm select-none animate-in fade-in duration-150"
+          onClick={() => setConvoToRename(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#18181B] border border-neutral-200/80 dark:border-white/10 p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-1 text-left">
+              <h3 className="text-lg font-bold text-neutral-900 dark:text-white">Rename Chat</h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">Enter a new title for this conversation.</p>
+            </div>
+            <input
+              type="text"
+              value={renameTitle}
+              onChange={(e) => setRenameTitle(e.target.value)}
+              placeholder="Chat title..."
+              autoFocus
+              className="w-full px-4 py-3 rounded-2xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200/80 dark:border-white/10 text-neutral-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveRename();
+              }}
+            />
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConvoToRename(null)}
+                className="flex-1 py-3 px-4 rounded-2xl bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-sm font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveRename}
+                className="flex-1 py-3 px-4 rounded-2xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 text-white dark:text-neutral-900 text-sm font-bold shadow-md transition-colors cursor-pointer"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Bottom Profile Footer (Redundant Chat button removed to maximize vertical space) */}
@@ -869,7 +950,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer — Fullscreen with NO drop shadows */}
       <div
         ref={containerRef as any}
         className={`fixed inset-0 z-[130] md:hidden transition-opacity duration-200 ${
@@ -878,13 +959,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         <div
           ref={overlayRef as any}
-          className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
+          className="absolute inset-0 bg-transparent transition-opacity"
           onClick={onCloseMobileSidebar}
           aria-hidden="true"
         />
         <aside
           ref={sidebarRef as any}
-          className={`absolute top-0 left-0 h-full w-[86%] max-w-[340px] bg-white dark:bg-black shadow-2xl border-r border-neutral-200/80 dark:border-white/10 z-10 will-change-transform transition-transform duration-300 ease-out ${
+          className={`absolute top-0 left-0 h-full w-full bg-white dark:bg-black shadow-none border-none z-10 will-change-transform transition-transform duration-300 ease-out ${
             isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >

@@ -49,6 +49,7 @@ import { SharedChatView } from './components/SharedChatView';
 import TermsAndConditions from './components/TermsAndConditions';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import { initNativeNotifications, cleanupNativeNotifications } from './utils/nativeNotifications';
+import { listenToKeyboard } from './utils/capacitorUtils';
 
 import { Skeleton, PageSkeleton } from './components/Skeleton';
 import { useOTAUpdater } from './hooks/useOTAUpdater';
@@ -374,6 +375,16 @@ const App: React.FC = () => {
             OneSignal.Notifications.requestPermission(true).then((granted: boolean) => {
                 console.log('[OneSignal] Native permission granted:', granted);
             }).catch((e: any) => console.warn('[OneSignal] Native permission error:', e));
+
+            OneSignal.Notifications.addEventListener('foregroundWillDisplay', (event: any) => {
+                try {
+                    if (event?.notification?.display) {
+                        event.notification.display();
+                    } else if (event?.getNotification?.()?.display) {
+                        event.getNotification().display();
+                    }
+                } catch (err) {}
+            });
         } else if (typeof window !== 'undefined') {
             // Web: use the OneSignal Web SDK loaded asynchronously
             const initWebOneSignal = async () => {
@@ -386,6 +397,10 @@ const App: React.FC = () => {
                         });
                         (window as any).OneSignal.Slidedown.promptPush();
                         console.log('[OneSignal] Web SDK initialized');
+                        const lastUid = window.localStorage?.getItem('avelut_last_uid');
+                        if (lastUid && (window as any).OneSignal.login) {
+                            (window as any).OneSignal.login(lastUid);
+                        }
                     }
                 } catch (e) {
                     console.warn('[OneSignal] Web init error:', e);
@@ -426,10 +441,18 @@ const App: React.FC = () => {
     });
 
     useEffect(() => {
-        if (Capacitor.isNativePlatform() && user?.uid) {
-            OneSignal.login(user.uid);
-        } else if (Capacitor.isNativePlatform() && !user?.uid) {
-            OneSignal.logout();
+        if (user?.uid) {
+            if (Capacitor.isNativePlatform()) {
+                OneSignal.login(user.uid);
+            } else if (typeof window !== 'undefined' && (window as any).OneSignal?.login) {
+                (window as any).OneSignal.login(user.uid);
+            }
+        } else {
+            if (Capacitor.isNativePlatform()) {
+                OneSignal.logout();
+            } else if (typeof window !== 'undefined' && (window as any).OneSignal?.logout) {
+                (window as any).OneSignal.logout();
+            }
         }
     }, [user?.uid]);
 
@@ -437,7 +460,8 @@ const App: React.FC = () => {
         if (typeof window !== 'undefined') {
             const lastUid = window.localStorage?.getItem('avelut_last_uid') || auth.currentUser?.uid;
             if (lastUid) {
-                return readCachedJson<UserProfile | null>(`avelut_profile_${lastUid}`, null);
+                const cached = readCachedJson<UserProfile | null>(`avelut_profile_${lastUid}`, null);
+                if (cached) return cached;
             }
         }
         return null;
@@ -618,10 +642,6 @@ const App: React.FC = () => {
             if (getWindowPathname() !== newPath && typeof window !== 'undefined') {
                 window.history.pushState(null, '', newPath);
             }
-        }
-        
-        if (Capacitor.isNativePlatform()) {
-            OneSignal.Session.addOutcome('nav_' + newItem).catch(() => {});
         }
     }, []);
 
@@ -814,6 +834,46 @@ const App: React.FC = () => {
         onClose: () => setIsMobileSidebarOpen(false),
         enabled: !isSidebarSwipeDisabled,
     });
+
+    // Ensure window, html, body and mainRef never scroll upward when soft keyboard appears
+    useEffect(() => {
+        const resetWindowScroll = () => {
+            if (window.scrollY !== 0 || window.scrollX !== 0) {
+                window.scrollTo(0, 0);
+            }
+            if (document.documentElement.scrollTop !== 0) {
+                document.documentElement.scrollTop = 0;
+            }
+            if (document.body.scrollTop !== 0) {
+                document.body.scrollTop = 0;
+            }
+            if (mainRef.current && mainRef.current.scrollTop !== 0) {
+                mainRef.current.scrollTop = 0;
+            }
+        };
+
+        window.addEventListener('scroll', resetWindowScroll, { passive: false });
+        return () => window.removeEventListener('scroll', resetWindowScroll);
+    }, [mainRef]);
+
+    useEffect(() => {
+        if (!Capacitor.isNativePlatform()) return;
+        const cleanup = listenToKeyboard(
+            () => {
+                window.scrollTo(0, 0);
+                if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
+                if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
+                if (mainRef.current) mainRef.current.scrollTop = 0;
+            },
+            () => {
+                window.scrollTo(0, 0);
+                if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
+                if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
+                if (mainRef.current) mainRef.current.scrollTop = 0;
+            }
+        );
+        return cleanup;
+    }, [mainRef]);
     const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState<boolean>(() => {
         if (typeof window !== 'undefined') {
             return window.localStorage?.getItem('avelut_sidebar_collapsed') === 'true';
@@ -1765,7 +1825,7 @@ const App: React.FC = () => {
         if (currentPath === '/' || currentPath === '' || currentPath === '/home') {
             if (Capacitor.isNativePlatform()) {
                 return (
-                    <div key="auth-state" className="min-h-screen">
+                    <div key="auth-state" className="h-full w-full overflow-y-auto">
                         {authView === 'login'
                             ? <Login onSwitchToSignUp={() => setAuthView('signup')} />
                             : <SignUp onSwitchToLogin={() => setAuthView('login')} />}
@@ -1786,7 +1846,7 @@ const App: React.FC = () => {
             );
         }
         return (
-            <div key="auth-state" className="min-h-screen">
+            <div key="auth-state" className="h-full w-full overflow-y-auto">
                 {authView === 'login'
                     ? <Login onSwitchToSignUp={() => setAuthView('signup')} />
                     : <SignUp onSwitchToLogin={() => setAuthView('login')} />}
@@ -1794,7 +1854,7 @@ const App: React.FC = () => {
         );
     }
 
-    if (isAppSettingsLoading) {
+    if (!userProfile && isAppSettingsLoading) {
         return <div key="settings-loader-state"><AppLoader /></div>;
     }
 
@@ -1810,7 +1870,7 @@ const App: React.FC = () => {
         );
     }
 
-    if (isProfileLoading) {
+    if (!userProfile && isProfileLoading) {
         return <div key="profile-loader-state"><AppLoader /></div>;
     }
 
@@ -1826,8 +1886,8 @@ const App: React.FC = () => {
 
     return (
         <div
-            className="flex fixed inset-0 w-full bg-off-white dark:bg-black font-sans text-charcoal dark:text-white selection:bg-brand-200 selection:text-brand-900"
-            style={{ overflow: 'visible' }}
+            className="flex fixed inset-0 w-full h-full bg-off-white dark:bg-black font-sans text-charcoal dark:text-white selection:bg-brand-200 selection:text-brand-900 overflow-hidden"
+            style={{ overflow: 'hidden' }}
         >
             <NativePullToRefresh />
 
@@ -1881,7 +1941,19 @@ const App: React.FC = () => {
                 sidebarRef={sidebarRef}
                 containerRef={containerRef}
             />
-            <main ref={mainRef as any} className="flex-1 flex flex-col min-w-0 relative" style={{ overflowX: 'hidden', overflowY: 'visible' }}>
+            <main
+                ref={mainRef as any}
+                className="flex-1 flex flex-col min-w-0 relative h-full overflow-hidden"
+                style={{ overflow: 'hidden' }}
+                onScroll={(e) => {
+                    if (e.currentTarget.scrollTop !== 0) {
+                        e.currentTarget.scrollTop = 0;
+                    }
+                    if (e.currentTarget.scrollLeft !== 0) {
+                        e.currentTarget.scrollLeft = 0;
+                    }
+                }}
+            >
                 <Header
                     activeItem={activeItem}
                     currentPageLabel={typeof customHeaderConfig?.title === 'string' ? customHeaderConfig.title : currentPageLabel}
@@ -1906,7 +1978,6 @@ const App: React.FC = () => {
                     onNewChat={customHeaderConfig?.onNewChat || (() => { setActiveConversationId(null); setActiveItem('chat'); })}
                     onClearChat={customHeaderConfig?.onClearChat}
                     onDeleteChat={customHeaderConfig?.onDeleteChat}
-                    onOpenMemoryBank={customHeaderConfig?.onOpenMemoryBank}
                     hasActiveChat={customHeaderConfig?.hasActiveChat ?? Boolean(activeConversationId)}
                     hasMessages={customHeaderConfig?.hasMessages ?? false}
                 />

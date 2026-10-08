@@ -39,16 +39,38 @@ export const AppUpdateBadge: React.FC<{ className?: string }> = ({ className = '
         );
     }
 
+    const [isApplying, setIsApplying] = React.useState(false);
+
     if (updateStatus === 'ready') {
+        const handleRestart = async () => {
+            if (isApplying) return;
+            setIsApplying(true);
+            try {
+                await restartToUpdate();
+            } catch {
+                setIsApplying(false);
+            }
+        };
+
         return (
             <button
                 type="button"
-                onClick={restartToUpdate}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black dark:bg-white text-white dark:text-black text-xs font-semibold cursor-pointer transition-colors hover:bg-neutral-800 dark:hover:bg-neutral-200 select-none animate-pulse ${className}`}
+                onClick={handleRestart}
+                disabled={isApplying}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black dark:bg-white text-white dark:text-black text-xs font-semibold cursor-pointer transition-colors hover:bg-neutral-800 dark:hover:bg-neutral-200 select-none ${isApplying ? 'opacity-75 cursor-wait' : 'animate-pulse'} ${className}`}
                 title="Update ready. Tap to restart."
             >
-                <i className="bi bi-arrow-repeat text-xs" />
-                <span>Update ready • Restart</span>
+                {isApplying ? (
+                    <>
+                        <span className="w-3 h-3 border-2 border-neutral-400 border-t-neutral-800 dark:border-neutral-500 dark:border-t-neutral-200 rounded-full animate-spin shrink-0" />
+                        <span>Applying update...</span>
+                    </>
+                ) : (
+                    <>
+                        <i className="bi bi-arrow-repeat text-xs" />
+                        <span>Update ready • Restart</span>
+                    </>
+                )}
             </button>
         );
     }

@@ -108,3 +108,18 @@ export const showKeyboard = async (): Promise<void> => {
   }
 };
 
+/**
+ * Programmatically hide native keyboard and blur active focused element.
+ */
+export const hideKeyboard = async (): Promise<void> => {
+  if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
+  if (!isNative()) return;
+  try {
+    await Keyboard.hide();
+  } catch (err) {
+    // Silently ignore if not supported in current environment
+  }
+};
+

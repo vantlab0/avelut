@@ -102,6 +102,26 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
     try {
       await onProfileUpdate({ notifications_enabled: enabled });
       setIsNotificationSwitchOn(enabled);
+
+      if (isNative()) {
+        try {
+          const { requestLocalNotificationPermission } = await import('../utils/nativeNotifications');
+          if (enabled) {
+            await requestLocalNotificationPermission();
+            const OneSignal = (await import('@onesignal/capacitor-plugin')).default;
+            await OneSignal.User.pushSubscription.optIn();
+            if (user?.uid) {
+              await OneSignal.login(user.uid);
+            }
+          } else {
+            const OneSignal = (await import('@onesignal/capacitor-plugin')).default;
+            await OneSignal.User.pushSubscription.optOut();
+          }
+        } catch (e) {
+          console.warn('[Settings] Error syncing OneSignal subscription state:', e);
+        }
+      }
+
       addToast(enabled ? 'Notifications enabled!' : 'Notifications disabled.', 'info');
     } catch (err) {
       console.error(err);
@@ -350,14 +370,20 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
               }
             />
           )}
-          {isNotificationSwitchOn && isNative() && matchSearch('Test Notifications', 'Send a test notification') && (
+          {isNotificationSwitchOn && matchSearch('Test Notifications', 'Send a test notification') && (
              <SettingsRow
                 icon={<i className="bi bi-send text-lg" />}
                 title="Test Notifications"
                 subtitle="Send a test notification to this device"
-                onClick={() => {
-                   import('../utils/nativeNotifications').then(m => m.sendTestNotification());
-                   addToast('Test notification will appear in 2 seconds (minimize app to see it)', 'info');
+                onClick={async () => {
+                   addToast('Sending test notification...', 'info');
+                   const { sendTestNotification } = await import('../utils/nativeNotifications');
+                   const res = await sendTestNotification();
+                   if (res.success) {
+                     addToast(res.message, 'success');
+                   } else {
+                     addToast(res.message, 'warning');
+                   }
                 }}
              />
           )}

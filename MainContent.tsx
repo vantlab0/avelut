@@ -25,7 +25,7 @@ const UserProfilePage = lazy(() => import('./components/UserProfile').then(modul
 const BillingSettingsPage = lazy(() => import('./components/BillingSettings').then(module => ({ default: module.BillingSettingsScreen })));
 const Help = lazy(() => import('./components/Help'));
 const Messenger = lazy(() => import('./components/Messenger').then(module => ({ default: module.Messenger })));
-const AvelutAI = lazy(() => import('./components/AvelutAI'));
+import AvelutAI from './components/AvelutAI';
 const AdminPanel = lazy(() => import('./components/AdminPanel').then(module => ({ default: module.AdminPanel })));
 const Onboarding = lazy(() => import('./components/Onboarding').then(module => ({ default: module.Onboarding })));
 const History = lazy(() => import('./components/History').then(module => ({ default: module.History })));
@@ -53,6 +53,7 @@ const skeletonMap: Record<string, React.ReactNode> = {
 };
 
 const getSkeletonFallback = (activeItem: string): React.ReactNode => {
+    if (activeItem === 'chat' || !activeItem) return null;
     if (activeItem.startsWith('public_profile_')) return <PublicProfileSkeleton />;
     return skeletonMap[activeItem] ?? <PageSkeleton />;
 };

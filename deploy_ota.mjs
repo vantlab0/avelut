@@ -27,17 +27,26 @@ async function deployOTA() {
         const otaVersion = `${baseVersion}-${Date.now()}`;
         console.log(`[OTA] Generated OTA Version: ${otaVersion}`);
 
+        let commit = 'unknown';
+        try {
+            commit = execSync('git rev-parse --short HEAD').toString().trim();
+        } catch {}
+
         // Write version.json into dist for app sync
         const versionJsonPath = "./dist/version.json";
         const versionPayload = {
             version: otaVersion,
             baseVersion,
+            commit,
             buildTimestamp: Date.now(),
         };
         fs.writeFileSync(versionJsonPath, JSON.stringify(versionPayload, null, 2));
         console.log("[OTA] Written version.json to dist");
 
         console.log("[OTA] Creating dist.zip package...");
+        if (fs.existsSync("./dist.zip")) {
+            fs.unlinkSync("./dist.zip");
+        }
         const zip = new AdmZip();
         zip.addLocalFolder("./dist");
         zip.writeZip("./dist.zip");

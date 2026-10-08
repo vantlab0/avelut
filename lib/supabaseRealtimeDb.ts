@@ -229,6 +229,50 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     isDeleted: value.is_deleted ?? false,
   };
 
+  const summary = mediaType === 'voice' ? 'Voice message'
+    : mediaType === 'image' ? 'Image file'
+    : mediaType === 'file' ? 'Document file'
+    : (text || 'Media');
+
+  const dispatchPush = async () => {
+    try {
+      const client = supabaseAdmin || supabase;
+      const { data: recipientMembers } = await client.from('chat_members')
+        .select('unread_count, user_id')
+        .eq('chat_id', chatId)
+        .neq('user_id', senderId);
+
+      if (recipientMembers && recipientMembers.length > 0) {
+        const apiBase = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() 
+          ? 'https://www.avelut.xyz' 
+          : '';
+
+        for (const member of recipientMembers) {
+          if (!member.user_id) continue;
+          fetch(`${apiBase}/api/notifications`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'send',
+              targetUserId: member.user_id,
+              title: "New Message",
+              message: summary,
+              data: {
+                route: 'messenger',
+                chatId: chatId,
+                senderId: senderId,
+              }
+            })
+          }).catch((err) => {
+            console.warn('[OneSignal] Push notification fetch failed:', err);
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[OneSignal] Error dispatching push notification:', err);
+    }
+  };
+
   try {
     const { error: rpcErr } = await supabase.rpc('send_chat_message', {
       p_chat_id: chatId,
@@ -242,6 +286,7 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     });
 
     if (!rpcErr) {
+      void dispatchPush();
       return message;
     }
 
@@ -270,11 +315,6 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
       throw new Error(msgErr.message || 'Failed to send message.');
     }
   }
-
-  const summary = mediaType === 'voice' ? 'Voice message'
-    : mediaType === 'image' ? 'Image file'
-    : mediaType === 'file' ? 'Document file'
-    : (text || 'Media');
 
   // Update sender's member record
   await client.from('chat_members')
@@ -306,29 +346,10 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
         })
         .eq('chat_id', chatId)
         .eq('user_id', member.user_id);
-
-      // Send OneSignal push notification to the recipient
-      try {
-        const apiBase = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() 
-          ? 'https://www.avelut.xyz' 
-          : '';
-          
-        fetch(`${apiBase}/api/notifications`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'send',
-            targetUserId: member.user_id,
-            title: "New Message",
-            message: summary
-          })
-        }).catch(() => {});
-      } catch (e) {
-        // ignore fetch errors
-      }
     }
   }
 
+  void dispatchPush();
   return message;
 }
 

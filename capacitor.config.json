@@ -10,12 +10,16 @@
       "overlaysWebView": false
     },
     "Keyboard": {
-      "resize": "body",
+      "resize": "native",
       "style": "DARK",
-      "resizeOnFullScreen": true
+      "resizeOnFullScreen": false
     },
     "CapacitorUpdater": {
-      "autoUpdate": false
+      "autoUpdate": false,
+      "statsUrl": ""
+    },
+    "GoogleSignIn": {
+      "clientId": "750743868519-fhhpqa43j11uuu61kj5d7oni141vscu8.apps.googleusercontent.com"
     }
   },
   "android": {

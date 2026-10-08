@@ -26,14 +26,7 @@ import { ConfirmationModal } from './ConfirmationModal';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingTypingIndicator } from './ThinkingTypingIndicator';
 import { ChatLimitBanner } from './ChatLimitBanner';
-import {
-  getAIMemoryBank,
-  buildMemoryPromptContext,
-  extractAndSaveMemoriesFromExchange,
-  type AIMemoryBank,
-} from '../services/aiMemoryBankService';
-import { MemoryBankModal } from './memory/MemoryBankModal';
-import { showKeyboard } from '../utils/capacitorUtils';
+import { showKeyboard, hideKeyboard } from '../utils/capacitorUtils';
 
 export type ChatMode = 'context' | 'fast' | 'deep' | 'exam';
 
@@ -291,9 +284,6 @@ const GrokChatComposer: React.FC<{
   onOpenCamera: () => void;
   onSend: () => void;
   autoFocus?: boolean;
-  onOpenMemoryBank?: () => void;
-  isMemoryActive?: boolean;
-  memoryCount?: number;
 }> = ({
   input,
   setInput,
@@ -307,9 +297,6 @@ const GrokChatComposer: React.FC<{
   onOpenCamera,
   onSend,
   autoFocus,
-  onOpenMemoryBank,
-  isMemoryActive,
-  memoryCount,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
@@ -328,7 +315,7 @@ const GrokChatComposer: React.FC<{
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showAttachMenu]);
 
-  // Robust function to activate focus and trigger the software keyboard
+  // Helper to activate focus and trigger keyboard when explicitly requested
   const activateKeyboard = useCallback(() => {
     if (!textareaRef.current) return;
     try {
@@ -338,55 +325,21 @@ const GrokChatComposer: React.FC<{
         textareaRef.current.setSelectionRange(len, len);
       } catch {}
     } catch {}
+    window.scrollTo(0, 0);
+    if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
+    if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
     void showKeyboard();
   }, []);
 
-  // Always activate keyboard whenever:
-  // 1. App is opened or mounted
-  // 2. User returns to app (visibilitychange or window focus or native appStateChange)
-  // 3. User navigates to chat
+  // Soft autofocus on mount if autoFocus is true
   useEffect(() => {
-    activateKeyboard();
-    const t1 = setTimeout(activateKeyboard, 80);
-    const t2 = setTimeout(activateKeyboard, 250);
-    const t3 = setTimeout(activateKeyboard, 500);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+    if (autoFocus) {
+      const timer = setTimeout(() => {
         activateKeyboard();
-        setTimeout(activateKeyboard, 150);
-      }
-    };
-
-    const handleWindowFocus = () => {
-      activateKeyboard();
-    };
-
-    const handleAppBecameActive = () => {
-      activateKeyboard();
-      setTimeout(activateKeyboard, 150);
-    };
-
-    const handleFocusEvent = () => {
-      activateKeyboard();
-      setTimeout(activateKeyboard, 100);
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleWindowFocus);
-    window.addEventListener('avelut_app_became_active', handleAppBecameActive);
-    window.addEventListener('avelut_focus_chat_input', handleFocusEvent);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleWindowFocus);
-      window.removeEventListener('avelut_app_became_active', handleAppBecameActive);
-      window.removeEventListener('avelut_focus_chat_input', handleFocusEvent);
-    };
-  }, [activateKeyboard]);
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [autoFocus, activateKeyboard]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -422,9 +375,11 @@ const GrokChatComposer: React.FC<{
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      void hideKeyboard();
+      if (textareaRef.current) {
+        textareaRef.current.blur();
+      }
       onSend();
-      // Keep keyboard continuously active
-      setTimeout(activateKeyboard, 40);
     }
   };
 
@@ -436,7 +391,7 @@ const GrokChatComposer: React.FC<{
 
   return (
     <div
-      className="w-full max-w-3xl mx-auto px-3 sm:px-4 pb-[calc(max(0.75rem,env(safe-area-inset-bottom)))] pt-2 sticky bottom-0 z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md"
+      className="w-full max-w-3xl mx-auto px-3 sm:px-4 pb-[calc(max(0.75rem,env(safe-area-inset-bottom)))] pt-2 relative z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md shrink-0"
       onPaste={handlePaste}
       onClick={() => {
         if (document.activeElement !== textareaRef.current) {
@@ -477,6 +432,11 @@ const GrokChatComposer: React.FC<{
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
+            onFocus={() => {
+              window.scrollTo(0, 0);
+              if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
+              if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
+            }}
             placeholder="Ask anything or paste images..."
             rows={1}
             className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 text-[15px] sm:text-base resize-none max-h-36 py-0 leading-relaxed [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -558,7 +518,21 @@ const GrokChatComposer: React.FC<{
           <div className="flex items-center ml-auto">
             <button
               type="button"
-              onClick={isLoading ? undefined : (voiceStatus === 'listening' ? onToggleVoice : (hasText ? onSend : onToggleVoice))}
+              onClick={
+                isLoading
+                  ? undefined
+                  : voiceStatus === 'listening'
+                  ? onToggleVoice
+                  : hasText
+                  ? () => {
+                      void hideKeyboard();
+                      if (textareaRef.current) {
+                        textareaRef.current.blur();
+                      }
+                      onSend();
+                    }
+                  : onToggleVoice
+              }
               disabled={isLoading}
               className={`h-11 sm:h-12 px-5 sm:px-6 rounded-full flex items-center justify-center gap-2 shrink-0 shadow-md transition-all duration-200 active:scale-95 font-bold text-sm select-none ${
                 isLoading
@@ -641,8 +615,8 @@ export const Chat: React.FC<ChatProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
-  const [memoryBank, setMemoryBank] = useState<AIMemoryBank | null>(null);
-  const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
+  const [isSwitchingChat, setIsSwitchingChat] = useState(false);
+  const switchingConvoIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -653,29 +627,6 @@ export const Chat: React.FC<ChatProps> = ({
 
   const aiModel = getFeatureModel('chat_interaction', appSettings);
   const ai = useMemo(() => createAvelutAI(appSettings, userProfile), [appSettings, userProfile]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const fetchBank = () => {
-      if (userProfile?.uid) {
-        getAIMemoryBank(userProfile.uid, userProfile).then((bank) => {
-          if (isMounted) setMemoryBank(bank);
-        });
-      }
-    };
-
-    fetchBank();
-
-    const handleMemoryAutoAdded = () => {
-      fetchBank();
-    };
-    window.addEventListener('avelut_memory_auto_added', handleMemoryAutoAdded);
-
-    return () => {
-      isMounted = false;
-      window.removeEventListener('avelut_memory_auto_added', handleMemoryAutoAdded);
-    };
-  }, [userProfile?.uid, userProfile]);
 
   const isLoadingRef = useRef(isLoading);
   isLoadingRef.current = isLoading;
@@ -786,11 +737,10 @@ export const Chat: React.FC<ChatProps> = ({
       title: null,
       hideDefaultRightActions: true,
       hideProfileAvatar: true,
-      className: 'absolute top-0 left-0 right-0 z-40 flex items-center justify-between bg-transparent border-none px-4 sm:px-6 md:px-8 pt-[max(0.875rem,env(safe-area-inset-top))] pb-3 pointer-events-none [&>*]:pointer-events-auto',
+      className: 'absolute top-0 left-0 right-0 z-40 flex items-center justify-between bg-transparent border-none px-3 sm:px-6 pt-[max(0.35rem,env(safe-area-inset-top,0.35rem))] pb-1 pointer-events-none [&>*]:pointer-events-auto',
       onNewChat: handleNewChat,
       onClearChat: handleClearCurrentChat,
       onDeleteChat: handleDeleteCurrentChat,
-      onOpenMemoryBank: () => setIsMemoryModalOpen(true),
       hasActiveChat: Boolean(activeConversationId),
       hasMessages: messages.length > 0,
     });
@@ -885,38 +835,41 @@ export const Chat: React.FC<ChatProps> = ({
       if (!isLoadingRef.current) {
         setMessages([]);
       }
+      setIsSwitchingChat(false);
+      switchingConvoIdRef.current = null;
       return;
     }
 
     let isMounted = true;
+    switchingConvoIdRef.current = activeConversationId;
+    setIsSwitchingChat(true);
+
     getLocalMessages(activeConversationId).then((localMsgs) => {
-      if (isMounted && localMsgs.length > 0) {
-        setMessages((current) => {
-          const localFormatted: Message[] = localMsgs.map((m) => {
-            let attachments: any[] | undefined = undefined;
-            if (m.attachments_json) {
-              try {
-                attachments = JSON.parse(m.attachments_json);
-              } catch {}
-            }
-            return {
-              id: m.id,
-              text: m.text,
-              image_url: m.image_url || undefined,
-              attachments,
-              sender: (m.sender === 'user' ? 'user' : 'bot') as 'user' | 'bot',
-              timestamp: m.timestamp,
-            };
-          });
-          const existingIds = new Set(localFormatted.map((m) => m.id));
-          const existingTexts = new Set(localFormatted.map((m) => `${m.sender}:${m.text}`));
-          const uniqueCurrent = current.filter(
-            (m) => !existingIds.has(m.id) && !existingTexts.has(`${m.sender}:${m.text}`)
-          );
-          return [...localFormatted, ...uniqueCurrent].sort((a, b) => a.timestamp - b.timestamp);
+      if (isMounted && switchingConvoIdRef.current === activeConversationId) {
+        const localFormatted: Message[] = localMsgs.map((m) => {
+          let attachments: any[] | undefined = undefined;
+          if (m.attachments_json) {
+            try {
+              attachments = JSON.parse(m.attachments_json);
+            } catch {}
+          }
+          return {
+            id: m.id,
+            text: m.text,
+            image_url: m.image_url || undefined,
+            attachments,
+            sender: (m.sender === 'user' ? 'user' : 'bot') as 'user' | 'bot',
+            timestamp: m.timestamp,
+          };
         });
+        setMessages(localFormatted.sort((a, b) => a.timestamp - b.timestamp));
+        setIsSwitchingChat(false);
       }
-    }).catch(() => {});
+    }).catch(() => {
+      if (isMounted && switchingConvoIdRef.current === activeConversationId) {
+        setIsSwitchingChat(false);
+      }
+    });
 
     const messagesRef = dbRef(db, `chat_messages/${activeConversationId}`);
     const unsubscribe = onValue(messagesRef, (snapshot) => {
@@ -931,7 +884,7 @@ export const Chat: React.FC<ChatProps> = ({
           data.push({ id: child.key, ...val, attachments });
         });
         const sorted = data.sort((a, b) => a.timestamp - b.timestamp);
-        if (isMounted) {
+        if (isMounted && switchingConvoIdRef.current === activeConversationId) {
           setMessages((current) => {
             const dbTexts = new Set(sorted.map((m: any) => `${m.sender === 'user' ? 'user' : 'bot'}:${m.text}`));
             const dbIds = new Set(sorted.map((m: any) => m.id));
@@ -940,10 +893,14 @@ export const Chat: React.FC<ChatProps> = ({
             );
             return [...sorted, ...inFlight].sort((a, b) => a.timestamp - b.timestamp) as Message[];
           });
+          setIsSwitchingChat(false);
         }
       } else {
-        if (isMounted && !isLoadingRef.current) {
-          setMessages([]);
+        if (isMounted && switchingConvoIdRef.current === activeConversationId) {
+          setIsSwitchingChat(false);
+          if (!isLoadingRef.current) {
+            setMessages([]);
+          }
         }
       }
     });
@@ -1089,6 +1046,7 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleSendMessage = async (customText?: string) => {
     stopVoiceRecognition();
+    void hideKeyboard();
     if (activeRequestIdRef.current || isLoading) {
       console.warn('[Chat] Duplicate submission blocked by active requestId lock:', activeRequestIdRef.current);
       return;
@@ -1272,8 +1230,7 @@ export const Chat: React.FC<ChatProps> = ({
         modeInstruction = '\nFormat as practice exam question style.';
       }
 
-      const memoryContext = memoryBank?.isEnabled ? buildMemoryPromptContext(memoryBank, userProfile) : '';
-      const fullSystemInstruction = `${baseSystemInstruction}${modeInstruction}${memoryContext ? `\n\n${memoryContext}` : ''}`;
+      const fullSystemInstruction = `${baseSystemInstruction}${modeInstruction}`;
 
       // Build multimodal parts for the current user turn: text + image 1 + image 2 + image 3...
       const userParts: any[] = [];
@@ -1426,25 +1383,6 @@ export const Chat: React.FC<ChatProps> = ({
         model: aiModel,
         metadata: { path: 'chat', from_cache: fromCache, mode: selectedMode },
       });
-
-      const shouldExtract = memoryBank ? memoryBank.isEnabled : true;
-      if (shouldExtract) {
-        void extractAndSaveMemoriesFromExchange({
-          userId: userProfile.uid,
-          userMessage: displayInput,
-          aiResponse: responseText,
-          appSettings,
-          userProfile,
-        }).then((newItems) => {
-          if (newItems && newItems.length > 0) {
-            void getAIMemoryBank(userProfile.uid, userProfile).then((updatedBank) => {
-              setMemoryBank(updatedBank);
-              const preview = newItems.map((i) => i.content).slice(0, 2).join('; ');
-              addToast(`🧠 AI remembered: "${preview}" (Saved to Memory Card)`, 'info');
-            });
-          }
-        });
-      }
     } catch (err: any) {
       console.error('[Chat] Error in chat:', err);
       // Clean up empty bot placeholder if streaming failed
@@ -1514,8 +1452,20 @@ export const Chat: React.FC<ChatProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-white dark:bg-black overflow-hidden text-neutral-900 dark:text-white">
       {/* MESSAGES / EMPTY STATE AREA */}
-      <div className="flex-1 overflow-y-auto px-4 pt-[calc(max(0.875rem,env(safe-area-inset-top))+3.5rem)] pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {messages.length === 0 && !isLoading ? (
+      <div className="flex-1 overflow-y-auto px-4 pt-[calc(max(0.35rem,env(safe-area-inset-top,0.35rem))+3rem)] pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {isSwitchingChat ? (
+          <div className="flex flex-col items-center justify-center py-28 space-y-4 min-h-[40vh] animate-in fade-in duration-200">
+            {/* Unique Designed Orbital Geometric Spinner */}
+            <div className="relative w-14 h-14 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-600 dark:border-t-blue-400 border-r-indigo-500/40 dark:border-r-indigo-400/40 animate-spin" style={{ animationDuration: '0.85s' }} />
+              <div className="absolute inset-1.5 rounded-full border-2 border-transparent border-b-violet-500 dark:border-b-violet-400 border-l-cyan-400/50 animate-spin" style={{ animationDuration: '0.6s', animationDirection: 'reverse' }} />
+              <div className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400 animate-ping opacity-80" />
+            </div>
+            <p className="text-xs font-semibold tracking-wider uppercase text-neutral-400 dark:text-neutral-500 select-none animate-pulse">
+              Loading chat...
+            </p>
+          </div>
+        ) : messages.length === 0 && !isLoading ? (
           <div className="flex-1 h-full min-h-[40vh]" />
         ) : (
           <div className="w-full max-w-3xl mx-auto space-y-8">
@@ -1697,9 +1647,6 @@ export const Chat: React.FC<ChatProps> = ({
         onAttachImage={(img) => void addOptimizedImage(img)}
         onOpenGallery={() => fileInputRef.current?.click()}
         onOpenCamera={() => setIsCameraOpen(true)}
-        onOpenMemoryBank={() => setIsMemoryModalOpen(true)}
-        isMemoryActive={Boolean(memoryBank?.isEnabled)}
-        memoryCount={memoryBank?.items?.filter((i) => i.enabled).length}
         onSend={() => handleSendMessage()}
         autoFocus={true}
       />
@@ -1728,13 +1675,6 @@ export const Chat: React.FC<ChatProps> = ({
         {...modalState}
         onCancel={() => setModalState((s) => ({ ...s, isOpen: false }))}
         isConfirming={isDeleting}
-      />
-
-      <MemoryBankModal
-        isOpen={isMemoryModalOpen}
-        onClose={() => setIsMemoryModalOpen(false)}
-        userProfile={userProfile}
-        onMemoryBankChange={(updated) => setMemoryBank(updated)}
       />
     </div>
   );

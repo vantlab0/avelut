@@ -66,7 +66,7 @@ export async function nativeGoogleSignIn(): Promise<GoogleSignInResponse> {
   // Native Mobile Flow (Capacitor Android / iOS)
   const clientId =
     import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-    '1087192461942-7p6u3m8a0c23k1r3n9g4j8k5l2m0n1o2.apps.googleusercontent.com';
+    '750743868519-fhhpqa43j11uuu61kj5d7oni141vscu8.apps.googleusercontent.com';
 
   try {
     if (!isPluginInitialized) {
@@ -123,6 +123,25 @@ export async function nativeGoogleSignIn(): Promise<GoogleSignInResponse> {
         canceled: true,
         error: null,
       };
+    }
+
+    console.warn('[GoogleSignIn] Native sign-in failed, attempting browser OAuth fallback...', errorMessage);
+    try {
+      const { data: oauthData, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+      if (!oauthError) {
+        return {
+          user: null,
+          session: null,
+          error: null,
+        };
+      }
+    } catch (fallbackErr) {
+      console.warn('[GoogleSignIn] Fallback error:', fallbackErr);
     }
 
     return {
