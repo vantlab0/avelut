@@ -1,49 +1,66 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Sparkles, Mic, Play, Pause, Check, X, ArrowRight, Volume2, ShieldCheck } from 'lucide-react';
 import { unifiedVoiceRouter, UnifiedAudioPlayer } from '../../services/voice/UnifiedVoiceRouter';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { useToast } from '../../hooks/useToast';
 
 export interface VoiceOption {
-  id: 'Aiden' | 'Jennifer' | 'Kai' | 'Andre';
+  id: string;
   name: string;
   gender: 'Male' | 'Female';
   persona: string;
   sampleText: string;
-  tag: string;
+  tag?: string;
 }
 
 export const TUTORIAL_VOICES: VoiceOption[] = [
   {
-    id: 'Jennifer',
-    name: 'Jennifer',
+    id: 'Katerina',
+    name: 'Katerina',
     gender: 'Female',
-    persona: 'Warm, expressive, and encouraging university lecturer.',
-    sampleText: "Hello! I will be your live lecturer today. Let's break down this topic step-by-step on the whiteboard.",
+    persona: 'Engaging, expressive, and articulate university lecturer.',
+    sampleText: "Hello! I will be your live lecturer today. Let's break down this topic step-by-step on the interactive whiteboard.",
     tag: 'Recommended',
   },
   {
-    id: 'Aiden',
-    name: 'Aiden',
+    id: 'Ethan',
+    name: 'Ethan',
     gender: 'Male',
-    persona: 'Clear, articulate, and energetic academic instructor.',
-    sampleText: "Welcome to this session! We'll explore core principles and work through practical examples together.",
+    persona: 'Conversational, friendly, and warm academic tutor.',
+    sampleText: "Welcome! We'll explore core principles and work through intuitive examples together.",
+    tag: 'Friendly',
+  },
+  {
+    id: 'Harry',
+    name: 'Harry',
+    gender: 'Male',
+    persona: 'Energetic, dynamic, and confident instructor.',
+    sampleText: "Great to have you here! Let's dive deep into this concept and master it together with full energy.",
     tag: 'Energetic',
   },
   {
-    id: 'Kai',
-    name: 'Kai',
-    gender: 'Male',
-    persona: 'Calm, patient, and modern conceptual tutor.',
-    sampleText: "Hi there! Take your time as we visualize this concept together. Feel free to ask questions anytime.",
+    id: 'Luna',
+    name: 'Luna',
+    gender: 'Female',
+    persona: 'Gentle, calm, patient, and sweet conceptual mentor.',
+    sampleText: "Hi there. Take your time as we visualize this topic together. Ask me questions whenever you'd like.",
     tag: 'Calm & Patient',
   },
   {
-    id: 'Andre',
-    name: 'Andre',
+    id: 'Mason',
+    name: 'Mason',
     gender: 'Male',
-    persona: 'Deep, authoritative, and structured professor.',
-    sampleText: "Greetings. Today we examine the foundational mechanics and analytical frameworks of our subject.",
+    persona: 'Academic, professional, structured, and clear professor.',
+    sampleText: "Greetings. Today we analyze the foundational mechanisms and theoretical frameworks of our subject.",
     tag: 'Authoritative',
+  },
+  {
+    id: 'Serena',
+    name: 'Serena',
+    gender: 'Female',
+    persona: 'Supportive, encouraging, and highly interactive tutor.',
+    sampleText: "Hello! You're going to do great today. Let's start with the big picture and build up our intuition.",
+    tag: 'Supportive',
   },
 ];
 
@@ -52,6 +69,8 @@ export interface LiveTutorialVoiceSelectorModalProps {
   onClose: () => void;
   onSelectVoiceAndStart: (selectedVoice: string) => void;
   topicTitle?: string;
+  courseName?: string;
+  durationMinutes?: number;
   initialVoice?: string;
 }
 
@@ -59,24 +78,20 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
   isOpen,
   onClose,
   onSelectVoiceAndStart,
-  topicTitle = 'Live Tutorial',
-  initialVoice = 'Jennifer',
+  topicTitle = 'Live Interactive Tutorial',
+  courseName,
+  durationMinutes = 15,
+  initialVoice = 'Katerina',
 }) => {
   const { settings: appSettings } = useAppSettings();
   const { addToast } = useToast();
 
   const [selectedVoice, setSelectedVoice] = useState<string>(initialVoice);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
-  const activeAudioElRef = useRef<HTMLAudioElement | null>(null);
   const activePlayerRef = useRef<UnifiedAudioPlayer | null>(null);
 
   useEffect(() => {
     return () => {
-      if (activeAudioElRef.current) {
-        try {
-          activeAudioElRef.current.pause();
-        } catch (_) {}
-      }
       if (activePlayerRef.current) {
         try {
           activePlayerRef.current.stop();
@@ -92,12 +107,6 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
 
     // If already playing this voice, stop it
     if (playingVoiceId === voiceOption.id) {
-      if (activeAudioElRef.current) {
-        try {
-          activeAudioElRef.current.pause();
-        } catch (_) {}
-        activeAudioElRef.current = null;
-      }
       if (activePlayerRef.current) {
         try {
           activePlayerRef.current.stop();
@@ -109,12 +118,6 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
     }
 
     // Stop current audio if playing
-    if (activeAudioElRef.current) {
-      try {
-        activeAudioElRef.current.pause();
-      } catch (_) {}
-      activeAudioElRef.current = null;
-    }
     if (activePlayerRef.current) {
       try {
         activePlayerRef.current.stop();
@@ -124,54 +127,30 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
 
     setPlayingVoiceId(voiceOption.id);
 
-    // 1. Try playing the pre-generated static audio asset from storage
-    const staticAudioUrl = `/assets/voices/${voiceOption.id.toLowerCase()}.mp3`;
-    const audio = new Audio(staticAudioUrl);
-
-    audio.onended = () => {
+    try {
+      const player = unifiedVoiceRouter.playSpeech(voiceOption.sampleText, {
+        appSettings,
+        provider: 'alibaba',
+        voice: voiceOption.id,
+        speed: 1.0,
+        onEnd: () => {
+          setPlayingVoiceId(null);
+          activePlayerRef.current = null;
+        },
+        onError: (err) => {
+          console.warn('[VoiceSelector] Preview error:', err);
+          setPlayingVoiceId(null);
+          activePlayerRef.current = null;
+          addToast('Could not play preview. Voice will synthesize in classroom.', 'info');
+        },
+      });
+      activePlayerRef.current = player;
+    } catch {
       setPlayingVoiceId(null);
-      activeAudioElRef.current = null;
-    };
-
-    audio.onerror = () => {
-      // Fallback: Synthesize via UnifiedVoiceRouter if static file is unavailable
-      try {
-        const player = unifiedVoiceRouter.playSpeech(voiceOption.sampleText, {
-          appSettings,
-          provider: 'alibaba',
-          voice: voiceOption.id,
-          speed: 1.0,
-          onEnd: () => {
-            setPlayingVoiceId(null);
-            activePlayerRef.current = null;
-          },
-          onError: (err) => {
-            console.warn('[VoiceSelector] Preview error:', err);
-            setPlayingVoiceId(null);
-            activePlayerRef.current = null;
-            addToast('Could not play preview. Please check connection.', 'info');
-          },
-        });
-        activePlayerRef.current = player;
-      } catch (err) {
-        setPlayingVoiceId(null);
-      }
-    };
-
-    audio.play().then(() => {
-      activeAudioElRef.current = audio;
-    }).catch(() => {
-      // Browser autoplay policy or error -> trigger fallback
-      audio.onerror?.(new Event('error') as any);
-    });
+    }
   };
 
   const handleConfirmStart = () => {
-    if (activeAudioElRef.current) {
-      try {
-        activeAudioElRef.current.pause();
-      } catch (_) {}
-    }
     if (activePlayerRef.current) {
       try {
         activePlayerRef.current.stop();
@@ -183,47 +162,42 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#FFFFFF] border border-[#E3E9F1] rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col text-[#0F172A]"
+        className="relative w-full max-w-lg bg-[#0F0F12] border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-white"
       >
-        {/* Modal Header */}
-        <div className="p-6 bg-[#F6F6F3] border-b border-[#E3E9F1] flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#0066FF] text-white flex items-center justify-center shadow-md">
-              <i className="bi bi-mic-fill text-lg"></i>
+        {/* Top Header */}
+        <div className="flex items-start justify-between p-5 pb-3 border-b border-white/5">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-red-500/10 text-red-400 border border-red-500/20">
+                <Mic className="w-3 h-3 text-red-400" /> Teacher Voice Selection
+              </span>
+              <span className="text-[11px] font-semibold text-white/50 px-2 py-0.5 rounded-full bg-white/5">
+                {durationMinutes} Mins Session
+              </span>
             </div>
-            <div>
-              <h2 className="text-base font-bold text-[#0F172A]">Choose Instructor Voice</h2>
-              <p className="text-xs text-[#64748B]">Powered by Qwen3-TTS-Flash engine</p>
-            </div>
+            <h2 className="text-lg font-bold text-white tracking-tight line-clamp-1">
+              {topicTitle}
+            </h2>
+            <p className="text-xs text-white/50 mt-0.5">
+              Choose your AI instructor voice to initialize the session
+            </p>
           </div>
+
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-[#FFFFFF] border border-[#E3E9F1] flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors"
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all shrink-0 cursor-pointer"
+            aria-label="Close"
           >
-            <i className="bi bi-x-lg text-sm"></i>
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Topic Ribbon */}
-        <div className="px-6 py-3 bg-[#FFFFFF] border-b border-[#E3E9F1] flex items-center justify-between">
-          <div className="min-w-0 pr-2">
-            <span className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider block">Topic</span>
-            <span className="text-xs font-bold text-[#002D62] truncate block max-w-[320px] sm:max-w-sm">
-              {topicTitle}
-            </span>
-          </div>
-          <div className="flex items-center space-x-1.5 bg-[#F1F5F9] border border-[#E3E9F1] px-3 py-1 rounded-full">
-            <i className="bi bi-broadcast text-[#0066FF] text-xs"></i>
-            <span className="text-xs font-bold text-[#0F172A]">Live Interactive Voice</span>
-          </div>
-        </div>
-
-        {/* Voice List */}
-        <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+        {/* Voices List */}
+        <div className="p-5 space-y-2.5 max-h-[58vh] overflow-y-auto">
           {TUTORIAL_VOICES.map((voice) => {
             const isSelected = selectedVoice === voice.id;
             const isPlaying = playingVoiceId === voice.id;
@@ -232,64 +206,68 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
               <div
                 key={voice.id}
                 onClick={() => setSelectedVoice(voice.id)}
-                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${
+                className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all duration-150 cursor-pointer flex items-center justify-between ${
                   isSelected
-                    ? 'border-[#0066FF] bg-blue-50/40 shadow-sm'
-                    : 'border-[#E3E9F1] bg-[#FFFFFF] hover:border-[#0066FF]/40 hover:bg-[#F6F6F3]'
+                    ? 'bg-[#18181D] border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.2)] ring-1 ring-red-500'
+                    : 'bg-[#141418]/60 border-white/5 hover:bg-[#18181D]/80 hover:border-white/10'
                 }`}
               >
-                <div className="flex items-center space-x-3.5 min-w-0 flex-1 pr-3">
-                  {/* Voice Avatar Icon */}
+                {/* Left Avatar & Info */}
+                <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
                   <div
-                    className={`w-11 h-11 rounded-2xl flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
+                    className={`flex items-center justify-center w-11 h-11 rounded-2xl shrink-0 transition-colors font-bold text-sm ${
                       isSelected
-                        ? 'bg-[#0066FF] text-white'
-                        : 'bg-[#F1F5F9] text-[#002D62] border border-[#E3E9F1]'
+                        ? 'bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-md shadow-red-500/30'
+                        : 'bg-white/10 text-white/90'
                     }`}
                   >
                     {voice.name[0]}
                   </div>
 
-                  {/* Voice Details */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-bold text-[#0F172A]">{voice.name}</span>
-                      <span className="text-[10px] font-semibold text-[#64748B] bg-[#F1F5F9] px-2 py-0.5 rounded-md">
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white tracking-tight truncate">
+                        {voice.name}
+                      </span>
+                      <span className="text-[10px] font-semibold text-white/50 bg-white/5 px-2 py-0.5 rounded-md">
                         {voice.gender}
                       </span>
-                      {voice.tag === 'Recommended' && (
-                        <span className="text-[10px] font-bold text-[#0066FF] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
-                          Recommended
+                      {voice.tag && (
+                        <span className="text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md">
+                          {voice.tag}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-[#64748B] line-clamp-1 mt-0.5">{voice.persona}</p>
+
+                    <p className="text-xs text-white/50 line-clamp-1 mt-0.5">
+                      {voice.persona}
+                    </p>
                   </div>
                 </div>
 
-                {/* Right Actions: Play Preview & Radio Check */}
-                <div className="flex items-center space-x-2 shrink-0">
+                {/* Right Actions: Play Preview & Checkmark */}
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={(e) => handlePreviewVoice(voice, e)}
                     type="button"
                     title={isPlaying ? 'Pause sample' : 'Listen to preview'}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold transition-all ${
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
                       isPlaying
-                        ? 'bg-[#0066FF] text-white animate-pulse shadow-md'
-                        : 'bg-[#F1F5F9] hover:bg-[#E3E9F1] text-[#0066FF] border border-[#E3E9F1]'
+                        ? 'bg-red-500 text-white animate-pulse shadow-md shadow-red-500/40 ring-2 ring-red-400'
+                        : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10'
                     }`}
                   >
-                    <i className={`bi ${isPlaying ? 'bi-pause-fill text-lg' : 'bi-play-fill text-lg'}`}></i>
+                    {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
                   </button>
 
                   <div
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                    className={`w-6 h-6 rounded-full border flex items-center justify-center transition-colors ${
                       isSelected
-                        ? 'border-[#0066FF] bg-[#0066FF] text-white'
-                        : 'border-[#CBD5E1] bg-white'
+                        ? 'border-red-500 bg-red-500 text-white shadow-sm'
+                        : 'border-white/20 bg-transparent'
                     }`}
                   >
-                    {isSelected && <i className="bi bi-check text-sm font-bold"></i>}
+                    {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                   </div>
                 </div>
               </div>
@@ -298,23 +276,27 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
         </div>
 
         {/* Modal Footer */}
-        <div className="p-6 bg-[#F6F6F3] border-t border-[#E3E9F1] flex items-center justify-between">
+        <div className="p-5 pt-3 border-t border-white/5 flex items-center justify-between gap-3">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 rounded-xl border border-[#E3E9F1] bg-[#FFFFFF] hover:bg-[#F1F5F9] text-xs font-bold text-[#64748B] transition-colors"
+            type="button"
+            className="px-4 py-3 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white/70 hover:text-white transition-colors cursor-pointer"
           >
-            Cancel
+            Back
           </button>
 
           <button
             onClick={handleConfirmStart}
-            className="px-6 py-2.5 rounded-xl bg-[#0066FF] hover:bg-[#0052cc] text-white text-xs font-bold flex items-center space-x-2 transition-transform active:scale-95 shadow-md"
+            type="button"
+            className="flex-1 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-sm tracking-wide flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(239,68,68,0.4)] active:scale-[0.98] transition-all cursor-pointer"
           >
-            <span>Start Live Tutorial</span>
-            <i className="bi bi-arrow-right"></i>
+            <span>Start Session with {selectedVoice}</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </div>
     </div>
   );
 };
+
+export default LiveTutorialVoiceSelectorModal;

@@ -17,6 +17,8 @@ import { useAppSettings } from '../hooks/useAppSettings';
 import type { UserProfile, Course, Topic } from '../types';
 import { InsufficientCreditsModal } from './tutorial/InsufficientCreditsModal';
 import { LessonDurationModal, type LessonDurationMode } from './tutorial/LessonDurationModal';
+import { LiveTutorialVoiceSelectorModal } from './tutorial/LiveTutorialVoiceSelectorModal';
+import { LiveClassroomLoadingScreen } from './tutorial/LiveClassroomLoadingScreen';
 import { AvelutLiveClassroomView } from './tutorial/live-classroom/AvelutLiveClassroomView';
 import {
   evaluateLiveTutorialStart,
@@ -116,9 +118,15 @@ export const VoiceTutorialPage: React.FC<VoiceTutorialPageProps> = ({
     effectiveSessionData?.topic?.topic_context;
 
   // ── UI State ─────────────────────────────────────────────────────────────
-  const [isPlayerActive, setIsPlayerActive] = useState(false);
+  type TutorialSetupStep = 'duration' | 'voice' | 'loading' | 'classroom';
+  const [setupStep, setSetupStep] = useState<TutorialSetupStep>('duration');
   const [selectedDuration, setSelectedDuration] = useState<LiveDurationMinutes>(15);
-  const [showDurationModal, setShowDurationModal] = useState(true);
+  const [selectedVoice, setSelectedVoice] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('avelut_live_classroom_voice') || 'Katerina';
+    }
+    return 'Katerina';
+  });
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [creditCheckData, setCreditCheckData] = useState<any>(null);
   const [resumeProgress, setResumeProgress] = useState<LiveTeachingProgress | null>(null);
@@ -160,8 +168,7 @@ export const VoiceTutorialPage: React.FC<VoiceTutorialPageProps> = ({
   ]);
 
   useEffect(() => {
-    setIsPlayerActive(false);
-    setShowDurationModal(true);
+    setSetupStep('duration');
     setResumeProgress(null);
   }, [sessionId]);
 
@@ -178,7 +185,7 @@ export const VoiceTutorialPage: React.FC<VoiceTutorialPageProps> = ({
   }, [userProfile?.uid, topicTitle, courseName]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
-  const handleStartLesson = async (mode: 15 | 30 | 60) => {
+  const handleDurationConfirm = async (mode: 15 | 30 | 60) => {
     const dur = mode as LiveDurationMinutes;
     setSelectedDuration(dur);
     const decision = evaluateLiveTutorialStart(
@@ -198,14 +205,28 @@ export const VoiceTutorialPage: React.FC<VoiceTutorialPageProps> = ({
       return;
     }
 
-    // Instant start
-    setShowDurationModal(false);
-    setIsPlayerActive(true);
+    // Move to Step 2: Voice Selection
+    setSetupStep('voice');
+  };
+
+  const handleVoiceConfirmAndStart = (voice: string) => {
+    setSelectedVoice(voice);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('avelut_live_classroom_voice', voice);
+      } catch {}
+    }
+    // Move to Step 3: Straight line red progress bar loading screen
+    setSetupStep('loading');
+  };
+
+  const handleLoadingComplete = () => {
+    // Move to Step 4: Live Interactive Classroom
+    setSetupStep('classroom');
   };
 
   const handleClose = () => {
-    setIsPlayerActive(false);
-    setShowDurationModal(false);
+    setSetupStep('duration');
     if (onBack) {
       onBack();
     } else {
@@ -218,9 +239,9 @@ export const VoiceTutorialPage: React.FC<VoiceTutorialPageProps> = ({
   return (
     <div className="relative w-full h-full min-h-screen bg-[#0A0A0A] text-[#FAFAFA]">
 
-      {/* ── CHOOSE DURATION MODAL (SHOWN FIRST) ───────────────────────── */}
+      {/* ── STEP 1: CHOOSE DURATION MODAL (RED ACCENT THEME) ─────────── */}
       <LessonDurationModal
-        isOpen={showDurationModal && !isPlayerActive}
+        isOpen={setupStep === 'duration'}
         topicTitle={topicTitle}
         courseName={courseName}
         initialMode={15}
@@ -228,13 +249,35 @@ export const VoiceTutorialPage: React.FC<VoiceTutorialPageProps> = ({
         appSettings={resolvedAppSettings}
         onClose={handleClose}
         onConfirm={(mode) => {
-          void handleStartLesson(mode);
+          void handleDurationConfirm(mode);
         }}
         onBuyCredits={() => {
-          setShowDurationModal(false);
+          setSetupStep('duration');
           onNavigate?.('billing');
         }}
       />
+
+      {/* ── STEP 2: CHOOSE TEACHER VOICE MODAL (RED ACCENT THEME) ────── */}
+      <LiveTutorialVoiceSelectorModal
+        isOpen={setupStep === 'voice'}
+        topicTitle={topicTitle}
+        courseName={courseName}
+        durationMinutes={selectedDuration}
+        initialVoice={selectedVoice}
+        onClose={() => setSetupStep('duration')}
+        onSelectVoiceAndStart={handleVoiceConfirmAndStart}
+      />
+
+      {/* ── STEP 3: STRAIGHT LINE RED PROGRESS BAR LOADING SCREEN ───── */}
+      {setupStep === 'loading' && (
+        <LiveClassroomLoadingScreen
+          topicTitle={topicTitle}
+          courseName={courseName}
+          durationMinutes={selectedDuration}
+          selectedVoice={selectedVoice}
+          onComplete={handleLoadingComplete}
+        />
+      )}
 
       {/* Insufficient credits modal */}
       <InsufficientCreditsModal
@@ -250,7 +293,7 @@ export const VoiceTutorialPage: React.FC<VoiceTutorialPageProps> = ({
         }}
         onTryShorter={(shorterMode) => {
           setShowCreditsModal(false);
-          void handleStartLesson(shorterMode);
+          void handleDurationConfirm(shorterMode);
         }}
         affordableModes={([15, 30, 60] as const).filter(
           (m) =>
@@ -259,14 +302,15 @@ export const VoiceTutorialPage: React.FC<VoiceTutorialPageProps> = ({
         )}
       />
 
-      {/* ── LIVE CLASSROOM ─────────────────────────────────────────────── */}
-      {isPlayerActive && (
+      {/* ── STEP 4: LIVE CLASSROOM (BOARD SHOWS & TEACHER TEACHES) ──── */}
+      {setupStep === 'classroom' && (
         <AvelutLiveClassroomView
-          key={`${topicTitle}::${courseName}::${selectedDuration}`}
+          key={`${topicTitle}::${courseName}::${selectedDuration}::${selectedVoice}`}
           topicTitle={topicTitle}
           courseName={courseName}
           syllabusContext={syllabusContext}
           durationMinutes={selectedDuration}
+          initialVoice={selectedVoice}
           learningPath={learningPath}
           userProfile={userProfile}
           appSettings={resolvedAppSettings}

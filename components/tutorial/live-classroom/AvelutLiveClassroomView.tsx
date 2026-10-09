@@ -80,6 +80,7 @@ export interface AvelutLiveClassroomViewProps {
   syllabusContext?: string;
   durationMinutes?: number;
   learningPath?: string[];
+  initialVoice?: string;
   userProfile?: UserProfile | null;
   appSettings?: any;
   onClose?: () => void;
@@ -178,10 +179,10 @@ const LiveVoiceWaveform: React.FC<{
     };
   }, [updateDOM]);
 
-  const barColor = isRecording ? 'bg-rose-500' : 'bg-blue-500';
+  const barColor = isRecording ? 'bg-rose-500' : 'bg-red-500';
   const btnColor = isRecording
     ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/40'
-    : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30';
+    : 'bg-gradient-to-tr from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-red-600/35';
   const label = isRecording
     ? 'Listening… (auto-sends when you pause)'
     : isTeacherSpeaking
@@ -213,19 +214,19 @@ const LiveVoiceWaveform: React.FC<{
         <div className="relative flex items-center justify-center shrink-0 w-20 h-20 sm:w-24 sm:h-24">
           <div
             className={`absolute w-32 h-32 sm:w-40 sm:h-40 rounded-full pointer-events-none scale-110 transition-colors duration-500 ${
-              isRecording ? 'bg-rose-500/[0.08]' : 'bg-blue-600/[0.08]'
+              isRecording ? 'bg-rose-500/[0.08]' : 'bg-red-600/[0.08]'
             }`}
           />
           <div
             className={`absolute w-24 h-24 sm:w-28 sm:h-28 rounded-full pointer-events-none scale-110 animate-pulse transition-colors duration-500 ${
-              isRecording ? 'bg-rose-500/[0.12]' : 'bg-blue-600/[0.12]'
+              isRecording ? 'bg-rose-500/[0.12]' : 'bg-red-600/[0.12]'
             }`}
           />
           <button
             onClick={onMicClick}
             disabled={disabled}
             className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center
-                       shadow-xl transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none
+                       shadow-xl transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer
                        ${btnColor}`}
             aria-label={isRecording ? 'Stop and send' : 'Tap to speak'}
           >
@@ -253,7 +254,7 @@ const LiveVoiceWaveform: React.FC<{
 
       <p
         className={`mt-3 text-sm sm:text-base font-medium tracking-wide transition-colors duration-300 ${
-          isRecording ? 'text-rose-400' : 'text-blue-400'
+          isRecording ? 'text-rose-400' : 'text-red-400'
         }`}
       >
         {label}
@@ -269,11 +270,11 @@ const TeacherStatePill: React.FC<{ state: TeacherState }> = ({ state }) => {
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#18181B]/80 border border-white/10 backdrop-blur-md shadow-lg">
       {state === 'speaking' && (
         <>
-          <Volume2 className="w-4 h-4 text-[#38BDF8] animate-pulse" />
-          <span className="text-xs font-semibold text-[#38BDF8]">Speaking</span>
+          <Volume2 className="w-4 h-4 text-red-400 animate-pulse" />
+          <span className="text-xs font-semibold text-red-400">Speaking</span>
           <span className="flex gap-0.5 ml-1">
             {['-0.3s', '-0.15s', '0s'].map((d) => (
-              <span key={d} className="w-0.5 h-3.5 bg-[#38BDF8] rounded-full animate-bounce" style={{ animationDelay: d }} />
+              <span key={d} className="w-0.5 h-3.5 bg-red-500 rounded-full animate-bounce" style={{ animationDelay: d }} />
             ))}
           </span>
         </>
@@ -326,6 +327,7 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
   syllabusContext,
   durationMinutes = 30,
   learningPath,
+  initialVoice,
   userProfile,
   appSettings,
   onClose,
@@ -344,6 +346,7 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
   const [activeFormula, setActiveFormula] = useState<string | null>(null);
 
   const [selectedVoice, setSelectedVoice] = useState<string>(() => {
+    if (initialVoice) return initialVoice;
     if (typeof window !== 'undefined') {
       return localStorage.getItem('avelut_live_classroom_voice') || 'Katerina';
     }
@@ -904,7 +907,7 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
               } text-xs font-semibold backdrop-blur-md shadow-md border transition-all active:scale-95 cursor-pointer`}
               title="Change teacher voice (Alibaba Flash Realtime)"
             >
-              <Volume2 className="w-3.5 h-3.5 text-[#38BDF8]" />
+              <Volume2 className="w-3.5 h-3.5 text-red-500" />
               <span className="max-w-[70px] sm:max-w-[100px] truncate">{selectedVoice}</span>
               <ChevronDown className={`w-3.5 h-3.5 opacity-60 transition-transform duration-200 ${showVoiceMenu ? 'rotate-180' : ''}`} />
             </button>
@@ -919,7 +922,7 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
               >
                 <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider opacity-50 border-b border-white/5 dark:border-white/10 mb-1 flex items-center justify-between">
                   <span>Alibaba Realtime Voices</span>
-                  <span className="text-[9px] font-medium text-[#38BDF8]">Flash Model</span>
+                  <span className="text-[9px] font-medium text-red-400">Flash Model</span>
                 </div>
                 {ALIBABA_FLASH_VOICES.map((v) => {
                   const isSelected = v.id === selectedVoice;
@@ -931,8 +934,8 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-all text-xs cursor-pointer ${
                         isSelected
                           ? isDark
-                            ? 'bg-[#38BDF8]/20 text-[#38BDF8] font-bold'
-                            : 'bg-sky-50 text-sky-700 font-bold'
+                            ? 'bg-red-500/20 text-red-400 font-bold'
+                            : 'bg-red-50 text-red-700 font-bold'
                           : isDark
                             ? 'text-white/80 hover:bg-white/10 hover:text-white'
                             : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
@@ -949,7 +952,7 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
                         </div>
                         <p className="text-[11px] opacity-60 truncate mt-0.5">{v.desc}</p>
                       </div>
-                      {isSelected && <Check className="w-4 h-4 text-[#38BDF8] shrink-0" />}
+                      {isSelected && <Check className="w-4 h-4 text-red-500 shrink-0" />}
                     </button>
                   );
                 })}

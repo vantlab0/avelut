@@ -134,8 +134,8 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
         <div className="flex items-start justify-between p-5 pb-3 border-b border-white/5">
           <div className="flex flex-col">
             <div className="flex items-center gap-2 mb-1">
-              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/20">
-                <Sparkles className="w-3 h-3" /> Live Classroom
+              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-red-500/10 text-red-400 border border-red-500/20">
+                <Sparkles className="w-3 h-3 text-red-400" /> Live Classroom
               </span>
               {courseName && (
                 <span className="text-xs text-white/40 truncate max-w-[160px]">
@@ -153,7 +153,7 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
 
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all shrink-0"
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all shrink-0 cursor-pointer"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -175,7 +175,7 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
                 onClick={() => setSelectedMode(item.minutes)}
                 className={`w-full flex items-center justify-between p-4 rounded-2xl border text-left transition-all duration-150 cursor-pointer ${
                   isSelected
-                    ? 'bg-[#18181D] border-[#38BDF8] shadow-[0_0_20px_rgba(56,189,248,0.15)] ring-1 ring-[#38BDF8]'
+                    ? 'bg-[#18181D] border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.2)] ring-1 ring-red-500'
                     : 'bg-[#141418]/60 border-white/5 hover:bg-[#18181D]/80 hover:border-white/10'
                 }`}
               >
@@ -184,7 +184,7 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
                   <div
                     className={`flex items-center justify-center w-11 h-11 rounded-xl shrink-0 transition-colors ${
                       isSelected
-                        ? 'bg-[#38BDF8] text-black font-bold'
+                        ? 'bg-red-500 text-white font-bold shadow-md shadow-red-500/30'
                         : isAllowed
                         ? 'bg-white/10 text-white'
                         : 'bg-white/5 text-white/30'
@@ -204,7 +204,7 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
 
                     {/* Small label underneath */}
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs font-semibold text-[#38BDF8]">
+                      <span className="text-xs font-semibold text-red-400">
                         {item.tagline}
                       </span>
 
@@ -231,7 +231,7 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
                       <span>Locked</span>
                     </div>
                   ) : isSelected ? (
-                    <CheckCircle2 className="w-5 h-5 text-[#38BDF8]" />
+                    <CheckCircle2 className="w-5 h-5 text-red-500" />
                   ) : (
                     <div className="w-4 h-4 rounded-full border border-white/20" />
                   )}
@@ -254,10 +254,10 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
           <button
             type="button"
             onClick={handleStart}
-            className={`w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl font-bold text-sm tracking-wide transition-all shadow-lg active:scale-[0.98] ${
+            className={`w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl font-bold text-sm tracking-wide transition-all shadow-lg active:scale-[0.98] cursor-pointer ${
               isSelectedLocked
                 ? 'bg-white/10 hover:bg-white/15 text-white border border-white/15 hover:border-white/25 shadow-white/5'
-                : 'bg-[#38BDF8] hover:bg-[#0284c7] text-black shadow-[0_0_25px_rgba(56,189,248,0.3)]'
+                : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white shadow-[0_0_25px_rgba(239,68,68,0.35)]'
             }`}
           >
             {isSelectedLocked ? (
@@ -268,7 +268,7 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
             ) : (
               <>
                 <Zap className="w-4 h-4 fill-current" />
-                <span>Start Lesson ({selectedMode} Minutes)</span>
+                <span>Continue to Voice Selection ({selectedMode} Mins)</span>
               </>
             )}
           </button>
