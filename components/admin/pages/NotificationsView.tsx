@@ -99,6 +99,35 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
             }
 
             await update(dbRef(db), updates);
+
+            // Dispatch live system push notification to Android device notification trays via FCM
+            try {
+                const apiBase = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()
+                    ? 'https://www.avelut.xyz'
+                    : '';
+                const isAll = notificationAudience === 'general' || recipientMode === 'all';
+                fetch(`${apiBase}/api/notifications`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'send',
+                        targetUserId: isAll ? 'all' : selectedRecipientId,
+                        broadcast: isAll,
+                        title,
+                        message,
+                        data: {
+                            route: notificationRoute,
+                            type: notificationType,
+                            category: notificationType
+                        }
+                    })
+                }).catch(err => {
+                    console.warn('[FCM] Error dispatching live device push:', err);
+                });
+            } catch (fcmErr) {
+                console.warn('[FCM] Push dispatch trigger error:', fcmErr);
+            }
+
             setAnnouncementTitle('');
             setAnnouncementMessage('');
             

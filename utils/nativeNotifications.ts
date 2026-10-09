@@ -295,56 +295,57 @@ export const initNativeNotifications = async (
       return;
     }
 
-    // 3. Register with FCM on native device
-    await PushNotifications.register();
+    if (!listenersAttached) {
+      listenersAttached = true;
 
-    if (listenersAttached) return;
-    listenersAttached = true;
-
-    // 4. Token received
-    registrationHandle = await PushNotifications.addListener('registration', async (token) => {
-      console.log('[FCM] Received device token:', token.value?.substring(0, 20) + '...');
-      if (token?.value && user?.uid) {
-        await saveFcmToken(user.uid, token.value);
-      }
-    });
-
-    // 5. Registration error
-    registrationErrorHandle = await PushNotifications.addListener('registrationError', (error) => {
-      console.warn('[FCM] Push notification registration error:', error);
-    });
-
-    // 6. Foreground push notification received: display toast
-    pushReceivedHandle = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
-      try {
-        const title = notification.title || 'Avelut';
-        const body = notification.body || '';
-        const display = body ? `${title}: ${body}` : title;
-        if (navigationHandlers.addToast) {
-          navigationHandlers.addToast(`🔔 ${display}`, 'info');
+      // Token received
+      registrationHandle = await PushNotifications.addListener('registration', async (token) => {
+        console.log('[FCM] Received device token:', token.value?.substring(0, 20) + '...');
+        if (token?.value && user?.uid) {
+          await saveFcmToken(user.uid, token.value);
         }
-      } catch (err) {
-        console.warn('[FCM] Foreground notification display error:', err);
-      }
-    });
+      });
 
-    // 7. Notification tapped / clicked
-    actionHandle = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-      try {
-        const data = action.notification?.data || {};
-        if (data.route && navigationHandlers.setActiveItem) {
-          navigationHandlers.setActiveItem(data.route);
-        }
-        if (data.chatId && navigationHandlers.setPendingChatId) {
-          navigationHandlers.setPendingChatId(data.chatId);
-          if (navigationHandlers.setActiveItem) {
-            navigationHandlers.setActiveItem('messenger');
+      // Registration error
+      registrationErrorHandle = await PushNotifications.addListener('registrationError', (error) => {
+        console.warn('[FCM] Push notification registration error:', error);
+      });
+
+      // Foreground push notification received: display toast
+      pushReceivedHandle = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        try {
+          const title = notification.title || 'Avelut';
+          const body = notification.body || '';
+          const display = body ? `${title}: ${body}` : title;
+          if (navigationHandlers.addToast) {
+            navigationHandlers.addToast(`🔔 ${display}`, 'info');
           }
+        } catch (err) {
+          console.warn('[FCM] Foreground notification display error:', err);
         }
-      } catch (err) {
-        console.warn('[FCM] Action handler error:', err);
-      }
-    });
+      });
+
+      // Notification tapped / clicked
+      actionHandle = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+        try {
+          const data = action.notification?.data || {};
+          if (data.route && navigationHandlers.setActiveItem) {
+            navigationHandlers.setActiveItem(data.route);
+          }
+          if (data.chatId && navigationHandlers.setPendingChatId) {
+            navigationHandlers.setPendingChatId(data.chatId);
+            if (navigationHandlers.setActiveItem) {
+              navigationHandlers.setActiveItem('messenger');
+            }
+          }
+        } catch (err) {
+          console.warn('[FCM] Action handler error:', err);
+        }
+      });
+    }
+
+    // Register with FCM on native device
+    await PushNotifications.register();
 
     // 8. Clean up any delivered notifications
     await clearDeliveredNotifications();

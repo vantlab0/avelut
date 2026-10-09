@@ -201,6 +201,58 @@ async function getDeviceTokenForUser(userId: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * Fetch all registered device FCM tokens across app_kv and profiles
+ */
+async function getAllDeviceTokens(): Promise<string[]> {
+  const tokenSet = new Set<string>();
+  try {
+    const kvRes = await fetch(`${SUPABASE_URL}/rest/v1/app_kv?key=like.user_device_tokens%25&select=value,value_json`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (kvRes.ok) {
+      const kvRows = await kvRes.json();
+      if (Array.isArray(kvRows)) {
+        for (const row of kvRows) {
+          const raw = row.value || row.value_json;
+          let parsed = raw;
+          if (typeof parsed === 'string') {
+            try { parsed = JSON.parse(parsed); } catch {}
+          }
+          const t = parsed?.fcm_token;
+          if (t && typeof t === 'string' && t.length > 20) {
+            tokenSet.add(t.trim());
+          }
+        }
+      }
+    }
+
+    const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?fcm_token=not.is.null&select=fcm_token`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (profRes.ok) {
+      const profRows = await profRes.json();
+      if (Array.isArray(profRows)) {
+        for (const row of profRows) {
+          const t = row.fcm_token;
+          if (t && typeof t === 'string' && t.length > 20) {
+            tokenSet.add(t.trim());
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[FCM] Error fetching all device tokens:', err);
+  }
+  return Array.from(tokenSet);
+}
+
 export async function GET() {
   const sa = await getServiceAccount();
   return new Response(
@@ -247,7 +299,91 @@ export async function POST(req: Request) {
         );
       }
 
-      // Resolve destination FCM device token
+      // Convert any custom data values to string as required by FCM
+      const dataPayload: Record<string, string> = {};
+      if (customData && typeof customData === 'object') {
+        for (const [k, v] of Object.entries(customData)) {
+          if (v !== undefined && v !== null) {
+            dataPayload[k] = typeof v === 'string' ? v : JSON.stringify(v);
+          }
+        }
+      }
+
+      // ── Broadcast to all users ──
+      if (targetUserId === 'all' || body.broadcast === true) {
+        const tokens = await getAllDeviceTokens();
+        if (tokens.length === 0) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              reason: 'No active device FCM tokens found in database to broadcast to.',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const accessToken = await getFCMV1AccessToken(sa);
+        let delivered = 0;
+        let failed = 0;
+
+        await Promise.allSettled(
+          tokens.map(async (tok) => {
+            try {
+              const fcmPayload = {
+                message: {
+                  token: tok,
+                  notification: {
+                    title: title || 'Avelut',
+                    body: message,
+                  },
+                  data: dataPayload,
+                  android: {
+                    priority: 'high',
+                    notification: {
+                      channel_id: 'default',
+                      icon: 'ic_launcher',
+                      sound: 'default',
+                      default_vibrate_timings: true,
+                    },
+                  },
+                },
+              };
+
+              const res = await fetch(
+                `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${accessToken}`,
+                  },
+                  body: JSON.stringify(fcmPayload),
+                }
+              );
+              if (res.ok) {
+                delivered++;
+              } else {
+                failed++;
+              }
+            } catch {
+              failed++;
+            }
+          })
+        );
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            broadcast: true,
+            totalDevices: tokens.length,
+            delivered,
+            failed,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // ── Single recipient ──
       const token = fcmToken || (await getDeviceTokenForUser(targetUserId));
       if (!token) {
         return new Response(
@@ -257,16 +393,6 @@ export async function POST(req: Request) {
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
-      }
-
-      // Convert any custom data values to string as required by FCM
-      const dataPayload: Record<string, string> = {};
-      if (customData && typeof customData === 'object') {
-        for (const [k, v] of Object.entries(customData)) {
-          if (v !== undefined && v !== null) {
-            dataPayload[k] = typeof v === 'string' ? v : JSON.stringify(v);
-          }
-        }
       }
 
       const accessToken = await getFCMV1AccessToken(sa);

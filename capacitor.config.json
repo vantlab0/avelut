@@ -20,6 +20,9 @@
     },
     "GoogleSignIn": {
       "clientId": "750743868519-fhhpqa43j11uuu61kj5d7oni141vscu8.apps.googleusercontent.com"
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
     }
   },
   "android": {
