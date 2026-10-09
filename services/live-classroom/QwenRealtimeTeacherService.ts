@@ -593,7 +593,7 @@ export class QwenRealtimeTeacherService {
       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
     const DEFAULT_REALTIME_PROXY =
-      'wss://realtime.avelut.xyz/qwen-realtime';
+      'wss://realtime.avelut.xyz/';
 
     const DEFAULT_LOCAL_PROXY =
       'ws://localhost:3001/qwen-realtime';
