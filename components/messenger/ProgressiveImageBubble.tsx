@@ -2,14 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { resolveImageDisplayUrl, extractImageCaption } from './messengerUtils';
 
 export interface ProgressiveImageBubbleProps {
-  msg: any;
-  isMe: boolean;
+  msg?: any;
+  isMe?: boolean;
   onImageClick?: (url: string) => void;
+  src?: string;
+  microThumbnail?: any;
+  isUploading?: boolean;
+  onPreview?: (url: string) => void;
 }
 
-export const ProgressiveImageBubble: React.FC<ProgressiveImageBubbleProps> = ({ msg, isMe, onImageClick }) => {
-  const displayUrl = resolveImageDisplayUrl(msg);
-  const caption = extractImageCaption(msg.text || '');
+export const ProgressiveImageBubble: React.FC<ProgressiveImageBubbleProps> = ({
+  msg,
+  isMe = false,
+  onImageClick,
+  src,
+  microThumbnail,
+  isUploading = false,
+  onPreview,
+}) => {
+  const displayUrl = src || (msg ? resolveImageDisplayUrl(msg) : '');
+  const caption = msg ? extractImageCaption(msg.text || '') : '';
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
 
@@ -20,12 +32,17 @@ export const ProgressiveImageBubble: React.FC<ProgressiveImageBubbleProps> = ({ 
 
   if (!displayUrl) return null;
 
+  const handleClick = () => {
+    if (onPreview) onPreview(displayUrl);
+    else if (onImageClick) onImageClick(displayUrl);
+  };
+
   return (
     <div className="relative group overflow-hidden rounded-2xl my-1 max-w-[280px] sm:max-w-[320px]">
       {!loaded && !error && (
         <div className="w-64 h-48 bg-[#1C1C1C] animate-pulse flex items-center justify-center rounded-2xl">
-          {msg.microThumbUrl ? (
-            <img src={msg.microThumbUrl} alt="" className="w-full h-full object-cover blur-md opacity-60" />
+          {msg?.microThumbUrl || microThumbnail ? (
+            <img src={msg?.microThumbUrl || microThumbnail} alt="" className="w-full h-full object-cover blur-md opacity-60" />
           ) : (
             <span className="text-xs text-[#A3A3A3]">Loading image…</span>
           )}
@@ -43,7 +60,7 @@ export const ProgressiveImageBubble: React.FC<ProgressiveImageBubbleProps> = ({ 
           alt={caption || 'Attached Image'}
           onLoad={() => setLoaded(true)}
           onError={() => setError(true)}
-          onClick={() => onImageClick?.(displayUrl)}
+          onClick={handleClick}
           className={`w-full max-h-[320px] object-cover rounded-2xl cursor-pointer transition-opacity duration-300 ${
             loaded ? 'opacity-100' : 'opacity-0 absolute inset-0'
           }`}

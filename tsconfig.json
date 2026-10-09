@@ -25,5 +25,5 @@
     "noEmit": true
   },
   "include": ["**/*", "vite-env.d.ts"],
-  "exclude": ["node_modules", "dist", "android", "ios"]
+  "exclude": ["node_modules", "dist", "android", "ios", "*.cjs", "*.mjs", "scripts", "supabase"]
 }

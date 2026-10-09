@@ -283,6 +283,7 @@ const GrokChatComposer: React.FC<{
   onOpenGallery: () => void;
   onOpenCamera: () => void;
   onSend: () => void;
+  onStop?: () => void;
   autoFocus?: boolean;
 }> = ({
   input,
@@ -296,6 +297,7 @@ const GrokChatComposer: React.FC<{
   onOpenGallery,
   onOpenCamera,
   onSend,
+  onStop,
   autoFocus,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -331,12 +333,24 @@ const GrokChatComposer: React.FC<{
     void showKeyboard();
   }, []);
 
-  // Soft autofocus on mount if autoFocus is true
+  const dismissKeyboard = useCallback(() => {
+    try {
+      if (textareaRef.current) {
+        textareaRef.current.blur();
+      }
+      if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      void hideKeyboard();
+    } catch {}
+  }, []);
+
+  // Only soft autofocus on large screens when explicitly requested, never force on mobile
   useEffect(() => {
-    if (autoFocus) {
+    if (autoFocus && typeof window !== 'undefined' && window.innerWidth > 768) {
       const timer = setTimeout(() => {
         activateKeyboard();
-      }, 120);
+      }, 150);
       return () => clearTimeout(timer);
     }
   }, [autoFocus, activateKeyboard]);
@@ -375,15 +389,13 @@ const GrokChatComposer: React.FC<{
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      void hideKeyboard();
-      if (textareaRef.current) {
-        textareaRef.current.blur();
-      }
+      dismissKeyboard();
       onSend();
     }
   };
 
-  const handleAttachClick = () => {
+  const handleAttachClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setShowAttachMenu((prev) => !prev);
   };
 
@@ -393,11 +405,6 @@ const GrokChatComposer: React.FC<{
     <div
       className="w-full max-w-3xl mx-auto px-3 sm:px-4 pb-[calc(max(0.75rem,env(safe-area-inset-bottom)))] pt-2 relative z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md shrink-0"
       onPaste={handlePaste}
-      onClick={() => {
-        if (document.activeElement !== textareaRef.current) {
-          activateKeyboard();
-        }
-      }}
     >
       <div className="relative flex flex-col bg-[#f4f4f5] dark:bg-[#212124] rounded-[28px] border border-neutral-200/70 dark:border-white/5 transition-all focus-within:ring-1 focus-within:ring-black/10 dark:focus-within:ring-white/10 shadow-sm">
         
@@ -518,38 +525,39 @@ const GrokChatComposer: React.FC<{
           <div className="flex items-center ml-auto">
             <button
               type="button"
-              onClick={
-                isLoading
-                  ? undefined
-                  : voiceStatus === 'listening'
-                  ? onToggleVoice
-                  : hasText
-                  ? () => {
-                      void hideKeyboard();
-                      if (textareaRef.current) {
-                        textareaRef.current.blur();
-                      }
-                      onSend();
-                    }
-                  : onToggleVoice
-              }
-              disabled={isLoading}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isLoading) {
+                  onStop?.();
+                  return;
+                }
+                if (voiceStatus === 'listening') {
+                  onToggleVoice();
+                } else if (hasText) {
+                  dismissKeyboard();
+                  onSend();
+                } else {
+                  onToggleVoice();
+                }
+              }}
               className={`h-11 sm:h-12 px-5 sm:px-6 rounded-full flex items-center justify-center gap-2 shrink-0 shadow-md transition-all duration-200 active:scale-95 font-bold text-sm select-none ${
                 isLoading
-                  ? 'bg-black/70 dark:bg-white/70 text-white dark:text-black cursor-not-allowed'
+                  ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/30 cursor-pointer animate-in fade-in duration-150'
                   : voiceStatus === 'listening'
                   ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-red-500/25'
                   : hasText
                   ? 'bg-black dark:bg-white hover:bg-neutral-800 dark:hover:bg-neutral-100 text-white dark:text-black shadow-black/20 dark:shadow-white/20'
                   : 'bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 text-white dark:text-neutral-900'
               }`}
-              title={isLoading ? 'Thinking...' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
-              aria-label={isLoading ? 'Thinking...' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
+              title={isLoading ? 'Stop generating' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
+              aria-label={isLoading ? 'Stop generating' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
             >
               {isLoading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  <span>Thinking</span>
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="5" y="5" width="14" height="14" rx="2.5" />
+                  </svg>
+                  <span>Stop</span>
                 </>
               ) : voiceStatus === 'listening' ? (
                 <>
@@ -617,13 +625,23 @@ export const Chat: React.FC<ChatProps> = ({
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [isSwitchingChat, setIsSwitchingChat] = useState(false);
   const switchingConvoIdRef = useRef<string | null>(null);
+  const newlyCreatedConvoIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeRequestIdRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const { addToast } = useToast();
   const { attemptApiCall } = useApiLimiter();
   const { settings: appSettings } = useAppSettings();
+
+  const handleStopGenerating = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+  }, []);
 
   const aiModel = getFeatureModel('chat_interaction', appSettings);
   const ai = useMemo(() => createAvelutAI(appSettings, userProfile), [appSettings, userProfile]);
@@ -735,7 +753,7 @@ export const Chat: React.FC<ChatProps> = ({
     setCustomHeaderConfig({
       hideTitle: true,
       title: null,
-      hideDefaultRightActions: true,
+      hideDefaultRightActions: false,
       hideProfileAvatar: true,
       className: 'absolute top-0 left-0 right-0 z-40 flex items-center justify-between bg-transparent border-none px-3 sm:px-6 pt-[max(0.35rem,env(safe-area-inset-top,0.35rem))] pb-1 pointer-events-none [&>*]:pointer-events-auto',
       onNewChat: handleNewChat,
@@ -840,9 +858,51 @@ export const Chat: React.FC<ChatProps> = ({
       return;
     }
 
+    // ⚡ FIRST MESSAGE FIX: If this conversation was just created in handleSendMessage,
+    // do NOT treat it as switching conversations! Keep the optimistic messages in memory,
+    // do NOT show skeleton loader, and do NOT wipe in-flight streaming messages!
+    if (newlyCreatedConvoIdRef.current === activeConversationId) {
+      newlyCreatedConvoIdRef.current = null;
+      switchingConvoIdRef.current = activeConversationId;
+      setIsSwitchingChat(false);
+
+      const messagesRef = dbRef(db, `chat_messages/${activeConversationId}`);
+      const unsubscribe = onValue(messagesRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const data: any[] = [];
+          snapshot.forEach((child) => {
+            let attachments: any[] | undefined = undefined;
+            const val = child.val();
+            if (val.attachments_json) {
+              try { attachments = JSON.parse(val.attachments_json); } catch {}
+            }
+            data.push({ id: child.key, ...val, attachments });
+          });
+          const sorted = data.sort((a, b) => a.timestamp - b.timestamp);
+          setMessages((current) => {
+            const dbTexts = new Set(sorted.map((m: any) => `${m.sender === 'user' ? 'user' : 'bot'}:${m.text}`));
+            const dbIds = new Set(sorted.map((m: any) => m.id));
+            const inFlight = current.filter(
+              (m) => !dbIds.has(m.id) && !dbTexts.has(`${m.sender}:${m.text}`)
+            );
+            const inFlightUsers = inFlight.filter((m) => m.sender === 'user');
+            const inFlightBots = inFlight.filter((m) => m.sender !== 'user');
+            const merged = [...sorted, ...inFlightUsers].sort((a, b) => a.timestamp - b.timestamp);
+            return [...merged, ...inFlightBots] as Message[];
+          });
+        }
+      });
+
+      return () => {
+        off(messagesRef);
+      };
+    }
+
     let isMounted = true;
     switchingConvoIdRef.current = activeConversationId;
-    setIsSwitchingChat(true);
+    if (!isLoadingRef.current) {
+      setIsSwitchingChat(true);
+    }
 
     getLocalMessages(activeConversationId).then((localMsgs) => {
       if (isMounted && switchingConvoIdRef.current === activeConversationId) {
@@ -862,7 +922,17 @@ export const Chat: React.FC<ChatProps> = ({
             timestamp: m.timestamp,
           };
         });
-        setMessages(localFormatted.sort((a, b) => a.timestamp - b.timestamp));
+        setMessages((current) => {
+          if (isLoadingRef.current) {
+            const dbIds = new Set(localFormatted.map((m) => m.id));
+            const inFlight = current.filter((m) => !dbIds.has(m.id));
+            const inFlightUsers = inFlight.filter((m) => m.sender === 'user');
+            const inFlightBots = inFlight.filter((m) => m.sender !== 'user');
+            const merged = [...localFormatted, ...inFlightUsers].sort((a, b) => a.timestamp - b.timestamp);
+            return [...merged, ...inFlightBots] as Message[];
+          }
+          return localFormatted.sort((a, b) => a.timestamp - b.timestamp);
+        });
         setIsSwitchingChat(false);
       }
     }).catch(() => {
@@ -891,7 +961,10 @@ export const Chat: React.FC<ChatProps> = ({
             const inFlight = current.filter(
               (m) => !dbIds.has(m.id) && !dbTexts.has(`${m.sender}:${m.text}`)
             );
-            return [...sorted, ...inFlight].sort((a, b) => a.timestamp - b.timestamp) as Message[];
+            const inFlightUsers = inFlight.filter((m) => m.sender === 'user');
+            const inFlightBots = inFlight.filter((m) => m.sender !== 'user');
+            const merged = [...sorted, ...inFlightUsers].sort((a, b) => a.timestamp - b.timestamp);
+            return [...merged, ...inFlightBots] as Message[];
           });
           setIsSwitchingChat(false);
         }
@@ -1088,18 +1161,52 @@ export const Chat: React.FC<ChatProps> = ({
 
     console.log(`[Chat] request started requestId=${requestId} imageCount=${currentImages.length} payloadMB=${payloadMB}`);
 
+    const now = Date.now();
+    const userMsgId = generateLocalId('msg');
+    const aiMsgId = generateLocalId('msg');
+
+    const userMsgAttachments = currentImages.map((img) => ({
+      type: 'image' as const,
+      dataUrl: img,
+    }));
+
+    // ⚡ INSTANT OPTIMISTIC DISPLAY: Display user message & AI thinking state immediately in the UI on line 1
+    const optimisticUserMsg: Message = {
+      id: userMsgId,
+      text: displayInput,
+      image_url: currentImages[0] || undefined,
+      attachments: userMsgAttachments,
+      sender: 'user',
+      timestamp: now,
+    };
+
+    const optimisticAiMsg: Message = {
+      id: aiMsgId,
+      text: '',
+      reasoningText: '',
+      sender: 'bot',
+      timestamp: now + 999999,
+    };
+
+    setMessages((prev) => [...prev.filter((m) => m.id !== aiMsgId && m.id !== userMsgId), optimisticUserMsg, optimisticAiMsg]);
+    const currentAbort = new AbortController();
+    abortControllerRef.current = currentAbort;
+
     setInput('');
     setAttachedImages([]);
     setIsLoading(true);
 
-    let aiMsgId = '';
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
+
     try {
       let currentConvoId = activeConversationId;
-      const now = Date.now();
 
       const isNewConvo = !currentConvoId;
       if (!currentConvoId) {
         currentConvoId = generateLocalId('conv');
+        newlyCreatedConvoIdRef.current = currentConvoId;
         const initialTitle = (cleanUserText || (currentImages.length > 0 ? 'Image Analysis' : 'New Chat')).slice(0, 30);
         void saveLocalConversation({
           id: currentConvoId,
@@ -1110,7 +1217,7 @@ export const Chat: React.FC<ChatProps> = ({
         });
 
         const conversationsRef = dbRef(db, `chat_conversations/${userProfile.uid}/${currentConvoId}`);
-        // Fire-and-forget: do NOT await this — it blocks the AI call by a database roundtrip
+        // Fire-and-forget background sync
         void set(conversationsRef, {
           title: initialTitle,
           created_at: now,
@@ -1148,12 +1255,7 @@ export const Chat: React.FC<ChatProps> = ({
         })();
       };
 
-      const userMsgAttachments = currentImages.map((img) => ({
-        type: 'image' as const,
-        dataUrl: img,
-      }));
-
-      const userMsgId = generateLocalId('msg');
+      // Save user message to local SQLite asynchronously
       void saveLocalMessage({
         id: userMsgId,
         conversation_id: currentConvoId,
@@ -1165,27 +1267,13 @@ export const Chat: React.FC<ChatProps> = ({
         timestamp: now,
       });
 
-      aiMsgId = generateLocalId('msg');
-
-      setMessages((prev) => [
-        ...prev.filter((m) => m.id !== aiMsgId),
-        {
-          id: userMsgId,
-          text: displayInput,
-          image_url: currentImages[0] || undefined,
-          attachments: userMsgAttachments,
-          sender: 'user',
-          timestamp: now,
-        },
-      ]);
-
       const updateOrAppendAiMessage = (text: string, reasoningText?: string) => {
         setMessages((prev) => {
           const exists = prev.some((m) => m.id === aiMsgId);
           if (exists) {
             return prev.map((m) => (m.id === aiMsgId ? { ...m, text, reasoningText } : m));
           } else {
-            return [...prev, { id: aiMsgId, text, reasoningText, sender: 'bot', timestamp: Date.now() }];
+            return [...prev, { id: aiMsgId, text, reasoningText, sender: 'bot', timestamp: Date.now() + 999999 }];
           }
         });
       };
@@ -1284,49 +1372,61 @@ export const Chat: React.FC<ChatProps> = ({
       const aiParams = {
         model: aiModel,
         contents: historyContents,
+        signal: currentAbort.signal,
         config: {
           systemInstruction: fullSystemInstruction,
           temperature: selectedMode === 'fast' ? 0.3 : 0.5,
+          signal: currentAbort.signal,
           // Lower temperature = faster, more deterministic responses
         },
       };
 
-      const cachedReply = currentImages.length > 0 ? null : await getCachedAIResponse(promptText, aiModel, selectedMode);
-      let responseText = cachedReply || '';
+      let responseText = '';
       let reasoningText = '';
+      let fromCache = false;
       let usageAcc: AiUsageMetadata = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-      const fromCache = !!responseText;
 
-      if (responseText) {
-        updateOrAppendAiMessage(responseText);
-      } else {
-        if (!ai) {
-          addToast('Avelut AI is not configured in settings.', 'error');
-          setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
-          return;
-        }
+      if (!ai) {
+        addToast('Avelut AI is not configured in settings.', 'error');
+        setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
+        return;
+      }
 
-        // Show thinking indicator immediately for this bot message
-        updateOrAppendAiMessage('', '');
+      // Show pulsing blue dot indicator immediately for this bot message
+      updateOrAppendAiMessage('', '');
 
-        try {
-          const responseStream = await ai.models.generateContentStream(aiParams);
+      try {
+        const responseStream = await ai.models.generateContentStream(aiParams);
 
-          for await (const chunk of responseStream) {
-            usageAcc = accumulateUsageMetadata(usageAcc, chunk);
-            const chunkText = getResponseText(chunk);
-            const chunkReasoning = getResponseReasoningText(chunk);
-            if (chunkReasoning) {
-              reasoningText += chunkReasoning;
-            }
-            if (chunkText) {
-              responseText += chunkText;
-            }
-            updateOrAppendAiMessage(responseText, reasoningText);
+        for await (const chunk of responseStream) {
+          if (currentAbort.signal.aborted) {
+            break;
           }
-        } catch (streamErr: any) {
+          usageAcc = accumulateUsageMetadata(usageAcc, chunk);
+          const chunkText = getResponseText(chunk);
+          const chunkReasoning = getResponseReasoningText(chunk);
+          if (chunkReasoning) {
+            reasoningText += chunkReasoning;
+          }
+          if (chunkText) {
+            responseText += chunkText;
+          }
+          updateOrAppendAiMessage(responseText, reasoningText);
+        }
+      } catch (streamErr: any) {
+        if (currentAbort.signal.aborted) {
+          console.log('[Chat] Generation aborted by user during stream');
+        } else {
+          const isOffline = streamErr?.message?.includes('NETWORK_OFFLINE') ||
+            streamErr?.message?.includes('Failed to fetch') ||
+            (typeof navigator !== 'undefined' && !navigator.onLine);
+          if (isOffline) {
+            throw new Error('NETWORK_OFFLINE: Network connection lost. Please check your internet connection and try again.');
+          }
+
           console.warn('Streaming failed or not supported, falling back to generateContent:', streamErr);
           const aiResult = await attemptApiCall(async () => {
+            if (currentAbort.signal.aborted) return '';
             const result = await ai.models.generateContent(aiParams);
             usageAcc = accumulateUsageMetadata(usageAcc, result);
             const resText = getResponseText(result);
@@ -1334,56 +1434,85 @@ export const Chat: React.FC<ChatProps> = ({
             return resText;
           });
 
-          if (!aiResult.success) {
-            addToast(aiResult.message, 'error');
-            setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
-            return;
+          if (!currentAbort.signal.aborted) {
+            if (!aiResult.success) {
+              addToast(aiResult.message, 'error');
+              setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
+              return;
+            }
+
+            responseText = (aiResult.data || '').trim();
+            updateOrAppendAiMessage(responseText, reasoningText);
           }
-
-          responseText = (aiResult.data || '').trim();
-          updateOrAppendAiMessage(responseText, reasoningText);
         }
-
-        if (responseText && currentImages.length === 0) {
-          void setCachedAIResponse(promptText, aiModel, selectedMode, responseText);
-        }
-
-      // Trigger background title generation after primary chat response is successfully generated
-      triggerBackgroundTitleGen();
       }
 
-      if (!responseText.trim()) {
+      // Safeguard against HTML index fallback being treated as chat response
+      const isHtmlText = (str: string) => {
+        const t = str.trim().toLowerCase();
+        return t.startsWith('<!doctype') || t.startsWith('<html') || t.includes('<head>') || t.includes('id="root"');
+      };
+
+      if (isHtmlText(responseText)) {
+        console.warn('[Chat] Detected HTML document in responseText. Rejecting index.html content.');
+        setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
+        addToast('Network connection lost. Please check your internet connection and try again.', 'error');
+        return;
+      }
+
+      if (currentAbort.signal.aborted && !responseText.trim()) {
+        // User aborted before any text was received
+        setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
+        return;
+      }
+
+      if (responseText && currentImages.length === 0 && !currentAbort.signal.aborted) {
+        void setCachedAIResponse(promptText, aiModel, selectedMode, responseText);
+      }
+
+      if (!currentAbort.signal.aborted) {
+        // Trigger background title generation after primary chat response is successfully generated
+        triggerBackgroundTitleGen();
+      }
+
+      if (!responseText.trim() && !currentAbort.signal.aborted) {
         responseText = 'I apologize, but I could not generate a response. Please try again.';
         updateOrAppendAiMessage(responseText);
       }
 
-      void saveLocalMessage({
-        id: aiMsgId,
-        conversation_id: currentConvoId,
-        user_id: userProfile.uid,
-        sender: 'assistant',
-        text: responseText,
-        timestamp: Date.now(),
-      });
-
-      try {
-        push(messagesRef, {
+      if (responseText.trim()) {
+        void saveLocalMessage({
+          id: aiMsgId,
+          conversation_id: currentConvoId,
+          user_id: userProfile.uid,
+          sender: 'assistant',
           text: responseText,
-          sender: 'ai',
-          timestamp: serverTimestamp(),
+          timestamp: Date.now(),
         });
-      } catch (e) {
-        console.error(e);
-      }
 
-      void deductAICredits(userProfile.uid, cost, 'AI Chat Assistant', appSettings, {
-        promptTokens: usageAcc.promptTokens,
-        completionTokens: usageAcc.completionTokens,
-        totalTokens: usageAcc.totalTokens,
-        model: aiModel,
-        metadata: { path: 'chat', from_cache: fromCache, mode: selectedMode },
-      });
+        try {
+          push(messagesRef, {
+            text: responseText,
+            sender: 'ai',
+            timestamp: serverTimestamp(),
+          });
+        } catch (e) {
+          console.error(e);
+        }
+
+        void deductAICredits(userProfile.uid, cost, 'AI Chat Assistant', appSettings, {
+          promptTokens: usageAcc.promptTokens,
+          completionTokens: usageAcc.completionTokens,
+          totalTokens: usageAcc.totalTokens,
+          model: aiModel,
+          metadata: { path: 'chat', from_cache: fromCache, mode: selectedMode },
+        });
+      }
     } catch (err: any) {
+      if (currentAbort.signal.aborted || err?.name === 'AbortError') {
+        console.log('[Chat] Generation stopped by user.');
+        return;
+      }
       console.error('[Chat] Error in chat:', err);
       // Clean up empty bot placeholder if streaming failed
       setMessages((prev) => prev.filter((m) => m.id !== aiMsgId || m.text.trim().length > 0));
@@ -1394,13 +1523,21 @@ export const Chat: React.FC<ChatProps> = ({
       }
 
       const rawErrMsg = err?.message || String(err || '');
-      if (rawErrMsg.includes("temporarily busy") || rawErrMsg.includes("429") || rawErrMsg.includes("RATE_LIMIT") || rawErrMsg.includes("overloaded")) {
+      if (
+        rawErrMsg.includes('NETWORK_OFFLINE') ||
+        rawErrMsg.includes('Network connection lost') ||
+        rawErrMsg.includes('Failed to fetch') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        addToast('Network connection lost. Please check your internet connection and try again.', 'error');
+      } else if (rawErrMsg.includes("temporarily busy") || rawErrMsg.includes("429") || rawErrMsg.includes("RATE_LIMIT") || rawErrMsg.includes("overloaded")) {
         addToast("Avelut's AI provider is temporarily busy. Please try again in a moment.", "error");
       } else {
         addToast(rawErrMsg || 'An error occurred while sending your message.', 'error');
       }
     } finally {
       activeRequestIdRef.current = null;
+      abortControllerRef.current = null;
       setIsLoading(false);
     }
   };
@@ -1454,16 +1591,27 @@ export const Chat: React.FC<ChatProps> = ({
       {/* MESSAGES / EMPTY STATE AREA */}
       <div className="flex-1 overflow-y-auto px-4 pt-[calc(max(0.35rem,env(safe-area-inset-top,0.35rem))+3rem)] pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {isSwitchingChat ? (
-          <div className="flex flex-col items-center justify-center py-28 space-y-4 min-h-[40vh] animate-in fade-in duration-200">
-            {/* Unique Designed Orbital Geometric Spinner */}
-            <div className="relative w-14 h-14 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-600 dark:border-t-blue-400 border-r-indigo-500/40 dark:border-r-indigo-400/40 animate-spin" style={{ animationDuration: '0.85s' }} />
-              <div className="absolute inset-1.5 rounded-full border-2 border-transparent border-b-violet-500 dark:border-b-violet-400 border-l-cyan-400/50 animate-spin" style={{ animationDuration: '0.6s', animationDirection: 'reverse' }} />
-              <div className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400 animate-ping opacity-80" />
+          <div className="w-full max-w-3xl mx-auto py-10 space-y-6 animate-in fade-in duration-300">
+            {/* Soft, beautiful chat skeleton loader */}
+            <div className="flex justify-end animate-pulse">
+              <div className="w-48 sm:w-64 h-12 bg-neutral-200/80 dark:bg-[#252528] rounded-[22px] rounded-br-xs shadow-2xs" />
             </div>
-            <p className="text-xs font-semibold tracking-wider uppercase text-neutral-400 dark:text-neutral-500 select-none animate-pulse">
-              Loading chat...
-            </p>
+            <div className="flex justify-start space-y-3 flex-col max-w-[85%] sm:max-w-[75%] animate-pulse">
+              <div className="flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-full bg-blue-600/20 dark:bg-blue-400/20 flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                </div>
+                <div className="w-20 h-3.5 bg-neutral-200 dark:bg-[#252528] rounded-full" />
+              </div>
+              <div className="space-y-2.5 pl-8">
+                <div className="w-full h-4 bg-neutral-200/70 dark:bg-[#252528]/80 rounded-lg" />
+                <div className="w-5/6 h-4 bg-neutral-200/70 dark:bg-[#252528]/80 rounded-lg" />
+                <div className="w-3/5 h-4 bg-neutral-200/50 dark:bg-[#252528]/50 rounded-lg" />
+              </div>
+            </div>
+            <div className="flex justify-end animate-pulse pt-2">
+              <div className="w-36 sm:w-52 h-10 bg-neutral-200/60 dark:bg-[#252528]/60 rounded-[22px] rounded-br-xs" />
+            </div>
           </div>
         ) : messages.length === 0 && !isLoading ? (
           <div className="flex-1 h-full min-h-[40vh]" />
@@ -1472,7 +1620,7 @@ export const Chat: React.FC<ChatProps> = ({
             {messages.map((msg, index) => (
               <div
                 key={msg.id}
-                className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
               >
                 {msg.sender === 'user' ? (
                   <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
@@ -1498,7 +1646,7 @@ export const Chat: React.FC<ChatProps> = ({
                         <div className="min-w-0">
                           <MarkdownContent content={msg.text} />
                           {isLoading && index === messages.length - 1 && (
-                            <span aria-hidden="true" className="inline-block w-2 h-4 ml-1 bg-blue-600 dark:bg-blue-400 rounded-xs animate-pulse align-middle" />
+                            <span aria-hidden="true" className="inline-block w-2 h-2 ml-1.5 bg-blue-500 dark:bg-blue-400 rounded-full animate-pulse shadow-[0_0_6px_rgba(59,130,246,0.8)] align-middle" />
                           )}
                         </div>
                       )}
@@ -1648,7 +1796,8 @@ export const Chat: React.FC<ChatProps> = ({
         onOpenGallery={() => fileInputRef.current?.click()}
         onOpenCamera={() => setIsCameraOpen(true)}
         onSend={() => handleSendMessage()}
-        autoFocus={true}
+        onStop={handleStopGenerating}
+        autoFocus={false}
       />
 
       {isCameraOpen && (

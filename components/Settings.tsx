@@ -105,20 +105,15 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
 
       if (isNative()) {
         try {
-          const { requestLocalNotificationPermission } = await import('../utils/nativeNotifications');
           if (enabled) {
-            await requestLocalNotificationPermission();
-            const OneSignal = (await import('@onesignal/capacitor-plugin')).default;
-            await OneSignal.User.pushSubscription.optIn();
-            if (user?.uid) {
-              await OneSignal.login(user.uid);
+            const { PushNotifications } = await import('@capacitor/push-notifications');
+            const perm = await PushNotifications.requestPermissions();
+            if (perm.receive === 'granted') {
+              await PushNotifications.register();
             }
-          } else {
-            const OneSignal = (await import('@onesignal/capacitor-plugin')).default;
-            await OneSignal.User.pushSubscription.optOut();
           }
         } catch (e) {
-          console.warn('[Settings] Error syncing OneSignal subscription state:', e);
+          console.warn('[Settings] Error syncing push notification state:', e);
         }
       }
 

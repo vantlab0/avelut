@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AVELUT Brand Colors for dark native Android UI -->
+    <color name="colorPrimary">#002D62</color>
+    <color name="colorPrimaryDark">#0052FF</color>
+    <color name="colorAccent">#B3E5FC</color>
+    <!-- Dark app background matching dark skeleton #000000 -->
+    <color name="colorBackground">#000000</color>
+</resources>

@@ -243,10 +243,10 @@ export const MyNotebooks: React.FC<MyNotebooksProps> = ({
             <div
               key={nb.id}
               onClick={() => setSelectedNotebook(nb)}
-              className="w-full flex items-center justify-between p-4 sm:p-5 bg-[#FAF9F6] dark:bg-[#141414] border border-neutral-200/90 dark:border-[#2A2A2A] rounded-2xl hover:bg-neutral-100 dark:hover:bg-[#1C1C1C] transition-all cursor-pointer group shadow-2xs gap-3"
+              className="w-full flex items-center justify-between p-4 sm:p-5 bg-[#FAF9F6] dark:bg-[#141414] border border-neutral-200/90 dark:border-[#2A2A2A] rounded-2xl hover:bg-neutral-100 dark:hover:bg-[#1C1C1C] transition-all cursor-pointer group shadow-2xs gap-3 animate-in fade-in slide-in-from-bottom-1 duration-200"
             >
               <div className="flex items-center gap-3.5 min-w-0">
-                <div className="w-11 h-11 rounded-2xl bg-neutral-100 dark:bg-[#1C1C1C] border border-neutral-200 dark:border-[#2A2A2A] flex items-center justify-center text-black dark:text-[#FAFAFA] text-lg shrink-0 group-hover:bg-neutral-900 dark:group-hover:bg-[#2A2A2A] transition-colors">
+                <div className="w-11 h-11 rounded-2xl bg-neutral-100 dark:bg-[#1C1C1C] border border-neutral-200 dark:border-[#2A2A2A] flex items-center justify-center text-black dark:text-[#FAFAFA] text-lg shrink-0 group-hover:bg-neutral-200/80 dark:group-hover:bg-[#2A2A2A] transition-colors">
                   <i className="bi bi-journal-text"></i>
                 </div>
                 <div className="min-w-0">
@@ -269,12 +269,12 @@ export const MyNotebooks: React.FC<MyNotebooksProps> = ({
                 <button
                   type="button"
                   onClick={(e) => handleDeleteNotebook(nb.id, nb.title, e)}
-                  className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-[#1C1C1C] hover:bg-neutral-50 dark:hover:bg-[#2A2A2A] border border-neutral-200 dark:border-[#2A2A2A] text-neutral-500 dark:text-[#A3A3A3] hover:text-black dark:hover:text-[#FAFAFA] flex items-center justify-center transition-all cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-[#1C1C1C] hover:bg-red-50 dark:hover:bg-red-950/40 border border-neutral-200 dark:border-[#2A2A2A] text-neutral-500 dark:text-[#A3A3A3] hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center transition-all cursor-pointer"
                   title="Delete Notebook"
                 >
                   <i className="bi bi-trash text-xs"></i>
                 </button>
-                <div className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-[#1C1C1C] border border-neutral-200 dark:border-[#2A2A2A] flex items-center justify-center text-black dark:text-[#FAFAFA] group-hover:bg-neutral-900 dark:group-hover:bg-[#2A2A2A] transition-all">
+                <div className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-[#1C1C1C] border border-neutral-200 dark:border-[#2A2A2A] flex items-center justify-center text-black dark:text-[#FAFAFA] group-hover:bg-neutral-200/80 dark:group-hover:bg-[#2A2A2A] transition-all">
                   <i className="bi bi-chevron-right text-xs"></i>
                 </div>
               </div>

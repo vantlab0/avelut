@@ -23,7 +23,7 @@ export interface StructuredDiagramRequest {
   constraints: { max_nodes?: number; orientation?: 'horizontal' | 'vertical'; color_palette?: string };
   canvas: { width: number; height: number; reservedTop: number };
   yOffset: number;
-  existingBoardSummary: string;
+  existingBoardSummary?: string;
 }
 
 export interface StructuredDiagramResult {

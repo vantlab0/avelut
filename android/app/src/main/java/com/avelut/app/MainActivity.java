@@ -70,7 +70,9 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
-        bridgeContainer.setBackgroundColor(STATUS_BAR_BACKGROUND_COLOR);
+        boolean isNight = (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+            == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        bridgeContainer.setBackgroundColor(isNight ? STATUS_BAR_BACKGROUND_COLOR : Color.parseColor("#F6F6F3"));
 
         ViewCompat.setOnApplyWindowInsetsListener(bridgeContainer, (view, windowInsets) -> {
             Insets barInsets = windowInsets.getInsets(

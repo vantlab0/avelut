@@ -24,7 +24,7 @@
   },
   "android": {
     "allowMixedContent": true,
-    "backgroundColor": "#000000"
+    "backgroundColor": "#F6F6F3"
   },
   "ios": {
     "contentInset": "always",

@@ -10,6 +10,38 @@ interface GoogleDrivePickerOptions {
 
 const GOOGLE_ACCESS_TOKEN_KEY = 'avelut_google_drive_token';
 
+const loadScript = (src: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (typeof document === 'undefined') {
+      resolve();
+      return;
+    }
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+};
+
+const ensureGoogleDriveScripts = async (): Promise<boolean> => {
+  try {
+    await Promise.all([
+      loadScript('https://accounts.google.com/gsi/client'),
+      loadScript('https://apis.google.com/js/api.js'),
+    ]);
+    return true;
+  } catch (err) {
+    console.error('Failed to load Google Drive scripts on-demand:', err);
+    return false;
+  }
+};
+
 export const useGoogleDrivePicker = () => {
   const [accessToken, setAccessToken] = useState<string | null>(() => {
     try {
@@ -30,6 +62,13 @@ export const useGoogleDrivePicker = () => {
     }
 
     setIsPickerLoading(true);
+
+    const scriptsLoaded = await ensureGoogleDriveScripts();
+    if (!scriptsLoaded) {
+      setIsPickerLoading(false);
+      addToast("Failed to connect to Google Drive service. Check internet connection.", "error");
+      return;
+    }
 
     const buildAndShowPicker = (token: string) => {
       const view = new (window as any).google.picker.DocsView((window as any).google.picker.ViewId.DOCS)

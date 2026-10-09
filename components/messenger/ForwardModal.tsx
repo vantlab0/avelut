@@ -4,23 +4,35 @@ import type { UserProfile } from '../../types';
 export interface ForwardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  chats: any[];
-  onForward: (targetChatId: string) => void;
-  currentUserId: string;
+  chats?: any[];
+  onForward: (targetChatId: any) => void;
+  currentUserId?: string;
+  messageText?: string;
+  messageType?: string;
+  studyPartners?: Record<string, boolean>;
+  allUsers?: UserProfile[];
 }
 
 export const ForwardModal: React.FC<ForwardModalProps> = ({
   isOpen,
   onClose,
-  chats,
+  chats = [],
   onForward,
-  currentUserId,
+  currentUserId = '',
+  messageText,
+  messageType,
+  studyPartners,
+  allUsers = [],
 }) => {
   const [searchTerm, setSearchQuery] = useState('');
 
   if (!isOpen) return null;
 
-  const filtered = chats.filter((c) => {
+  const candidateList = chats.length > 0
+    ? chats
+    : allUsers.map((u) => ({ id: u.uid, title: u.display_name, partner_profile: u }));
+
+  const filtered = candidateList.filter((c) => {
     const title = c.partner_profile?.display_name || c.title || 'Chat';
     return title.toLowerCase().includes(searchTerm.toLowerCase());
   });

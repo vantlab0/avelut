@@ -62,12 +62,8 @@ const appContent = (
   </React.StrictMode>
 );
 
-if (rootElement.hasChildNodes()) {
-  ReactDOM.hydrateRoot(rootElement, appContent);
-} else {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(appContent);
-}
+const root = ReactDOM.createRoot(rootElement);
+root.render(appContent);
 
 if (Capacitor.isNativePlatform()) {
   // If running natively in Capacitor, unregister any service workers and clear caches

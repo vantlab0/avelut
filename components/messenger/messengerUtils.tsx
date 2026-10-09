@@ -78,7 +78,10 @@ export const formatChatTimestamp = (ts?: number): string => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
-export const getUnreadCount = (chat: any): number => Number(chat?.unreadCount || 0);
+export const getUnreadCount = (chatOrUid: any, optionalChat?: any): number => {
+  const chat = optionalChat !== undefined ? optionalChat : chatOrUid;
+  return Number(chat?.unreadCount || 0);
+};
 
 export const getLastMessagePreview = (chat: any): string => {
   if (!chat?.last_message) return 'Tap to send a message';
@@ -98,9 +101,10 @@ export const createFallbackChatUser = (uid = ''): UserProfile => ({
   email: '',
   photo_url: '',
   xp: 0,
-  level: 1,
-  streak: 0,
-  created_at: Date.now(),
+  level: '100',
+  current_streak: 0,
+  last_activity_date: Date.now(),
+  notifications_enabled: true,
   use_personal_token: false,
   subscription_status: 'free',
 });

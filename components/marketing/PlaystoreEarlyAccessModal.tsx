@@ -9,19 +9,30 @@ interface PlaystoreModalProps {
 
 export const PlaystoreEarlyAccessModal: React.FC<PlaystoreModalProps> = ({ onClose }) => {
   const { settings } = useAppSettings();
+  const collectEmails = Boolean(settings?.playstore_modal_collect_emails);
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
 
-  const collectEmails = settings.playstore_modal_collect_emails ?? true;
-  const playstoreLink = 'https://play.google.com/store/apps/details?id=com.avelut.app';
+  const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+  const playstoreAppUrl = 'market://details?id=com.avelut.app';
+  const playstoreWebUrl = 'https://play.google.com/store/apps/details?id=com.avelut.app';
+  const playstoreLink = isAndroid ? playstoreAppUrl : playstoreWebUrl;
+
+  const handlePlaystoreRedirect = () => {
+    if (isAndroid) {
+      window.location.href = playstoreAppUrl;
+    } else {
+      window.open(playstoreWebUrl, '_blank', 'noopener,noreferrer');
+    }
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!collectEmails) {
-        window.open(playstoreLink, '_blank');
-        onClose();
+        handlePlaystoreRedirect();
         return;
     }
 
@@ -46,11 +57,6 @@ export const PlaystoreEarlyAccessModal: React.FC<PlaystoreModalProps> = ({ onClo
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handlePlaystoreRedirect = () => {
-      window.open(playstoreLink, '_blank');
-      onClose();
   };
 
   return (

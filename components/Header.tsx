@@ -154,10 +154,10 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Right Slot: Combined Pill Control + Optional Update Badge */}
-      <div className="flex items-center gap-2 min-w-[40px] justify-end shrink-0 overflow-visible">
+      <div className="flex items-center gap-2 justify-end shrink-0 overflow-visible">
         {rightActions ? (
           rightActions
-        ) : (
+        ) : hideDefaultRightActions ? null : (
           <div className="relative pointer-events-auto overflow-visible" ref={dropdownRef}>
             {/* Combined Pill Container */}
             <div className="h-10 sm:h-11 rounded-full bg-white dark:bg-[#212124] shadow-md hover:shadow-lg border border-black/5 dark:border-white/10 px-1.5 flex items-center gap-1 shrink-0">

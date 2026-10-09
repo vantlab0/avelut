@@ -7,6 +7,6 @@
     <color name="colorPrimaryDark">#0052FF</color>
     <!-- Brand accent - ice blue highlights -->
     <color name="colorAccent">#B3E5FC</color>
-    <!-- App background -->
-    <color name="colorBackground">#FFFFFF</color>
+    <!-- App background matching instant skeleton #F6F6F3 -->
+    <color name="colorBackground">#F6F6F3</color>
 </resources>

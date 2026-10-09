@@ -24,10 +24,36 @@ export const normalizeLevel = (value?: string) => {
   return LEVELS[0];
 };
 
-export const normalizeSemester = (value?: string) => {
-  const normalized = (value || '').toString().trim().toLowerCase();
-  return SEMESTERS.includes(normalized as (typeof SEMESTERS)[number]) ? (normalized as (typeof SEMESTERS)[number]) : SEMESTERS[0];
+export const normalizeSemester = (value?: any): (typeof SEMESTERS)[number] => {
+  if (!value) return SEMESTERS[0];
+  const str = String(value).trim().toLowerCase();
+  if (
+    str === 'second' ||
+    str === '2' ||
+    str === '2nd' ||
+    str.includes('second') ||
+    str.includes('2nd') ||
+    str.includes('rain') ||
+    str.includes('omega') ||
+    str.includes('spring')
+  ) {
+    return 'second';
+  }
+  if (
+    str === 'first' ||
+    str === '1' ||
+    str === '1st' ||
+    str.includes('first') ||
+    str.includes('1st') ||
+    str.includes('harmattan') ||
+    str.includes('alpha') ||
+    str.includes('fall')
+  ) {
+    return 'first';
+  }
+  return SEMESTERS[0];
 };
+
 
 export const getCourseMergeKey = (course: Partial<Course>) => {
     const primaryLabel = (course.course_code || course.course_name || course.course_id || '').toString().trim();

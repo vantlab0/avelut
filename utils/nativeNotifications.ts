@@ -1,11 +1,13 @@
 /**
- * Notifications powered purely by OneSignal.
- * @capacitor/local-notifications has been removed.
+ * Pure Native Firebase Cloud Messaging (FCM) push notifications
+ * using @capacitor/push-notifications.
+ * OneSignal has been completely removed.
  */
 
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, PluginListenerHandle } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 import type { AuthUser } from '@/lib/backend';
-import OneSignal from '@onesignal/capacitor-plugin';
+import { supabase } from '@/lib/backend';
 
 type AddToastFn = (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 type SetActiveItemFn = (item: string) => void;
@@ -22,13 +24,18 @@ export interface ReminderSession {
 }
 
 let listenersAttached = false;
+let registrationHandle: PluginListenerHandle | null = null;
+let registrationErrorHandle: PluginListenerHandle | null = null;
+let pushReceivedHandle: PluginListenerHandle | null = null;
+let actionHandle: PluginListenerHandle | null = null;
+
 let navigationHandlers: {
   setActiveItem?: SetActiveItemFn;
   setPendingChatId?: SetPendingChatIdFn;
   addToast?: AddToastFn;
 } = {};
 
-function isNative(): boolean {
+export function isNative(): boolean {
   try {
     return Capacitor.isNativePlatform();
   } catch {
@@ -91,22 +98,53 @@ export function nextOccurrence(
   return null;
 }
 
-export async function requestLocalNotificationPermission(): Promise<boolean> {
-  if (isNative()) {
-     try {
-         return await OneSignal.Notifications.requestPermission(true);
-     } catch (e) {
-         return false;
-     }
+/**
+ * Persist device token to Supabase app_kv and profiles table
+ */
+export async function saveFcmToken(uid: string, token: string): Promise<void> {
+  if (!uid || !token) return;
+  try {
+    const platform = isNative() ? Capacitor.getPlatform() : 'web';
+    
+    // 1. Save to app_kv table under user_device_tokens/<uid>
+    const payload = {
+      fcm_token: token,
+      fcm_platform: platform,
+      updated_at: Date.now(),
+    };
+    await supabase.from('app_kv').upsert({
+      key: `user_device_tokens/${uid}`,
+      value: payload,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' });
+
+    // 2. Mirror into profiles table
+    await supabase.from('profiles').update({
+      fcm_token: token,
+      notifications_enabled: true,
+    }).eq('id', uid);
+
+    console.log('[FCM] Device token registered and saved for user:', uid);
+  } catch (err) {
+    console.warn('[FCM] Error saving token to Supabase:', err);
   }
-  return false;
+}
+
+export async function requestLocalNotificationPermission(): Promise<boolean> {
+  if (!isNative()) return false;
+  try {
+    const perm = await PushNotifications.requestPermissions();
+    return perm.receive === 'granted';
+  } catch (e) {
+    console.warn('[FCM] Permission request failed:', e);
+    return false;
+  }
 }
 
 export async function scheduleStudyReminders(
   sessions: ReminderSession[],
   options?: { enabled?: boolean }
 ): Promise<void> {
-  // To schedule calendar events fully via OneSignal, we need to pass these to the backend.
   if (options?.enabled === false) {
     await cancelAllStudyReminders();
     return;
@@ -132,62 +170,64 @@ export async function scheduleStudyReminders(
   if (toSchedule.length === 0) return;
 
   try {
-     const apiBase = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() 
-          ? 'https://www.avelut.xyz' 
-          : '';
-     
-     // Note: We use window.localStorage to get the user's ID
-     const uid = window.localStorage?.getItem('avelut_last_uid');
-     if (!uid) return;
+    const apiBase = typeof window !== 'undefined' && Capacitor.isNativePlatform()
+      ? 'https://www.avelut.xyz'
+      : '';
+    const uid = window.localStorage?.getItem('avelut_last_uid');
+    if (!uid) return;
 
-     await fetch(`${apiBase}/api/notifications`, {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
-             action: 'schedule',
-             targetUserId: uid,
-             reminders: toSchedule
-         })
-     });
+    await fetch(`${apiBase}/api/notifications`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'schedule',
+        targetUserId: uid,
+        reminders: toSchedule
+      })
+    });
   } catch (e) {
-     console.warn("Failed to schedule OneSignal reminders", e);
+    console.warn('[FCM] Failed to schedule study reminders:', e);
   }
 }
 
 export async function cancelStudyRemindersForSessions(sessionIds: string[]): Promise<void> {
-  // Cancellation via OneSignal requires tracking notification IDs on the backend.
+  // Optional reminder cleanup
 }
 
 export async function cancelAllStudyReminders(): Promise<void> {
-  // Cancellation via OneSignal requires tracking notification IDs on the backend.
+  // Optional reminder cleanup
 }
 
 export const clearDeliveredNotifications = async (): Promise<void> => {
-  if (isNative()) {
-      try {
-          OneSignal.Notifications.clearAll();
-      } catch {}
+  if (!isNative()) return;
+  try {
+    await PushNotifications.removeAllDeliveredNotifications();
+  } catch (err) {
+    console.warn('[FCM] Failed to clear delivered notifications:', err);
   }
 };
 
 export async function sendTestNotification(): Promise<{ success: boolean; message: string }> {
   try {
-    const apiBase = typeof window !== 'undefined' && Capacitor.isNativePlatform() 
-      ? 'https://www.avelut.xyz' 
+    const apiBase = typeof window !== 'undefined' && Capacitor.isNativePlatform()
+      ? 'https://www.avelut.xyz'
       : '';
-    const uid = typeof window !== 'undefined' 
-      ? (window.localStorage?.getItem('avelut_last_uid') || '') 
+    const uid = typeof window !== 'undefined'
+      ? (window.localStorage?.getItem('avelut_last_uid') || '')
       : '';
+
     if (!uid) {
       return { success: false, message: 'Please log in before sending a test notification.' };
     }
 
     if (isNative()) {
       try {
-        await OneSignal.Notifications.requestPermission(true);
-        await OneSignal.login(uid);
+        const granted = await requestLocalNotificationPermission();
+        if (granted) {
+          await PushNotifications.register();
+        }
       } catch (err) {
-        console.warn('[OneSignal] Registration error before test push:', err);
+        console.warn('[FCM] Registration check before test notification:', err);
       }
     }
 
@@ -197,8 +237,8 @@ export async function sendTestNotification(): Promise<{ success: boolean; messag
       body: JSON.stringify({
         action: 'send',
         targetUserId: uid,
-        title: 'Avelut Test Notification',
-        message: 'Push notifications are configured and working on this device!',
+        title: 'Avelut Push Test',
+        message: 'Firebase FCM push notifications are configured and working!',
         data: { route: 'chat' },
       }),
     });
@@ -207,13 +247,13 @@ export async function sendTestNotification(): Promise<{ success: boolean; messag
     if (!res.ok || data.success === false) {
       return {
         success: false,
-        message: data.reason || data.error?.errors?.[0] || 'Notification delivery failed.',
+        message: data.reason || data.error?.message || data.error || 'Notification delivery failed.',
       };
     }
 
     return {
       success: true,
-      message: 'Test notification sent! Check your notification tray.',
+      message: 'Test notification sent! Check your device notification tray.',
     };
   } catch (e: any) {
     return {
@@ -233,50 +273,97 @@ export const initNativeNotifications = async (
 
   if (!user || !isNative()) return;
 
-  await requestLocalNotificationPermission();
-
   try {
-    await OneSignal.login(user.uid);
-  } catch (err) {
-    console.warn('[OneSignal] Login error in initNativeNotifications:', err);
-  }
+    // 1. Create Android Notification Channel
+    try {
+      await PushNotifications.createChannel({
+        id: 'default',
+        name: 'General',
+        description: 'Avelut messages and updates',
+        importance: 5,
+        visibility: 1,
+        vibration: true,
+      });
+    } catch (channelErr) {
+      console.warn('[FCM] createChannel warning:', channelErr);
+    }
 
-  if (listenersAttached) return;
-  listenersAttached = true;
+    // 2. Request permission
+    const granted = await requestLocalNotificationPermission();
+    if (!granted) {
+      console.log('[FCM] Push notifications permission not granted.');
+      return;
+    }
 
-  try {
-    // Show heads-up notification banner even when the app is actively foregrounded
-    OneSignal.Notifications.addEventListener('foregroundWillDisplay', (event: any) => {
+    // 3. Register with FCM on native device
+    await PushNotifications.register();
+
+    if (listenersAttached) return;
+    listenersAttached = true;
+
+    // 4. Token received
+    registrationHandle = await PushNotifications.addListener('registration', async (token) => {
+      console.log('[FCM] Received device token:', token.value?.substring(0, 20) + '...');
+      if (token?.value && user?.uid) {
+        await saveFcmToken(user.uid, token.value);
+      }
+    });
+
+    // 5. Registration error
+    registrationErrorHandle = await PushNotifications.addListener('registrationError', (error) => {
+      console.warn('[FCM] Push notification registration error:', error);
+    });
+
+    // 6. Foreground push notification received: display toast
+    pushReceivedHandle = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
       try {
-        if (event?.notification?.display) {
-          event.notification.display();
-        } else if (event?.getNotification?.()?.display) {
-          event.getNotification().display();
+        const title = notification.title || 'Avelut';
+        const body = notification.body || '';
+        const display = body ? `${title}: ${body}` : title;
+        if (navigationHandlers.addToast) {
+          navigationHandlers.addToast(`🔔 ${display}`, 'info');
         }
       } catch (err) {
-        console.warn('[OneSignal] Foreground display error:', err);
+        console.warn('[FCM] Foreground notification display error:', err);
       }
     });
 
-    OneSignal.Notifications.addEventListener('click', (event: any) => {
-      const extra = (event?.notification?.additionalData || event?.notification?.rawPayload?.custom?.a) as any;
-      if (extra && extra.route) {
-        if (navigationHandlers.setActiveItem) {
-          navigationHandlers.setActiveItem(extra.route as string);
+    // 7. Notification tapped / clicked
+    actionHandle = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      try {
+        const data = action.notification?.data || {};
+        if (data.route && navigationHandlers.setActiveItem) {
+          navigationHandlers.setActiveItem(data.route);
         }
-      }
-      if (extra && extra.chatId) {
-        if (navigationHandlers.setPendingChatId) {
-          navigationHandlers.setPendingChatId(extra.chatId as string);
+        if (data.chatId && navigationHandlers.setPendingChatId) {
+          navigationHandlers.setPendingChatId(data.chatId);
+          if (navigationHandlers.setActiveItem) {
+            navigationHandlers.setActiveItem('messenger');
+          }
         }
+      } catch (err) {
+        console.warn('[FCM] Action handler error:', err);
       }
     });
-  } catch (e) {
-    console.warn('[OneSignal] Listener error:', e);
+
+    // 8. Clean up any delivered notifications
+    await clearDeliveredNotifications();
+
+    console.log('[FCM] Native push notification listeners attached successfully.');
+  } catch (err) {
+    console.warn('[FCM] Failed to initialize native push notifications:', err);
   }
 };
 
 export const cleanupNativeNotifications = async (): Promise<void> => {
   listenersAttached = false;
   navigationHandlers = {};
+  try {
+    await registrationHandle?.remove();
+    await registrationErrorHandle?.remove();
+    await pushReceivedHandle?.remove();
+    await actionHandle?.remove();
+  } catch (err) {
+    console.warn('[FCM] Cleanup listeners error:', err);
+  }
 };

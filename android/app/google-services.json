@@ -1,58 +1,33 @@
 {
   "project_info": {
-    "project_number": "750743868519",
-    "firebase_url": "https://tlord-1ab38-default-rtdb.firebaseio.com",
-    "project_id": "tlord-1ab38",
-    "storage_bucket": "tlord-1ab38.firebasestorage.app"
+    "project_number": "263940407029",
+    "project_id": "vantlab",
+    "storage_bucket": "vantlab.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:750743868519:android:8e53b987abb3b2e16570c2",
+        "mobilesdk_app_id": "1:263940407029:android:56d88c0235370669020fbc",
         "android_client_info": {
           "package_name": "com.avelut.app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "750743868519-6vuvhlgen1adnog2fdc9pf18b0k9vi0n.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.avelut.app",
-            "certificate_hash": "7fcc7315d22b700cecd9a121cfe734c128893758"
-          }
-        },
-        {
-          "client_id": "750743868519-debug.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.avelut.app",
-            "certificate_hash": "f4dafaf591bdc4aeabfba9d4f7ef745248b977c6"
-          }
-        },
-        {
-          "client_id": "750743868519-vm1e3pbjlo1onl2llmtrbsf00ug3d5dt.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.avelut.app",
-            "certificate_hash": "1f9d9a47207c11987fe5a040d5bd644eb93214a1"
-          }
-        },
-        {
-          "client_id": "750743868519-fhhpqa43j11uuu61kj5d7oni141vscu8.apps.googleusercontent.com",
+          "client_id": "263940407029-55s280010vsmrlmj95sgccm8qn1l07ic.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyASHzSZPE0BvDJb6lj_XrdVmAQGGH4pOEM"
+          "current_key": "AIzaSyDDx5uo22aA_eoRGaKCGgxgPCycOF5upTA"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "750743868519-fhhpqa43j11uuu61kj5d7oni141vscu8.apps.googleusercontent.com",
+              "client_id": "263940407029-55s280010vsmrlmj95sgccm8qn1l07ic.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

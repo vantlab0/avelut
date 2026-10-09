@@ -70,10 +70,48 @@ const normalizeLevel = (value?: string) => {
   return LEVELS[0];
 };
 
-const normalizeSemester = (value?: string) => {
-  const normalized = (value || '').toString().trim().toLowerCase();
-  return SEMESTERS.includes(normalized as (typeof SEMESTERS)[number]) ? (normalized as (typeof SEMESTERS)[number]) : SEMESTERS[0];
+const normalizeSemester = (value?: any): 'first' | 'second' => {
+  if (!value) return 'first';
+  const str = String(value).trim().toLowerCase();
+  if (
+    str === 'second' ||
+    str === '2' ||
+    str === '2nd' ||
+    str.includes('second') ||
+    str.includes('2nd') ||
+    str.includes('rain') ||
+    str.includes('omega') ||
+    str.includes('spring')
+  ) {
+    return 'second';
+  }
+  if (
+    str === 'first' ||
+    str === '1' ||
+    str === '1st' ||
+    str.includes('first') ||
+    str.includes('1st') ||
+    str.includes('harmattan') ||
+    str.includes('alpha') ||
+    str.includes('fall')
+  ) {
+    return 'first';
+  }
+  return 'first';
 };
+
+const inferSemesterFromCode = (courseCode?: string): 'first' | 'second' | undefined => {
+  if (!courseCode) return undefined;
+  const match = courseCode.match(/\b([1-9]\d{2,3})\b/) || courseCode.match(/(\d+)/);
+  if (match) {
+    const num = parseInt(match[1] || match[0], 10);
+    if (!isNaN(num)) {
+      return (num % 2 === 1) ? 'first' : 'second';
+    }
+  }
+  return undefined;
+};
+
 
 const normalizeTextbookUrls = (course: Partial<Course> | undefined) => {
   const urls: string[] = Array.isArray(course?.textbook_urls) ? course!.textbook_urls!.filter(Boolean) : [];
@@ -826,11 +864,12 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
         const validated = data.courses
           .filter((c: any) => c && (c.course_name || c.name) && (c.course_code || c.code))
           .map((c: any) => {
+            const courseCode = String(c.course_code || c.code).trim().toUpperCase();
             const rawLevel = c.level ? normalizeLevel(String(c.level)) : undefined;
-            const rawSemester = c.semester ? normalizeSemester(String(c.semester)) : undefined;
+            const rawSemester = c.semester ? normalizeSemester(c.semester) : (inferSemesterFromCode(courseCode) || undefined);
             return {
               course_name: String(c.course_name || c.name).trim(),
-              course_code: String(c.course_code || c.code).trim().toUpperCase(),
+              course_code: courseCode,
               selected: true,
               type: 'private' as const,
               level: rawLevel,
@@ -871,7 +910,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
       coursesToSave.forEach(course => {
         const courseId = course.course_code.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
         const courseLevel = normalizeLevel((course as any).level || selectedLevel);
-        const courseSemester = normalizeSemester((course as any).semester || selectedSemester);
+        const courseSemester = normalizeSemester((course as any).semester || inferSemesterFromCode(course.course_code) || selectedSemester);
         const courseData: Partial<Course> = {
           course_id: courseId,
           course_name: course.course_name.trim(),
@@ -885,11 +924,13 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
            if (college && college.departments) {
                Object.keys(college.departments).forEach(deptId => {
                    updates[`schools_data/${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${deptId}/levels/${courseLevel}/courses/${courseId}`] = courseData;
+                   updates[`departments_data/${deptId}/course_list/${courseId}`] = courseData;
                });
            }
         } else {
            const deptPath = `${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${selectedDepartmentId}`;
            updates[`schools_data/${deptPath}/levels/${courseLevel}/courses/${courseId}`] = courseData;
+           updates[`departments_data/${selectedDepartmentId}/course_list/${courseId}`] = courseData;
         }
       });
 

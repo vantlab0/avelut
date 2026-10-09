@@ -1,7 +1,6 @@
 import { MessengerChatList } from "./pages/MessengerChatList";
 import { MessengerFindFriends } from "./pages/MessengerFindFriends";
 import { MessengerNewChat } from "./pages/MessengerNewChat";
-import { MessengerChatInterface } from "./pages/MessengerChatInterface";
 import { auth, db, ensureDirectChat, get, limitToLast, off, onAuthStateChanged, onDisconnect, onValue, push, query, ref as dbRef, remove, serverTimestamp as serverTimestamp, set, storage, type AuthUser, update } from "@/lib/backend";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { readCachedJson, writeCachedJson } from "../../utils/cache";
@@ -2636,9 +2635,11 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
               messageText={forwardTargetContent}
               messageType={forwardTargetType}
               studyPartners={studyPartners}
-              allUsers={allUsers}
-              onForward={async (recipientIds) => {
-                await forwardMessageToUsers(forwardTargetContent, forwardTargetType, recipientIds);
+              onForward={async (recipientIds: any) => {
+                const ids = Array.isArray(recipientIds) ? recipientIds : [recipientIds];
+                if (typeof (forwardMessageToUsers as any) === 'function') {
+                  await (forwardMessageToUsers as any)(forwardTargetContent, forwardTargetType, ids);
+                }
                 setIsForwardModalOpen(false);
                 setForwardTargetContent('');
               }}

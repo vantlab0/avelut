@@ -73,3 +73,106 @@ export const mergeTopics = (existingTopics: Array<Partial<Topic>>, newTopics: To
   });
   return Array.from(topicMap.values());
 };
+
+export const normalizeSemesterValue = (value?: any): 'first' | 'second' => {
+  if (!value) return 'first';
+  const str = String(value).trim().toLowerCase();
+  if (
+    str === 'second' ||
+    str === '2' ||
+    str === '2nd' ||
+    str.includes('second') ||
+    str.includes('2nd') ||
+    str.includes('rain') ||
+    str.includes('omega') ||
+    str.includes('spring')
+  ) {
+    return 'second';
+  }
+  if (
+    str === 'first' ||
+    str === '1' ||
+    str === '1st' ||
+    str.includes('first') ||
+    str.includes('1st') ||
+    str.includes('harmattan') ||
+    str.includes('alpha') ||
+    str.includes('fall')
+  ) {
+    return 'first';
+  }
+  return 'first';
+};
+
+export const inferSemesterFromCourseCode = (courseCode?: string): 'first' | 'second' | undefined => {
+  if (!courseCode) return undefined;
+  const match = courseCode.match(/\b([1-9]\d{2,3})\b/) || courseCode.match(/(\d+)/);
+  if (match) {
+    const num = parseInt(match[1] || match[0], 10);
+    if (!isNaN(num)) {
+      // In university course codes, odd ending is typically 1st semester, even ending is 2nd semester
+      return (num % 2 === 1) ? 'first' : 'second';
+    }
+  }
+  return undefined;
+};
+
+export const resolveCourseSemester = (
+  rawSemester?: any,
+  courseCode?: string,
+  fallbackFilter?: string
+): 'first' | 'second' => {
+  if (rawSemester) {
+    const str = String(rawSemester).trim().toLowerCase();
+    if (
+      str === 'second' ||
+      str === '2' ||
+      str === '2nd' ||
+      str.includes('second') ||
+      str.includes('2nd') ||
+      str.includes('rain') ||
+      str.includes('omega') ||
+      str.includes('spring')
+    ) {
+      return 'second';
+    }
+    if (
+      str === 'first' ||
+      str === '1' ||
+      str === '1st' ||
+      str.includes('first') ||
+      str.includes('1st') ||
+      str.includes('harmattan') ||
+      str.includes('alpha') ||
+      str.includes('fall')
+    ) {
+      return 'first';
+    }
+  }
+  const inferred = inferSemesterFromCourseCode(courseCode);
+  if (inferred) return inferred;
+
+  return fallbackFilter === 'second' ? 'second' : 'first';
+};
+
+export const resolveCourseLevel = (
+  rawLevel?: any,
+  courseCode?: string,
+  fallbackLevel?: string
+): string => {
+  if (rawLevel) {
+    const clean = String(rawLevel).toLowerCase().replace(/\s+/g, '');
+    const standardLevels = ['100lvl', '200lvl', '300lvl', '400lvl', '500lvl', '600lvl', '700lvl'];
+    if (standardLevels.includes(clean)) return clean;
+    const match = clean.match(/([1-7])00/);
+    if (match) return `${match[1]}00lvl`;
+    const num = clean.match(/\d+/);
+    if (num && standardLevels.includes(`${num[0]}lvl`)) return `${num[0]}lvl`;
+  }
+  if (courseCode) {
+    const match = courseCode.match(/\b([1-7])\d{2}\b/);
+    if (match && match[1]) return `${match[1]}00lvl`;
+  }
+  return fallbackLevel || '100lvl';
+};
+

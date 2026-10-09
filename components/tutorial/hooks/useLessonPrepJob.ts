@@ -63,20 +63,32 @@ export function useLessonPrepJob({
 
       // Optimistically update status immediately so UI displays progress instantly
       setStatus({
+        key,
         state: 'preparing',
         step: 1,
         progressPercent: 10,
         message: 'Planning lesson structure…',
+        etaMinutes: '~2 min',
+        updatedAt: Date.now(),
+        durationMode: targetDuration,
+        topicTitle,
+        courseName,
       });
 
       // Check if already ready locally
       const pkg = await lessonPrepService.loadReadyPackage(key, voice);
       if (pkg) {
         setStatus({
+          key,
           state: 'ready',
           step: 3,
           progressPercent: 100,
           message: 'Lesson is ready on device!',
+          etaMinutes: '0 min',
+          updatedAt: Date.now(),
+          durationMode: targetDuration,
+          topicTitle,
+          courseName,
         });
         return;
       }

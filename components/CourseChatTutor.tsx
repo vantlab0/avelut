@@ -159,11 +159,11 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
         hideTitle: true,
         hideDefaultRightActions: true,
         leftActions: (
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-[calc(100vw-110px)] sm:max-w-none">
-            {/* Back Arrow Button — Off-white styling */}
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 max-w-[calc(100vw-150px)] sm:max-w-md">
+            {/* Back Arrow Button */}
             <button
               onClick={onBack}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-2xl border border-[#E3E9F1] dark:border-[#2A2A2A] bg-white dark:bg-[#141414] hover:bg-slate-50 dark:hover:bg-[#1C1C1C] text-[#0F172A] dark:text-white text-xs sm:text-sm font-bold active:scale-95 cursor-pointer transition-all shrink-0 shadow-2xs"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-2xl border border-[#E3E9F1] dark:border-[#2A2A2A] bg-white dark:bg-[#141414] hover:bg-slate-50 dark:hover:bg-[#1C1C1C] text-[#0F172A] dark:text-white text-xs sm:text-sm font-bold active:scale-95 cursor-pointer transition-all shrink-0 shadow-2xs"
               aria-label="Back to study guide"
               title="Back"
             >
@@ -171,32 +171,35 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
               <span className="hidden sm:inline">Back</span>
             </button>
 
-            {/* Live Tutorial Button */}
-            <button
-              onClick={handleTriggerLiveTutorial}
-              className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-2xl border border-[#2563EB]/30 dark:border-[#3B82F6]/30 hover:border-[#2563EB] dark:hover:border-[#3B82F6] bg-white dark:bg-[#141414] hover:bg-[#F3F3F3] dark:hover:bg-[#1C1C1C] text-[#0F172A] dark:text-white text-xs sm:text-sm font-extrabold active:scale-95 cursor-pointer transition-all shrink-0 shadow-2xs group"
-              title={liveAccess.allowed ? "Launch Live Voice & Whiteboard Tutorial" : "Live Tutorial Locked"}
-            >
-              <div className="w-5 h-5 rounded-full bg-[#2563EB]/10 dark:bg-[#3B82F6]/20 flex items-center justify-center text-[#2563EB] dark:text-[#3B82F6] shrink-0">
-                <i className="bi bi-broadcast text-xs font-bold animate-pulse"></i>
-              </div>
-              <span className="whitespace-nowrap font-black tracking-tight text-[#0F172A] dark:text-white">Live Tutorial</span>
-              {!liveAccess.allowed && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#F3F3F3] dark:bg-[#1C1C1C] text-[#525252] dark:text-[#A3A3A3] text-[10px] font-extrabold border border-[#E6E6E6] dark:border-[#2A2A2A]">
-                  <i className="bi bi-lock-fill text-[10px]"></i>
-                </span>
-              )}
-            </button>
-
             {/* Topic & Course Info */}
-            <div className="min-w-0 flex flex-col justify-center ml-1">
+            <div className="min-w-0 flex flex-col justify-center">
               <span className="text-[10px] font-bold text-[#64748B] dark:text-slate-400 uppercase tracking-wider block truncate">
                 {course.course_code || course.course_name}
               </span>
-              <h2 className="text-xs sm:text-sm font-bold text-[#0F172A] dark:text-white truncate max-w-[130px] sm:max-w-[240px] md:max-w-[340px]">
+              <h2 className="text-xs sm:text-sm font-bold text-[#0F172A] dark:text-white truncate">
                 {topic.topic_name}
               </h2>
             </div>
+          </div>
+        ),
+        rightActions: (
+          <div className="flex items-center shrink-0">
+            {/* Live Tutorial Button */}
+            <button
+              onClick={handleTriggerLiveTutorial}
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-2xl border border-[#2563EB]/30 dark:border-[#3B82F6]/30 hover:border-[#2563EB] dark:hover:border-[#3B82F6] bg-white dark:bg-[#141414] hover:bg-[#F3F3F3] dark:hover:bg-[#1C1C1C] text-[#0F172A] dark:text-white text-xs sm:text-sm font-extrabold active:scale-95 cursor-pointer transition-all shrink-0 shadow-2xs group"
+              title={liveAccess.allowed ? "Launch Live Voice & Whiteboard Tutorial" : "Live Tutorial Locked"}
+            >
+              <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#2563EB]/10 dark:bg-[#3B82F6]/20 flex items-center justify-center text-[#2563EB] dark:text-[#3B82F6] shrink-0">
+                <i className="bi bi-broadcast text-[10px] sm:text-xs font-bold animate-pulse"></i>
+              </div>
+              <span className="whitespace-nowrap font-black tracking-tight text-[#0F172A] dark:text-white text-xs sm:text-sm">Live Tutorial</span>
+              {!liveAccess.allowed && (
+                <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded-md bg-[#F3F3F3] dark:bg-[#1C1C1C] text-[#525252] dark:text-[#A3A3A3] text-[9px] font-extrabold border border-[#E6E6E6] dark:border-[#2A2A2A]">
+                  <i className="bi bi-lock-fill text-[9px]"></i>
+                </span>
+              )}
+            </button>
           </div>
         ),
         className: 'bg-[#F6F6F3]/95 dark:bg-[#141414]/95 border-b border-[#E3E9F1] dark:border-[#2A2A2A] backdrop-blur-md',
@@ -630,7 +633,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
             return (
               <div
                 key={message.id}
-                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} w-full animate-fade-in`}
+                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} w-full animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
               >
                 {!isUser && (
                   <div className="flex items-center gap-2 mb-1.5 px-1">

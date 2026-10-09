@@ -45,8 +45,8 @@ export interface PendingToolCall {
   name: string;
   call_id: string;
   arguments: string;
-  startedTurn: number;
-  sessionGeneration: number;
+  startedTurn?: number;
+  sessionGeneration?: number;
   timer?: ReturnType<typeof setTimeout> | null;
 }
 

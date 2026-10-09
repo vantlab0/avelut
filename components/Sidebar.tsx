@@ -6,6 +6,7 @@ import { VerificationBadge } from './VerificationBadge';
 import { useToast } from '../hooks/useToast';
 import { deleteLocalConversation, getLocalMessages, renameLocalConversation } from '../services/chatStorageService';
 import { Capacitor } from '@capacitor/core';
+import { Pin, Pencil, FolderPlus, Archive, Trash2, ChevronRight, X } from 'lucide-react';
 
 export interface SidebarProps {
   activeItem: string;
@@ -123,16 +124,17 @@ interface ActiveMenuState {
 
 /**
  * Responsive Options Context Menu:
- * Slick design, neutral background, rounded corners popup positioned right above/by the chat item.
+ * Floating rounded card with 20px border radius, dark charcoal background (#262626), elevated drop shadow, padding 10px. Width around 230px.
  */
 const ChatContextMenu: React.FC<{
   menuState: ActiveMenuState;
   onClose: () => void;
   onTogglePin: (convoId: string) => void;
-  onShare: (convo: ChatConversation) => void;
   onRename: (convo: ChatConversation) => void;
+  onAddToProject: (convo: ChatConversation) => void;
+  onArchive: (convo: ChatConversation) => void;
   onRequestDelete: (convo: ChatConversation) => void;
-}> = ({ menuState, onClose, onTogglePin, onShare, onRename, onRequestDelete }) => {
+}> = ({ menuState, onClose, onTogglePin, onRename, onAddToProject, onArchive, onRequestDelete }) => {
   const { convo, isPinned, anchorY = 200, anchorX = 200 } = menuState;
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -145,12 +147,27 @@ const ChatContextMenu: React.FC<{
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // Compute popover position: neatly above the chat to be deleted if room, otherwise below
-  const desktopStyle = useMemo<React.CSSProperties>(() => {
-    const menuHeight = 185;
-    const isAbove = anchorY > 210;
-    const top = isAbove ? Math.max(16, anchorY - menuHeight) : Math.min(anchorY + 8, window.innerHeight - menuHeight - 16);
-    const left = Math.min(Math.max(12, anchorX - 160), window.innerWidth - 225);
+  // Compute popover position:
+  // Around 230px width, ~245px height. Anchor intelligently near touch/click coordinates without viewport overflow.
+  const popoverStyle = useMemo<React.CSSProperties>(() => {
+    const menuWidth = 230;
+    const menuHeight = 245;
+
+    // Position near the touch/cursor point
+    let left = anchorX > 160 ? anchorX - 180 : anchorX + 10;
+    // Bound within viewport horizontally
+    if (left + menuWidth > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - menuWidth - 12);
+    }
+    if (left < 12) left = 12;
+
+    // Bound vertically
+    let top = anchorY - 30;
+    if (top + menuHeight > window.innerHeight - 16) {
+      top = Math.max(16, window.innerHeight - menuHeight - 16);
+    }
+    if (top < 16) top = 16;
+
     return {
       top: `${top}px`,
       left: `${left}px`,
@@ -165,85 +182,77 @@ const ChatContextMenu: React.FC<{
       {/* Click-away backdrop */}
       <div className="fixed inset-0 z-[160]" onClick={onClose} aria-hidden="true" />
 
+      {/* Container: Floating rounded card with 20px border radius, dark charcoal background (#262626), elevated drop shadow, padding 10px. Width around 230px. */}
       <div
         ref={menuRef}
         onClick={(e) => e.stopPropagation()}
-        style={desktopStyle}
-        className="z-[161] absolute w-52 rounded-2xl p-1.5 space-y-0.5 bg-white dark:bg-[#1E1E22] border border-neutral-200/90 dark:border-white/10 shadow-xl transition-all animate-in fade-in zoom-in-95 duration-150"
+        style={popoverStyle}
+        className="z-[161] absolute w-[230px] rounded-[20px] p-[10px] bg-[#262626] border border-white/5 shadow-2xl shadow-black/80 transition-all animate-in fade-in zoom-in-95 duration-150 flex flex-col gap-1 text-left font-sans select-none"
       >
-        {/* Action 1: Pin / Unpin — Neutral colors */}
+        {/* 1. Pin (pushpin outline icon) - text and icon in off-white (#ededed) */}
         <button
           type="button"
           onClick={() => {
             onTogglePin(convo.id);
             onClose();
           }}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-xs sm:text-sm font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-900 dark:text-neutral-100 cursor-pointer"
+          className="w-full flex items-center gap-[12px] px-3 py-2.5 rounded-[12px] text-left text-[15px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
         >
-          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
-            {isPinned ? (
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.283.284-.53.5-.664.672C10.553 2.82 10.5 3 10.5 3.5V5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1.077l-1.423 7.115a.5.5 0 0 1-.49.405.5.5 0 0 1-.49-.405L6.577 7H5.5a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h1V3.5c0-.5-.053-.68-.19-.849-.134-.172-.38-.388-.664-.672C4.342 1.174 4 0.68 4 .5a.5.5 0 0 1 .146-.354z"/>
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-              </svg>
-            )}
-          </div>
-          <span className="block truncate text-neutral-900 dark:text-neutral-100">{isPinned ? 'Unpin chat' : 'Pin chat'}</span>
+          <Pin className="w-5 h-5 shrink-0 text-[#ededed]" />
+          <span className="truncate">{isPinned ? 'Unpin' : 'Pin'}</span>
         </button>
 
-        {/* Action 2: Share Chat — Neutral colors */}
-        <button
-          type="button"
-          onClick={() => {
-            onShare(convo);
-            onClose();
-          }}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-xs sm:text-sm font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-900 dark:text-neutral-100 cursor-pointer"
-        >
-          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
-            </svg>
-          </div>
-          <span className="block truncate text-neutral-900 dark:text-neutral-100">Share chat</span>
-        </button>
-
-        {/* Action 3: Rename Chat — Neutral colors */}
+        {/* 2. Rename (pencil outline icon) - text and icon in off-white (#ededed) */}
         <button
           type="button"
           onClick={() => {
             onClose();
             onRename(convo);
           }}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-xs sm:text-sm font-medium transition-colors hover:bg-neutral-100 dark:hover:bg-white/10 text-neutral-900 dark:text-neutral-100 cursor-pointer"
+          className="w-full flex items-center gap-[12px] px-3 py-2.5 rounded-[12px] text-left text-[15px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
         >
-          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
-            </svg>
-          </div>
-          <span className="block truncate text-neutral-900 dark:text-neutral-100">Rename</span>
+          <Pencil className="w-5 h-5 shrink-0 text-[#ededed]" />
+          <span className="truncate">Rename</span>
         </button>
 
-        {/* Action 4: Delete Chat — Red text & icon */}
-        <div className="border-t border-neutral-100 dark:border-white/10 my-0.5" />
+        {/* 3. Add to project (folder-plus outline icon) - off-white text and icon, with a trailing right chevron icon on the far right */}
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            onAddToProject(convo);
+          }}
+          className="w-full flex items-center gap-[12px] px-3 py-2.5 rounded-[12px] text-left text-[15px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
+        >
+          <FolderPlus className="w-5 h-5 shrink-0 text-[#ededed]" />
+          <span className="truncate">Add to project</span>
+          <ChevronRight className="w-4 h-4 shrink-0 text-[#ededed] ml-auto" />
+        </button>
+
+        {/* 4. Archive (archive box outline icon) - text and icon in off-white (#ededed) */}
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            onArchive(convo);
+          }}
+          className="w-full flex items-center gap-[12px] px-3 py-2.5 rounded-[12px] text-left text-[15px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
+        >
+          <Archive className="w-5 h-5 shrink-0 text-[#ededed]" />
+          <span className="truncate">Archive</span>
+        </button>
+
+        {/* 5. Delete (trash can outline icon) - text and icon both colored in soft destructive red (#f87171) */}
         <button
           type="button"
           onClick={() => {
             onClose();
             onRequestDelete(convo);
           }}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-left text-xs sm:text-sm font-semibold transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-500 cursor-pointer"
+          className="w-full flex items-center gap-[12px] px-3 py-2.5 rounded-[12px] text-left text-[15px] font-medium text-[#f87171] transition-colors duration-150 hover:bg-[#f87171]/10 active:bg-[#f87171]/20 cursor-pointer"
         >
-          <div className="w-5 h-5 flex items-center justify-center shrink-0 text-rose-600 dark:text-rose-500">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-            </svg>
-          </div>
-          <span className="block truncate text-rose-600 dark:text-rose-500">Delete chat</span>
+          <Trash2 className="w-5 h-5 shrink-0 text-[#f87171]" />
+          <span className="truncate">Delete</span>
         </button>
       </div>
     </div>
@@ -255,49 +264,123 @@ const ConversationRow: React.FC<{
   isActive: boolean;
   isPinned: boolean;
   onSelect: () => void;
-  onOptionsClick: (e: React.MouseEvent, convo: ChatConversation) => void;
-}> = ({ convo, isActive, isPinned, onSelect, onOptionsClick }) => (
-  <div
-    onClick={onSelect}
-    className={`w-full group relative flex items-center justify-between px-3 py-2 rounded-xl text-left transition-all duration-150 cursor-pointer select-none ${
-      isActive
-        ? 'bg-neutral-200 dark:bg-[#1C1C1C] text-neutral-900 dark:text-white font-medium'
-        : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/5'
-    }`}
-  >
-    <div className="flex-1 min-w-0 pr-2">
-      <div className="flex items-center gap-1.5">
-        {isPinned && (
-          <svg className="w-3 h-3 text-[#0066FF] dark:text-[#38BDF8] shrink-0" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.283.284-.53.5-.664.672C10.553 2.82 10.5 3 10.5 3.5V5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1.077l-1.423 7.115a.5.5 0 0 1-.49.405.5.5 0 0 1-.49-.405L6.577 7H5.5a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h1V3.5c0-.5-.053-.68-.19-.849-.134-.172-.38-.388-.664-.672C4.342 1.174 4 0.68 4 .5a.5.5 0 0 1 .146-.354z"/>
-          </svg>
-        )}
-        <span className="block text-[13.5px] truncate leading-snug font-medium">
-          {convo.title || 'New Chat'}
+  onOpenContextMenu: (coords: { x: number; y: number }, convo: ChatConversation) => void;
+}> = ({ convo, isActive, isPinned, onSelect, onOpenContextMenu }) => {
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const startPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const didLongPressRef = useRef<boolean>(false);
+
+  const clearTimer = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    didLongPressRef.current = false;
+    const touch = e.touches[0];
+    startPosRef.current = { x: touch.clientX, y: touch.clientY };
+
+    timerRef.current = setTimeout(() => {
+      didLongPressRef.current = true;
+      try {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate(40);
+        }
+      } catch {}
+      onOpenContextMenu({ x: touch.clientX, y: touch.clientY }, convo);
+    }, 450);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!timerRef.current) return;
+    const touch = e.touches[0];
+    const dx = Math.abs(touch.clientX - startPosRef.current.x);
+    const dy = Math.abs(touch.clientY - startPosRef.current.y);
+    if (dx > 10 || dy > 10) {
+      clearTimer();
+    }
+  };
+
+  const handleTouchEnd = () => {
+    clearTimer();
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    didLongPressRef.current = false;
+    startPosRef.current = { x: e.clientX, y: e.clientY };
+
+    timerRef.current = setTimeout(() => {
+      didLongPressRef.current = true;
+      onOpenContextMenu({ x: e.clientX, y: e.clientY }, convo);
+    }, 450);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!timerRef.current) return;
+    const dx = Math.abs(e.clientX - startPosRef.current.x);
+    const dy = Math.abs(e.clientY - startPosRef.current.y);
+    if (dx > 10 || dy > 10) {
+      clearTimer();
+    }
+  };
+
+  const handleMouseUp = () => {
+    clearTimer();
+  };
+
+  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearTimer();
+    onOpenContextMenu({ x: e.clientX, y: e.clientY }, convo);
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (didLongPressRef.current) {
+      didLongPressRef.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    onSelect();
+  };
+
+  return (
+    <div
+      onClick={handleClick}
+      onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      className={`w-full group relative flex items-center justify-between px-3 py-2 rounded-xl text-left transition-all duration-150 cursor-pointer select-none [-webkit-touch-callout:none] active:scale-[0.99] animate-in fade-in duration-150 ${
+        isActive
+          ? 'bg-neutral-200 dark:bg-[#1C1C1C] text-neutral-900 dark:text-white font-medium shadow-xs'
+          : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/5'
+      }`}
+    >
+      <div className="flex-1 min-w-0 pr-1">
+        <div className="flex items-center gap-1.5">
+          {isPinned && (
+            <Pin className="w-3.5 h-3.5 text-[#0066FF] dark:text-[#38BDF8] shrink-0" />
+          )}
+          <span className="block text-[13.5px] truncate leading-snug font-medium">
+            {convo.title || 'New Chat'}
+          </span>
+        </div>
+        <span className="block text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
+          {timeAgo(convo.last_updated_at)}
         </span>
       </div>
-      <span className="block text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
-        {timeAgo(convo.last_updated_at)}
-      </span>
     </div>
-
-    {/* 3-Dot Options Button: accessible on touch / hover */}
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onOptionsClick(e, convo);
-      }}
-      className="w-7 h-7 rounded-lg flex items-center justify-center text-neutral-400 hover:text-neutral-700 dark:hover:text-white hover:bg-neutral-200/60 dark:hover:bg-white/10 transition-all opacity-100 shrink-0 cursor-pointer"
-      aria-label="Chat options"
-      title="More options"
-    >
-      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-        <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
-      </svg>
-    </button>
-  </div>
-);
+  );
+};
 
 const SidebarPanel: React.FC<{
   activeItem: string;
@@ -350,6 +433,91 @@ const SidebarPanel: React.FC<{
   const [convoToDelete, setConvoToDelete] = useState<ChatConversation | null>(null);
   const [convoToRename, setConvoToRename] = useState<ChatConversation | null>(null);
   const [renameTitle, setRenameTitle] = useState('');
+
+  // Archived chats persistence
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const raw = localStorage.getItem(`avelut_archived_chats_${userProfile?.uid || 'anon'}`);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      return new Set();
+    }
+  });
+
+  // Add to project modal state
+  const [convoToAddToProject, setConvoToAddToProject] = useState<ChatConversation | null>(null);
+  const [projectNameInput, setProjectNameInput] = useState('');
+  const [savedProjects, setSavedProjects] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return ['Computer Science', 'Semester 1', 'Exam Prep'];
+    try {
+      const raw = localStorage.getItem(`avelut_chat_projects_${userProfile?.uid || 'anon'}`);
+      return raw ? JSON.parse(raw) : ['Computer Science', 'Semester 1', 'Exam Prep'];
+    } catch {
+      return ['Computer Science', 'Semester 1', 'Exam Prep'];
+    }
+  });
+
+  const handleArchiveChat = useCallback(
+    (convo: ChatConversation) => {
+      setArchivedIds((prev) => {
+        const next = new Set(prev);
+        const willArchive = !next.has(convo.id);
+        if (willArchive) {
+          next.add(convo.id);
+          addToast(`"${convo.title || 'Chat'}" moved to archive`, 'info');
+        } else {
+          next.delete(convo.id);
+          addToast('Chat unarchived', 'info');
+        }
+        try {
+          localStorage.setItem(
+            `avelut_archived_chats_${userProfile?.uid || 'anon'}`,
+            JSON.stringify(Array.from(next))
+          );
+        } catch {}
+        return next;
+      });
+    },
+    [userProfile?.uid, addToast]
+  );
+
+  const handleSaveToProject = useCallback(
+    (targetProject: string) => {
+      if (!convoToAddToProject) return;
+      const trimmed = targetProject.trim();
+      if (!trimmed) {
+        addToast('Please enter or select a project name.', 'warning');
+        return;
+      }
+      try {
+        if (!savedProjects.includes(trimmed)) {
+          const updated = [...savedProjects, trimmed];
+          setSavedProjects(updated);
+          localStorage.setItem(
+            `avelut_chat_projects_${userProfile?.uid || 'anon'}`,
+            JSON.stringify(updated)
+          );
+        }
+        const mappingRaw = localStorage.getItem(`avelut_chat_project_mapping_${userProfile?.uid || 'anon'}`);
+        const mapping = mappingRaw ? JSON.parse(mappingRaw) : {};
+        mapping[convoToAddToProject.id] = trimmed;
+        localStorage.setItem(
+          `avelut_chat_project_mapping_${userProfile?.uid || 'anon'}`,
+          JSON.stringify(mapping)
+        );
+        addToast(`Added "${convoToAddToProject.title || 'Chat'}" to "${trimmed}"`, 'success');
+        setConvoToAddToProject(null);
+        setProjectNameInput('');
+      } catch (err) {
+        console.error('Failed to add to project:', err);
+        addToast('Failed to add to project', 'error');
+      }
+    },
+    [convoToAddToProject, savedProjects, userProfile?.uid, addToast]
+  );
 
   const handleSaveRename = useCallback(async () => {
     if (!convoToRename) return;
@@ -498,20 +666,19 @@ const SidebarPanel: React.FC<{
     [userProfile?.uid, onDeleteConversation, addToast]
   );
 
-  const handleOpenOptions = useCallback(
-    (e: React.MouseEvent, convo: ChatConversation) => {
-      const rect = e.currentTarget.getBoundingClientRect();
+  const handleOpenContextMenu = useCallback(
+    (coords: { x: number; y: number }, convo: ChatConversation) => {
       setActiveMenu({
         convo,
         isPinned: pinnedIds.has(convo.id),
-        anchorY: rect.bottom,
-        anchorX: rect.left,
+        anchorY: coords.y,
+        anchorX: coords.x,
       });
     },
     [pinnedIds]
   );
 
-  // Divide conversations into Pinned and Recents
+  // Divide conversations into Pinned and Recents (excluding archived chats)
   const { pinnedConversations, unpinnedConversations } = useMemo(() => {
     if (!recentConversations || !Array.isArray(recentConversations)) {
       return { pinnedConversations: [], unpinnedConversations: [] };
@@ -519,6 +686,7 @@ const SidebarPanel: React.FC<{
     const pinned: ChatConversation[] = [];
     const unpinned: ChatConversation[] = [];
     recentConversations.forEach((c) => {
+      if (archivedIds.has(c.id)) return;
       if (pinnedIds.has(c.id)) {
         pinned.push(c);
       } else {
@@ -526,7 +694,7 @@ const SidebarPanel: React.FC<{
       }
     });
     return { pinnedConversations: pinned, unpinnedConversations: unpinned };
-  }, [recentConversations, pinnedIds]);
+  }, [recentConversations, pinnedIds, archivedIds]);
 
   const extraNavLinks: NavItem[] = [
     {
@@ -699,7 +867,7 @@ const SidebarPanel: React.FC<{
                         isActive={activeConversationId === convo.id}
                         isPinned={true}
                         onSelect={() => onSelectConversation?.(convo.id)}
-                        onOptionsClick={handleOpenOptions}
+                        onOpenContextMenu={handleOpenContextMenu}
                       />
                     ))}
                   </div>
@@ -742,7 +910,7 @@ const SidebarPanel: React.FC<{
                       isActive={activeConversationId === convo.id}
                       isPinned={false}
                       onSelect={() => onSelectConversation?.(convo.id)}
-                      onOptionsClick={handleOpenOptions}
+                      onOpenContextMenu={handleOpenContextMenu}
                     />
                   ))
                 )}
@@ -782,17 +950,21 @@ const SidebarPanel: React.FC<{
         </div>
       )}
 
-      {/* Floating Context Menu / Dropdown */}
+      {/* Floating Context Menu / Popover */}
       {activeMenu && (
         <ChatContextMenu
           menuState={activeMenu}
           onClose={() => setActiveMenu(null)}
           onTogglePin={togglePinChat}
-          onShare={handleShareChat}
           onRename={(convo) => {
             setConvoToRename(convo);
             setRenameTitle(convo.title || '');
           }}
+          onAddToProject={(convo) => {
+            setConvoToAddToProject(convo);
+            setProjectNameInput('');
+          }}
+          onArchive={handleArchiveChat}
           onRequestDelete={(convo) => {
             setConvoToDelete(convo);
           }}
@@ -884,6 +1056,80 @@ const SidebarPanel: React.FC<{
               >
                 Save
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Centered Modal: Add to Project */}
+      {convoToAddToProject && (
+        <div
+          className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm select-none animate-in fade-in duration-150"
+          onClick={() => setConvoToAddToProject(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-[24px] bg-[#1E1E22] border border-white/10 p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 text-left font-sans text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <FolderPlus className="w-5 h-5 text-neutral-300" />
+                  Add to project
+                </h3>
+                <p className="text-xs text-neutral-400">
+                  Organize "{convoToAddToProject.title || 'Chat'}" into a project
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConvoToAddToProject(null)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {savedProjects.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Select Project</p>
+                <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto">
+                  {savedProjects.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handleSaveToProject(p)}
+                      className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-neutral-200 text-xs font-medium transition-colors cursor-pointer border border-white/5"
+                    >
+                      📁 {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2 pt-2">
+              <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Or create new project</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={projectNameInput}
+                  onChange={(e) => setProjectNameInput(e.target.value)}
+                  placeholder="New project name..."
+                  autoFocus
+                  className="flex-1 px-3.5 py-2.5 rounded-xl bg-neutral-800 border border-white/10 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveToProject(projectNameInput);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSaveToProject(projectNameInput)}
+                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors cursor-pointer shrink-0"
+                >
+                  Save
+                </button>
+              </div>
             </div>
           </div>
         </div>

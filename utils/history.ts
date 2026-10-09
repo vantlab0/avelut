@@ -7,6 +7,7 @@ import {
 } from "../services/materialStorageService";
 
 import type { SavedItem, SavedItemType } from '../types/historyTypes';
+export type { SavedItem, SavedItemType };
 
 /**
  * Saves a generated material to SQLite per user instantly for offline usage and syncs with remote DB.

@@ -685,6 +685,7 @@ async function* callOpenRouterQwenStream(params: any, appSettings: AppSettings):
 export interface AvelutAIOptions {
   endpointPreference?: 'openai_compatible_first' | 'default';
   feature?: string;
+  signal?: AbortSignal;
 }
 
 /**
@@ -786,7 +787,13 @@ async function callAlibabaQwen(
   let lastError: Error | null = null;
   let isRateLimited = false;
 
+  const callerSignal = options?.signal || params?.signal || params?.config?.signal;
+  if (callerSignal?.aborted) {
+    return { text: () => '', candidates: [] };
+  }
+
   for (const model of candidateModels) {
+    if (callerSignal?.aborted) return { text: () => '', candidates: [] };
     const bodyPayload: any = {
       model,
       messages,
@@ -801,8 +808,10 @@ async function callAlibabaQwen(
     }
 
     for (const endpoint of endpoints) {
+      if (callerSignal?.aborted) return { text: () => '', candidates: [] };
       const maxRetries = 3;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        if (callerSignal?.aborted) return { text: () => '', candidates: [] };
         try {
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
@@ -814,6 +823,10 @@ async function callAlibabaQwen(
 
           // PDF understanding can take up to ~300s for first token
           const fetchController = new AbortController();
+          const onCallerAbort = () => fetchController.abort();
+          if (callerSignal) {
+            callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+          }
           const timeoutMs = hasDocument ? 280000 : 45000;
           const timeoutId = setTimeout(() => fetchController.abort(), timeoutMs);
 
@@ -827,6 +840,16 @@ async function callAlibabaQwen(
             });
           } finally {
             clearTimeout(timeoutId);
+            if (callerSignal) {
+              callerSignal.removeEventListener('abort', onCallerAbort);
+            }
+          }
+
+          if (callerSignal?.aborted) return { text: () => '', candidates: [] };
+
+          const ct = (response.headers.get('content-type') || '').toLowerCase();
+          if (ct.includes('text/html')) {
+            throw new Error('NETWORK_OFFLINE: Network connection lost. Please check your internet connection and try again.');
           }
 
           if (response.status === 429) {
@@ -845,10 +868,18 @@ async function callAlibabaQwen(
 
           if (!response.ok) {
             const errorText = await response.text();
+            if (errorText.toLowerCase().includes('<!doctype') || errorText.toLowerCase().includes('<html') || errorText.toLowerCase().includes('id="root"')) {
+              throw new Error('NETWORK_OFFLINE: Network connection lost. Please check your internet connection and try again.');
+            }
             throw new Error(`Alibaba Qwen Direct HTTP ${response.status}: ${errorText}`);
           }
 
           const rawText = await response.text();
+          const trimmedLower = rawText.trim().toLowerCase();
+          if (trimmedLower.startsWith('<!doctype') || trimmedLower.startsWith('<html') || trimmedLower.includes('<head>') || trimmedLower.includes('id="root"')) {
+            throw new Error('NETWORK_OFFLINE: Network connection lost. Please check your internet connection and try again.');
+          }
+
           let data: any = null;
           let extractedText = rawText;
           try {
@@ -935,7 +966,11 @@ async function* callAlibabaQwenStream(
 
   let response: Response | null = null;
 
+  const callerSignal = options?.signal || params?.signal || params?.config?.signal;
+  if (callerSignal?.aborted) return;
+
   for (const endpoint of endpoints) {
+    if (callerSignal?.aborted) return;
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -946,6 +981,10 @@ async function* callAlibabaQwenStream(
       }
 
       const fetchController = new AbortController();
+      const onCallerAbort = () => fetchController.abort();
+      if (callerSignal) {
+        callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+      }
       const timeoutId = setTimeout(() => fetchController.abort(), 45000);
 
       let res: Response;
@@ -958,9 +997,17 @@ async function* callAlibabaQwenStream(
         });
       } finally {
         clearTimeout(timeoutId);
+        if (callerSignal) {
+          callerSignal.removeEventListener('abort', onCallerAbort);
+        }
       }
 
       if (res.ok && res.body) {
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (ct.includes('text/html')) {
+          console.warn(`[Alibaba SSE] Endpoint ${endpoint} returned HTML (SPA fallback / offline). Skipping endpoint.`);
+          continue;
+        }
         response = res;
         break;
       } else {
@@ -972,16 +1019,22 @@ async function* callAlibabaQwenStream(
     }
   }
 
+  if (callerSignal?.aborted) return;
+
   if (!response || !response.body) {
     console.warn('[Alibaba SSE] Stream response not available, attempting callAlibabaQwen fallback...');
-    const fallbackResult = await callAlibabaQwen(params, appSettings);
+    const fallbackResult = await callAlibabaQwen(params, appSettings, options);
     yield fallbackResult;
     return;
   }
 
-  const contentType = response.headers.get('content-type') || '';
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
   if (!contentType.includes('text/event-stream')) {
     const text = await response.text();
+    const trimmed = text.trim().toLowerCase();
+    if (trimmed.startsWith('<!doctype') || trimmed.startsWith('<html') || trimmed.includes('<head>') || trimmed.includes('id="root"')) {
+      throw new Error('NETWORK_OFFLINE: Network connection lost. Please check your internet connection and try again.');
+    }
     yield {
       text: () => text,
       reasoningText: () => '',
@@ -996,8 +1049,9 @@ async function* callAlibabaQwenStream(
 
   try {
     while (true) {
+      if (callerSignal?.aborted) break;
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done || callerSignal?.aborted) break;
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
@@ -1081,11 +1135,13 @@ export const createAvelutAI = (
   };
 
   const generateContent = async (params: any) => {
-    return await callAlibabaQwen(normalizeParams(params), appSettings, options);
+    const mergedOptions: AvelutAIOptions = { ...options, signal: params?.signal || params?.config?.signal || options?.signal };
+    return await callAlibabaQwen(normalizeParams(params), appSettings, mergedOptions);
   };
 
   const generateContentStream = async (params: any) => {
-    const streamGen = callAlibabaQwenStream(normalizeParams(params), appSettings, options);
+    const mergedOptions: AvelutAIOptions = { ...options, signal: params?.signal || params?.config?.signal || options?.signal };
+    const streamGen = callAlibabaQwenStream(normalizeParams(params), appSettings, mergedOptions);
     return {
       [Symbol.asyncIterator]: () => streamGen,
       stream: streamGen,

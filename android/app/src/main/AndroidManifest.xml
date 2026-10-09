@@ -19,12 +19,30 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        <!-- Deep link for custom scheme avelut:// and com.avelut.app:// -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="avelut" />
+            <data android:scheme="com.avelut.app" />
+        </intent-filter>
+
         <!-- Deep link for custom notification actions -->
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="avelut" android:host="action" />
+        </intent-filter>
+
+        <!-- Android App Links for https://avelut.xyz and https://www.avelut.xyz -->
+        <intent-filter android:autoVerify="true">
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" android:host="avelut.xyz" />
+            <data android:scheme="https" android:host="www.avelut.xyz" />
         </intent-filter>
         <!-- Receive Shared Images Intent -->
         <intent-filter>

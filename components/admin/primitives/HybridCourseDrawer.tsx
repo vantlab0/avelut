@@ -339,7 +339,24 @@ OUTPUT ONLY A VALID JSON OBJECT:
                     return '100lvl';
                 };
 
+                const inferSem = (rawSem?: any, code?: string): 'first' | 'second' => {
+                    if (rawSem) {
+                        const s = String(rawSem).trim().toLowerCase();
+                        if (s === 'second' || s === '2' || s === '2nd' || s.includes('second') || s.includes('2nd') || s.includes('rain') || s.includes('omega') || s.includes('spring')) return 'second';
+                        if (s === 'first' || s === '1' || s === '1st' || s.includes('first') || s.includes('1st') || s.includes('harmattan') || s.includes('alpha') || s.includes('fall')) return 'first';
+                    }
+                    if (code) {
+                        const match = code.match(/\b([1-9]\d{2,3})\b/) || code.match(/(\d+)/);
+                        if (match) {
+                            const num = parseInt(match[1] || match[0], 10);
+                            if (!isNaN(num)) return (num % 2 === 1) ? 'first' : 'second';
+                        }
+                    }
+                    return 'first';
+                };
+
                 const resolvedLevel = inferLvl(item.level, courseCode);
+                const resolvedSemester = inferSem(item.semester, courseCode);
 
                 return {
                     course_id: courseId,
@@ -347,10 +364,11 @@ OUTPUT ONLY A VALID JSON OBJECT:
                     course_name: courseName || 'Untitled Course',
                     course_unit: Number(item.course_unit) || 3,
                     level: resolvedLevel,
-                    semester: item.semester === 'second' ? 'second' : 'first',
+                    semester: resolvedSemester,
                     isGlobalExist: isExist,
                     existingLinkedDepts: existingDepts,
                 };
+
             });
 
             setExtractedCourses(items);

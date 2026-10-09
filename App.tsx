@@ -12,8 +12,6 @@ import { Onboarding } from './components/Onboarding';
 
 import { createAvelutAI } from './utils/inference';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import OneSignal from '@onesignal/capacitor-plugin';
-
 import { App as CapacitorApp } from '@capacitor/app';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
@@ -367,48 +365,7 @@ const App: React.FC = () => {
     useOTAUpdater();
     useGlobalRefresh();
 
-    useEffect(() => {
-        // Initialize OneSignal on BOTH native and web
-        if (Capacitor.isNativePlatform()) {
-            // Native: use the Capacitor plugin
-            OneSignal.initialize("805fdff6-e515-4ace-ad01-f2dcec4f0a37");
-            OneSignal.Notifications.requestPermission(true).then((granted: boolean) => {
-                console.log('[OneSignal] Native permission granted:', granted);
-            }).catch((e: any) => console.warn('[OneSignal] Native permission error:', e));
 
-            OneSignal.Notifications.addEventListener('foregroundWillDisplay', (event: any) => {
-                try {
-                    if (event?.notification?.display) {
-                        event.notification.display();
-                    } else if (event?.getNotification?.()?.display) {
-                        event.getNotification().display();
-                    }
-                } catch (err) {}
-            });
-        } else if (typeof window !== 'undefined') {
-            // Web: use the OneSignal Web SDK loaded asynchronously
-            const initWebOneSignal = async () => {
-                try {
-                    if ((window as any).OneSignal) {
-                        await (window as any).OneSignal.init({
-                            appId: '805fdff6-e515-4ace-ad01-f2dcec4f0a37',
-                            notifyButton: { enable: false },
-                            allowLocalhostAsSecureOrigin: true,
-                        });
-                        (window as any).OneSignal.Slidedown.promptPush();
-                        console.log('[OneSignal] Web SDK initialized');
-                        const lastUid = window.localStorage?.getItem('avelut_last_uid');
-                        if (lastUid && (window as any).OneSignal.login) {
-                            (window as any).OneSignal.login(lastUid);
-                        }
-                    }
-                } catch (e) {
-                    console.warn('[OneSignal] Web init error:', e);
-                }
-            };
-            initWebOneSignal();
-        }
-    }, []);
 
 
 
@@ -440,21 +397,7 @@ const App: React.FC = () => {
         return null;
     });
 
-    useEffect(() => {
-        if (user?.uid) {
-            if (Capacitor.isNativePlatform()) {
-                OneSignal.login(user.uid);
-            } else if (typeof window !== 'undefined' && (window as any).OneSignal?.login) {
-                (window as any).OneSignal.login(user.uid);
-            }
-        } else {
-            if (Capacitor.isNativePlatform()) {
-                OneSignal.logout();
-            } else if (typeof window !== 'undefined' && (window as any).OneSignal?.logout) {
-                (window as any).OneSignal.logout();
-            }
-        }
-    }, [user?.uid]);
+
 
     const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
         if (typeof window !== 'undefined') {
@@ -644,25 +587,6 @@ const App: React.FC = () => {
             }
         }
     }, []);
-
-    useEffect(() => {
-        if (Capacitor.isNativePlatform()) {
-            OneSignal.Notifications.addEventListener('click', (event) => {
-                const url = event.result?.url;
-                if (url) {
-                    try {
-                        const path = new URL(url).pathname;
-                        if (path) {
-                            const newRoute = resolveActiveItemFromPath(path);
-                            if (newRoute) {
-                                setActiveItem(newRoute);
-                            }
-                        }
-                    } catch (e) {}
-                }
-            });
-        }
-    }, [setActiveItem]);
 
     const dismissedClipboardSigsRef = useRef<Set<string>>(new Set());
     const currentClipboardSigRef = useRef<string | null>(null);
@@ -1022,23 +946,29 @@ const App: React.FC = () => {
     }, [addToast, setActiveItem]);
 
     useEffect(() => {
-        if (!Capacitor.isNativePlatform()) return;
-        const urlListener = CapacitorApp.addListener('appUrlOpen', async (event) => {
+        if (!Capacitor.isNativePlatform()) return;        const urlListener = CapacitorApp.addListener('appUrlOpen', async (event) => {
             const url = new URL(event.url);
+            const protocol = url.protocol.replace(':', '');
+            const isCustomScheme = protocol === 'avelut' || protocol === 'com.avelut.app';
 
             if (url.protocol.startsWith('http')) {
                 if (url.pathname.startsWith('/refill-credits') || url.pathname.startsWith('/plans') || url.pathname.startsWith('/delete-account')) {
                     setCurrentPath(url.pathname + url.search);
                     return;
                 }
+                const route = url.pathname.replace(/^\//, '').split('/')[0];
+                if (['chat', 'study_guide', 'study_partners', 'messenger', 'notifications', 'leaderboard', 'timetable'].includes(route)) {
+                    setActiveItem(route);
+                    return;
+                }
             }
 
-            if (url.protocol.replace(':', '') === 'avelut' && url.host === 'payment-success') {
+            if (isCustomScheme && url.host === 'payment-success') {
                 addToast('Payment Successful! Refreshing profile...', 'success');
                 setActiveItem('chat');
                 return;
             }
-            if (url.protocol.replace(':', '') === 'avelut' && url.host === 'action') {
+            if (isCustomScheme && url.host === 'action') {
                 const actionId = url.searchParams.get('id');
                 const replyText = url.searchParams.get('replyText');
                 const chatId = url.searchParams.get('chatId');
@@ -1079,6 +1009,15 @@ const App: React.FC = () => {
                 } else if (actionId) {
                      setActiveItem(actionId);
                 }
+            } else if (isCustomScheme) {
+                const target = (url.host || url.pathname.replace(/^\//, '')).split('/')[0];
+                if (target === 'plans' || target === 'refill-credits' || target === 'delete-account') {
+                    setCurrentPath(`/${target}${url.search}`);
+                    return;
+                }
+                if (['chat', 'study_guide', 'study_partners', 'messenger', 'notifications', 'leaderboard', 'timetable'].includes(target)) {
+                    setActiveItem(target);
+                }
             }
         });
 
@@ -1094,15 +1033,7 @@ const App: React.FC = () => {
         };
     }, [user, addToast]);
 
-    useEffect(() => {
-        if (activeItem === 'chat' && typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('avelut_focus_chat_input'));
-            const t = setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('avelut_focus_chat_input'));
-            }, 100);
-            return () => clearTimeout(t);
-        }
-    }, [activeItem]);
+
 
     useEffect(() => {
         if (typeof window === 'undefined') return;

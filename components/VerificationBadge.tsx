@@ -3,11 +3,14 @@ import type { UserProfile } from '../types';
 
 interface VerificationBadgeProps {
   status?: UserProfile['subscription_status'] | string;
+  user?: UserProfile;
   className?: string;
+  size?: 'xs' | 'sm' | 'md' | 'lg' | string;
 }
 
-export const VerificationBadge: React.FC<VerificationBadgeProps> = ({ status, className = '' }) => {
-  if (status === 'basic' || status === 'premium' || status === 'weekly' || status === 'monthly' || status === 'semester') {
+export const VerificationBadge: React.FC<VerificationBadgeProps> = ({ status, user, className = '' }) => {
+  const effectiveStatus = status || user?.subscription_status;
+  if (effectiveStatus === 'basic' || effectiveStatus === 'premium' || effectiveStatus === 'weekly' || effectiveStatus === 'monthly' || effectiveStatus === 'semester') {
     return (
       <span className={`inline-flex items-center gap-0.5 text-blue-500 shrink-0 select-none ${className}`} title="Verified member">
         <svg className="w-4.5 h-4.5 fill-current drop-shadow-sm" viewBox="0 0 24 24" fill="currentColor">

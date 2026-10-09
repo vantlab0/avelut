@@ -264,12 +264,12 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
               }
             })
           }).catch((err) => {
-            console.warn('[OneSignal] Push notification fetch failed:', err);
+            console.warn('[FCM] Push notification fetch failed:', err);
           });
         }
       }
     } catch (err) {
-      console.warn('[OneSignal] Error dispatching push notification:', err);
+      console.warn('[FCM] Error dispatching push notification:', err);
     }
   };
 

@@ -20,6 +20,10 @@ import {
     sanitizeTopicMetadata,
     normalizeCourse,
     mergeTopics,
+    resolveCourseSemester,
+    resolveCourseLevel,
+    inferSemesterFromCourseCode,
+    normalizeSemesterValue,
 } from './studyguide/studyGuideUtils';
 
 async function fileToBase64(file: File): Promise<string> {
@@ -507,13 +511,16 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
             }
 
             const courseId = courseCode.toLowerCase().replace(/\s+/g, '');
+            const courseSemester = filter.semester === 'all'
+                ? (inferSemesterFromCourseCode(courseCode) || 'first')
+                : filter.semester;
             const courseData = {
                 course_id: courseId,
                 course_name: courseName,
                 course_code: courseCode.toUpperCase(),
                 description,
                 level: userProfile.level,
-                semester: filter.semester === 'all' ? 'first' : filter.semester,
+                semester: courseSemester,
                 course_status: 'active'
             };
 
@@ -530,7 +537,7 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
                 title: courseName,
                 code: courseCode.toUpperCase(),
                 level: userProfile.level,
-                semester: filter.semester === 'all' ? 1 : (filter.semester === 'second' ? 2 : 1),
+                semester: courseSemester === 'second' ? 2 : 1,
                 description,
                 department_id: userProfile.department_id,
                 school_id: userProfile.school_id,
@@ -556,7 +563,12 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
     const handleExtractCourses = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         const file = e.target.files[0];
-        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) return addToast('Please upload a PDF file.', 'error');
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif|bmp|gif)$/i.test(file.name);
+
+        if (!isPdf && !isImage) {
+            return addToast('Please upload a PDF or image of your course form.', 'error');
+        }
         if (!userProfile.school_id || !userProfile.college_id || !userProfile.department_id || !userProfile.level) {
             return addToast('Please complete your profile (School, College, Department, Level) first.', 'error');
         }
@@ -575,31 +587,46 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
             // Prefer Alibaba Omni model (qwen3.8-omni-flash). Do not force VL-only models.
             const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.8-omni-flash';
 
-            // DashScope Chat Completions cannot open PDF via image_url.
-            // Extract text client-side so the model actually reads the document.
-            const { extractTextFromPDF } = await import('../utils/pdfExtraction');
-            const pdfText = await extractTextFromPDF(file);
-            const truncated = (pdfText || '').slice(0, 120000).trim();
-            if (!truncated) {
-                throw new Error('Could not read any text from this PDF. Try a text-based PDF (not a scanned image-only file), or convert pages to images.');
-            }
+            const prompt = `Analyze this university course form, registration slip, curriculum document, or timetable carefully.
+Extract EVERY course listed on the document, accurately determining whether each course belongs to the First Semester or Second Semester.
 
-            const prompt = `Analyze this course form / curriculum document and extract all courses listed.
-
-DOCUMENT TEXT:
----
-${truncated}
----
-
-Extract every course with:
-- course_name (string)
-- course_code (string, e.g. "MEE 301")
+CRITICAL INSTRUCTIONS FOR ACCURATE SEMESTER DETECTION:
+1. Examine the document thoroughly for semester indicators:
+   - Header labels: "First Semester", "1st Semester", "Harmattan", "Alpha", "Fall" vs "Second Semester", "2nd Semester", "Rain", "Omega", "Spring".
+   - Section groupings: Courses listed under a "FIRST SEMESTER" section/table vs "SECOND SEMESTER" section/table.
+   - Column values: A "Semester", "Sem", or "Term" column containing 1, 2, 1st, 2nd, I, or II.
+   - If the course form contains courses for BOTH first and second semesters, you MUST identify which semester each individual course belongs to and mark each course with "first" or "second".
+   - If the entire document is for one semester only, assign that semester ("first" or "second") to all courses.
+   - If a course has no explicit semester label in the text or headers, infer from Nigerian/standard university course code conventions where odd-numbered courses (e.g., MEE 301, CSC 201, MTH 101, GST 101) typically belong to "first" semester, and even-numbered courses (e.g., MEE 302, CSC 202, MTH 102, GST 102) typically belong to "second" semester.
+2. The "semester" field for each course MUST be strictly either "first" or "second".
+3. For the "level" field, identify the level (e.g., "100lvl", "200lvl", "300lvl", "400lvl", "500lvl") from document headers or course code digits (101-199 -> "100lvl", 201-299 -> "200lvl", etc.). Fall back to "${userProfile.level || '100lvl'}" if not found.
+4. Clean up course codes (e.g. "MEE 301") and course titles (clean title in CAPITAL LETTERS, e.g. "FLUID MECHANICS").
 
 Return ONLY a JSON object with a "courses" array.`;
 
+            let parts: any[] = [];
+            if (isImage) {
+                const base64Chunk = await fileToBase64(file);
+                parts = [
+                    { text: prompt },
+                    { inlineData: { mimeType: file.type || 'image/jpeg', data: base64Chunk } }
+                ];
+            } else {
+                // PDF extraction
+                const { extractTextFromPDF } = await import('../utils/pdfExtraction');
+                const pdfText = await extractTextFromPDF(file);
+                const truncated = (pdfText || '').slice(0, 120000).trim();
+                if (!truncated) {
+                    throw new Error('Could not read text from this PDF. If this is a scanned photo, please take a clear picture and upload as an image (JPG/PNG).');
+                }
+                parts = [
+                    { text: `${prompt}\n\nDOCUMENT TEXT:\n---\n${truncated}\n---` }
+                ];
+            }
+
             const callRes = await attemptApiCall(() => ai.models.generateContent({
                 model: aiModel,
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                contents: [{ role: 'user', parts }],
                 config: {
                     responseMimeType: 'application/json',
                     responseSchema: {
@@ -609,8 +636,14 @@ Return ONLY a JSON object with a "courses" array.`;
                                 type: Type.ARRAY,
                                 items: {
                                     type: Type.OBJECT,
-                                    properties: { course_name: { type: Type.STRING }, course_code: { type: Type.STRING } },
-                                    required: ['course_name', 'course_code']
+                                    properties: {
+                                        course_name: { type: Type.STRING },
+                                        course_code: { type: Type.STRING },
+                                        semester: { type: Type.STRING, description: "Must be 'first' or 'second'" },
+                                        level: { type: Type.STRING, description: "e.g. '100lvl', '200lvl', '300lvl'" },
+                                        course_unit: { type: Type.NUMBER }
+                                    },
+                                    required: ['course_name', 'course_code', 'semester']
                                 }
                             }
                         },
@@ -622,36 +655,78 @@ Return ONLY a JSON object with a "courses" array.`;
             if (!callRes.success || !callRes.data) throw new Error(callRes.message || "Failed to get response from AI");
             const text = getResponseText(callRes.data);
             if (!text) throw new Error("Failed to get response from AI");
-            const data = JSON.parse(text);
+
+            let cleanJson = text.trim();
+            const codeBlockMatch = cleanJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (codeBlockMatch) {
+                cleanJson = codeBlockMatch[1].trim();
+            }
+            const firstBrace = cleanJson.indexOf('{');
+            const lastBrace = cleanJson.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1) {
+                cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+            }
+            const data = JSON.parse(cleanJson);
 
             if (data.courses && Array.isArray(data.courses) && data.courses.length > 0) {
+                const validCourses = data.courses.filter((c: any) => c && (c.course_code || c.code || c.course_name || c.name));
+                if (validCourses.length === 0) {
+                    throw new Error("No valid courses could be identified in the uploaded document.");
+                }
+
                 const updates: any = {};
                 const deptPath = `${userProfile.school_id}/colleges/${userProfile.college_id}/departments/${userProfile.department_id}`;
-                data.courses.forEach((c: any) => {
-                    const courseId = c.course_code.trim().toLowerCase().replace(/\s+/g, '');
+                let firstCount = 0;
+                let secondCount = 0;
+
+                validCourses.forEach((c: any) => {
+                    const rawCode = (c.course_code || c.code || '').trim().toUpperCase();
+                    const rawName = (c.course_name || c.name || rawCode).trim();
+                    const courseCode = rawCode || rawName.toUpperCase();
+                    const courseName = rawName || courseCode;
+                    const courseId = courseCode.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                    const courseSemester = resolveCourseSemester(c.semester, courseCode, filter.semester);
+                    const courseLevel = resolveCourseLevel(c.level, courseCode, userProfile.level || '100lvl');
+
+                    if (courseSemester === 'second') {
+                        secondCount++;
+                    } else {
+                        firstCount++;
+                    }
+
                     const courseData = {
                         course_id: courseId,
-                        course_name: c.course_name.trim(),
-                        course_code: c.course_code.trim().toUpperCase(),
-                        level: userProfile.level,
-                        semester: filter.semester === 'all' ? 'first' : filter.semester,
+                        course_name: courseName,
+                        course_code: courseCode,
+                        level: courseLevel,
+                        semester: courseSemester,
                         course_status: 'active'
                     };
-                    updates[`schools_data/${deptPath}/levels/${userProfile.level}/courses/${courseId}`] = courseData;
+                    updates[`schools_data/${deptPath}/levels/${courseLevel}/courses/${courseId}`] = courseData;
                     updates[`departments_data/${userProfile.department_id}/course_list/${courseId}`] = courseData;
                 });
                 await update(dbRef(db), updates);
+
                 await Promise.all(
-                    data.courses.map((c: any) => {
-                        const courseId = c.course_code.trim().toLowerCase().replace(/\s+/g, '');
+                    validCourses.map((c: any) => {
+                        const rawCode = (c.course_code || c.code || '').trim().toUpperCase();
+                        const rawName = (c.course_name || c.name || rawCode).trim();
+                        const courseCode = rawCode || rawName.toUpperCase();
+                        const courseName = rawName || courseCode;
+                        const courseId = courseCode.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                        const courseSemester = resolveCourseSemester(c.semester, courseCode, filter.semester);
+                        const courseLevel = resolveCourseLevel(c.level, courseCode, userProfile.level || '100lvl');
+
                         return supabaseDataService.upsertCourse({
                             course_id: courseId,
-                            course_code: c.course_code.trim().toUpperCase(),
-                            course_name: c.course_name.trim(),
-                            title: c.course_name.trim(),
-                            code: c.course_code.trim().toUpperCase(),
-                            level: userProfile.level,
-                            semester: filter.semester === 'all' ? 1 : (filter.semester === 'second' ? 2 : 1),
+                            course_code: courseCode,
+                            course_name: courseName,
+                            title: courseName,
+                            code: courseCode,
+                            level: courseLevel,
+                            semester: courseSemester === 'second' ? 2 : 1,
                             description: `Extracted course for ${userProfile.department_id}`,
                             department_id: userProfile.department_id,
                             school_id: userProfile.school_id,
@@ -659,17 +734,26 @@ Return ONLY a JSON object with a "courses" array.`;
                     })
                 );
 
-                const newExtractedCourses: Course[] = data.courses.map((c: any) => {
-                    const courseId = c.course_code.trim().toLowerCase().replace(/\s+/g, '');
+                const newExtractedCourses: Course[] = validCourses.map((c: any) => {
+                    const rawCode = (c.course_code || c.code || '').trim().toUpperCase();
+                    const rawName = (c.course_name || c.name || rawCode).trim();
+                    const courseCode = rawCode || rawName.toUpperCase();
+                    const courseName = rawName || courseCode;
+                    const courseId = courseCode.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                    const courseSemester = resolveCourseSemester(c.semester, courseCode, filter.semester);
+                    const courseLevel = resolveCourseLevel(c.level, courseCode, userProfile.level || '100lvl');
+
                     return {
                         course_id: courseId,
-                        course_name: c.course_name.trim(),
-                        course_code: c.course_code.trim().toUpperCase(),
-                        level: userProfile.level,
-                        semester: filter.semester === 'all' ? 'first' : filter.semester,
+                        course_name: courseName,
+                        course_code: courseCode,
+                        level: courseLevel,
+                        semester: courseSemester,
                         topics: [],
                     };
                 });
+
                 setCourses(prev => {
                     const merged = [...prev];
                     newExtractedCourses.forEach(nc => {
@@ -685,8 +769,23 @@ Return ONLY a JSON object with a "courses" array.`;
                 });
                 setShowAddCourseModal(false);
 
-                void deductAICredits(userProfile.uid, cost, 'Study Guide PDF Extraction', appSettings);
-                addToast(`Successfully extracted and saved ${data.courses.length} courses!`, 'success');
+                // Auto-adjust filter so the user immediately sees their imported courses
+                if (firstCount > 0 && secondCount > 0) {
+                    setFilter(f => ({ ...f, semester: 'all' }));
+                } else if (secondCount > 0 && firstCount === 0 && filter.semester === 'first') {
+                    setFilter(f => ({ ...f, semester: 'second' }));
+                } else if (firstCount > 0 && secondCount === 0 && filter.semester === 'second') {
+                    setFilter(f => ({ ...f, semester: 'first' }));
+                }
+
+                void deductAICredits(userProfile.uid, cost, 'Study Guide Course Form Extraction', appSettings);
+
+                const summaryMsg = firstCount > 0 && secondCount > 0
+                    ? `Successfully saved ${validCourses.length} courses (${firstCount} First Semester, ${secondCount} Second Semester)!`
+                    : secondCount > 0
+                        ? `Successfully saved ${secondCount} Second Semester course(s)!`
+                        : `Successfully saved ${firstCount} First Semester course(s)!`;
+                addToast(summaryMsg, 'success');
             } else {
                 throw new Error("No courses found in the document");
             }
@@ -1757,14 +1856,14 @@ Return a JSON object containing a "topics" array.`;
                                         Upload Course Registration Form
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mb-4">
-                                        Upload your course form PDF or curriculum document. AI will detect and register all courses automatically.
+                                        Upload your course form PDF or photo. AI will accurately detect 1st vs 2nd semester and register all courses.
                                     </p>
                                     <label className={`px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${isExtractingCourses ? 'opacity-60 pointer-events-none' : ''}`}>
                                         <i className="bi bi-cloud-arrow-up text-sm font-black"></i>
-                                        <span>{isExtractingCourses ? 'Extracting Courses...' : 'Select PDF Document'}</span>
+                                        <span>{isExtractingCourses ? 'Extracting Courses...' : 'Select Course Form (PDF or Photo)'}</span>
                                         <input
                                             type="file"
-                                            accept=".pdf,application/pdf"
+                                            accept=".pdf,application/pdf,image/*"
                                             className="hidden"
                                             onChange={handleExtractCourses}
                                             disabled={isExtractingCourses}
@@ -2320,8 +2419,8 @@ Return a JSON object containing a "topics" array.`;
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                                 <label className={`flex items-center justify-center gap-2.5 px-5 py-3.5 bg-slate-900 hover:bg-slate-800 dark:bg-[#1C1C1C] dark:hover:bg-[#2A2A2A] text-white rounded-2xl text-xs sm:text-sm font-bold cursor-pointer transition-all shadow-sm border border-slate-800 dark:border-[#2A2A2A] active:scale-95 ${isExtractingCourses ? 'opacity-70 pointer-events-none' : ''}`}>
                                                     <i className="bi bi-cloud-arrow-up text-base"></i>
-                                                    <span>{isExtractingCourses ? 'Extracting courses...' : 'Upload Course Form PDF'}</span>
-                                                    <input type="file" accept=".pdf" className="hidden" onChange={handleExtractCourses} disabled={isExtractingCourses} />
+                                                    <span>{isExtractingCourses ? 'Extracting courses...' : 'Upload Course Form (PDF/Photo)'}</span>
+                                                    <input type="file" accept=".pdf,application/pdf,image/*" className="hidden" onChange={handleExtractCourses} disabled={isExtractingCourses} />
                                                 </label>
                                                 <button
                                                     type="button"

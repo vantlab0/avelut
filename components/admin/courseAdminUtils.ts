@@ -11,9 +11,36 @@ export const MAX_MAILTO_LINK_LENGTH = 1900;
 export const MAX_COURSE_STATUS_LENGTH = 12;
 export const DEFAULT_SEMESTER: (typeof SEMESTERS)[number] = 'first';
 
-export const normalizeSemester = (semester?: Course['semester']): (typeof SEMESTERS)[number] => (
-    semester && SEMESTERS.includes(semester) ? semester : DEFAULT_SEMESTER
-);
+export const normalizeSemester = (semester?: any): (typeof SEMESTERS)[number] => {
+    if (!semester) return DEFAULT_SEMESTER;
+    const str = String(semester).trim().toLowerCase();
+    if (
+        str === 'second' ||
+        str === '2' ||
+        str === '2nd' ||
+        str.includes('second') ||
+        str.includes('2nd') ||
+        str.includes('rain') ||
+        str.includes('omega') ||
+        str.includes('spring')
+    ) {
+        return 'second';
+    }
+    if (
+        str === 'first' ||
+        str === '1' ||
+        str === '1st' ||
+        str.includes('first') ||
+        str.includes('1st') ||
+        str.includes('harmattan') ||
+        str.includes('alpha') ||
+        str.includes('fall')
+    ) {
+        return 'first';
+    }
+    return DEFAULT_SEMESTER;
+};
+
 
 export const normalizeLevel = (value?: string) => {
     if (!value) return LEVELS[0];

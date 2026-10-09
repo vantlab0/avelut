@@ -20,13 +20,6 @@
   <!-- This tells Chrome to open the app directly if installed -->
   <link rel="alternate" href="android-app://com.avelut.app/https/avelut.xyz" />
   <link rel="apple-touch-icon" href="/logo_icon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-  <link rel="dns-prefetch" href="https://accounts.google.com">
-  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Kalam:wght@300;400;700&family=Patrick+Hand&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
   <!-- SEO -->
   <meta name="description" content="Avelut teaches, not only summarizes. Live Tutorial: real voice + visual board lessons (15–60 min). Unlimited Avelut AI chat when you're stuck. Study guides, quizzes, scan-to-solve. Free to start." />
@@ -51,15 +44,7 @@
   <meta name="twitter:image" content="https://avelut.xyz/og-image.jpg" />
   <meta name="twitter:site" content="@avelut" />
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,300..700;1,7..72,300..700&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap"
-    rel="stylesheet">
-
   <link rel="stylesheet" href="/styles.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css"
-    integrity="sha384-wcIxkf4k558AjM3Yz3BBFQUbk/zgIYC2R0QpeeYb+TwlBVMrlgLqwRjRtGZiK7ww" crossorigin="anonymous">
 
   <script>
     // Map deprecated 'unload' event to 'pagehide' to prevent Chrome Permissions Policy violation
@@ -75,72 +60,142 @@
   </script>
 
   <script>
-    // ── Deep Link: Open App Banner ──────────────────────────────────────────
-    // Detects Android/iOS mobile browsers and shows a banner to open/download the app.
-    // The custom URL scheme "avelut://" must be registered in your Capacitor AndroidManifest.xml.
+    // ── Deep Link: Direct Mobile App & Native Play Store Handler ────────────
+    // Automatically attempts to open the Avelut mobile app directly when visiting.
+    // If not installed, redirects directly to Google Play Store native app (market://),
+    // NEVER the browser Play Store webpage.
     (function () {
       try {
         var ua = navigator.userAgent || '';
         var isAndroid = /Android/i.test(ua);
         var isIOS = /iPhone|iPad|iPod/i.test(ua);
-        var isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator).standalone;
-        var isCapacitor = typeof window.Capacitor !== 'undefined';
+        var isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator && window.navigator.standalone);
+        var isCapacitor = typeof window.Capacitor !== 'undefined' || window.location.protocol === 'capacitor:';
 
-        // Do not show banner if already running as native app or PWA
+        // Do not execute if already running inside the native app or standalone PWA
         if (isStandalone || isCapacitor) return;
 
         if (isAndroid || isIOS) {
+          var cleanPath = (window.location.pathname.replace(/^\//, '') || '') + window.location.search;
+          var androidIntentUrl = 'intent://' + (cleanPath || 'open') + '#Intent;scheme=avelut;package=com.avelut.app;end';
+          var marketUrl = 'market://details?id=com.avelut.app';
+          var appStoreUrl = 'https://apps.apple.com/app/avelut/idYOUR_APP_STORE_ID';
+          var storeUrl = isAndroid ? marketUrl : appStoreUrl;
+
+          function launchMobileApp(isUserAction) {
+            var hasLeftPage = false;
+            var startTime = Date.now();
+
+            function onPageInactive() {
+              hasLeftPage = true;
+            }
+            window.addEventListener('pagehide', onPageInactive, { once: true });
+            window.addEventListener('blur', onPageInactive, { once: true });
+            document.addEventListener('visibilitychange', function () {
+              if (document.hidden) hasLeftPage = true;
+            }, { once: true });
+
+            if (isAndroid) {
+              // 1. Android Chrome Intent:
+              // - If com.avelut.app is installed: opens Avelut app directly.
+              // - If com.avelut.app is NOT installed: Chrome forwards to Google Play Store app natively.
+              window.location.href = androidIntentUrl;
+
+              // 2. Fallback for browsers where intent doesn't resolve or auto-route:
+              // If the page remains active after 1200ms, open Google Play Store native app directly.
+              setTimeout(function () {
+                if (!hasLeftPage && (Date.now() - startTime < 3500)) {
+                  window.location.href = marketUrl;
+                }
+              }, 1200);
+            } else if (isIOS) {
+              var iosSchemeUrl = 'avelut://' + (cleanPath || 'open');
+              window.location.href = iosSchemeUrl;
+              setTimeout(function () {
+                if (!hasLeftPage && (Date.now() - startTime < 3500)) {
+                  window.location.href = appStoreUrl;
+                }
+              }, 1500);
+            }
+          }
+
+          // ── Auto-Open on Website Visit ────────────────────────────────────
+          // When visiting the website on Android, attempt to open the app directly.
+          // Uses sessionStorage to avoid redirect loops if the user returns back to the browser.
+          if (isAndroid) {
+            try {
+              var alreadyVisited = sessionStorage.getItem('avelut_deep_link_auto_triggered');
+              if (!alreadyVisited) {
+                sessionStorage.setItem('avelut_deep_link_auto_triggered', '1');
+                setTimeout(function () {
+                  launchMobileApp(false);
+                }, 350);
+              }
+            } catch (e) { /* ignore storage errors */ }
+          }
+
+          // ── Smart Top Banner ──────────────────────────────────────────────
           var banner = document.createElement('div');
           banner.id = 'avelut-app-banner';
           banner.style.cssText = [
-            'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:99999',
-            'background:#0A0A0A', 'color:#fff', 'display:flex', 'align-items:center',
-            'gap:12px', 'padding:10px 14px', 'font-family:system-ui,sans-serif',
-            'font-size:13px', 'box-shadow:0 2px 12px rgba(0,0,0,0.4)',
-            'border-bottom:1px solid rgba(255,255,255,0.08)'
+            'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:999999',
+            'background:#0D0F14', 'color:#fff', 'display:flex', 'align-items:center',
+            'gap:12px', 'padding:10px 14px', 'font-family:system-ui,-apple-system,sans-serif',
+            'font-size:13px', 'box-shadow:0 4px 20px rgba(0,0,0,0.5)',
+            'border-bottom:1px solid rgba(255,255,255,0.1)'
           ].join(';');
 
-          var playStoreUrl = 'https://play.google.com/store/apps/details?id=com.avelut.app';
-          var appStoreUrl = 'https://apps.apple.com/app/avelut/idYOUR_APP_STORE_ID'; // Replace with real ID
-          var storeUrl = isAndroid ? playStoreUrl : appStoreUrl;
-          var deepLinkUrl = 'avelut://' + window.location.pathname.replace(/^\//, '') + window.location.search;
-
           banner.innerHTML = [
-            '<img src="/logo_icon.png" style="width:36px;height:36px;border-radius:8px;flex-shrink:0" alt="Avelut">',
+            '<img src="/logo_icon.png" style="width:36px;height:36px;border-radius:9px;flex-shrink:0;object-fit:cover" alt="Avelut">',
             '<div style="flex:1;min-width:0">',
-              '<div style="font-weight:700;font-size:14px">AVELUT</div>',
-              '<div style="color:rgba(255,255,255,0.55);font-size:11px">Better on the app &bull; Free</div>',
+              '<div style="font-weight:700;font-size:14px;letter-spacing:-0.01em">AVELUT</div>',
+              '<div style="color:rgba(255,255,255,0.65);font-size:11px">Open in mobile app &bull; Free</div>',
             '</div>',
-            '<a id="avelut-banner-open" href="' + deepLinkUrl + '" style="background:#0066FF;color:#fff;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;flex-shrink:0">Open</a>',
-            '<a href="' + storeUrl + '" style="color:rgba(255,255,255,0.45);font-size:11px;text-decoration:none;flex-shrink:0;padding:4px">Get App</a>',
-            '<button onclick="document.getElementById(\'avelut-app-banner\').remove();document.body.style.paddingTop=\'0\'" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;line-height:1;padding:2px 4px;flex-shrink:0" aria-label="Close">&times;</button>'
+            '<button id="avelut-banner-open" style="background:#0066FF;color:#fff;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;flex-shrink:0;outline:none">Open</button>',
+            '<a id="avelut-banner-store" href="' + storeUrl + '" style="color:rgba(255,255,255,0.7);font-size:11px;font-weight:500;text-decoration:none;flex-shrink:0;padding:6px 4px">Get App</a>',
+            '<button id="avelut-banner-close" style="background:none;border:none;color:rgba(255,255,255,0.45);font-size:20px;cursor:pointer;line-height:1;padding:2px 6px;flex-shrink:0" aria-label="Close">&times;</button>'
           ].join('');
 
-          document.addEventListener('DOMContentLoaded', function () {
+          function attachBanner() {
+            if (!document.body || document.getElementById('avelut-app-banner')) return;
             document.body.insertBefore(banner, document.body.firstChild);
-            document.body.style.paddingTop = (banner.offsetHeight + 4) + 'px';
+            document.body.style.paddingTop = (banner.offsetHeight || 56) + 'px';
 
-            // Try opening the app via custom scheme; fall back gracefully
             var openBtn = document.getElementById('avelut-banner-open');
             if (openBtn) {
               openBtn.addEventListener('click', function (e) {
                 e.preventDefault();
-                var fallbackTimer = setTimeout(function () {
-                  window.location.href = storeUrl;
-                }, 1500);
-                window.location.href = deepLinkUrl;
-                window.addEventListener('blur', function () { clearTimeout(fallbackTimer); }, { once: true });
+                launchMobileApp(true);
               });
             }
-          });
+
+            var storeBtn = document.getElementById('avelut-banner-store');
+            if (storeBtn && isAndroid) {
+              storeBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                window.location.href = marketUrl;
+              });
+            }
+
+            var closeBtn = document.getElementById('avelut-banner-close');
+            if (closeBtn) {
+              closeBtn.addEventListener('click', function () {
+                banner.remove();
+                document.body.style.paddingTop = '0';
+              });
+            }
+          }
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', attachBanner);
+          } else {
+            attachBanner();
+          }
         }
       } catch (e) { /* ignore */ }
     })();
   </script>
-  <!-- OneSignal Web Push SDK (for web browser notifications) -->
-  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="https://apis.google.com/js/api.js" async defer></script>
+
   <style>
     html, body {
       position: fixed;

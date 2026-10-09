@@ -1,6 +1,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource/plus-jakarta-sans";
+@import "@fontsource/kalam";
+@import "@fontsource/caveat";
+@import "@fontsource/nunito";
+@import "bootstrap-icons/font/bootstrap-icons.min.css";
+@import "katex/dist/katex.min.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
