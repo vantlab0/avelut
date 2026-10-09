@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, storage, ref as dbRef, get, update, ref as storageRef, uploadBytes, getDownloadURL } from '@/lib/backend';
-import { Type, createAvelutAI } from '../../../../utils/inference';
+import { Type, createAvelutAI, getResponseText } from '../../../../utils/inference';
 import { useToast } from '../../../../hooks/useToast';
 import { useAppSettings } from '../../../../hooks/useAppSettings';
 import { InlineEditableText } from '../../primitives/InlineEditableText';
@@ -303,8 +303,12 @@ RULES:
             setExtractionStage('populating');
             setExtractionProgress(90);
 
-            const responseText = (response as any).text || '';
-            const parsedData = JSON.parse(responseText);
+            const responseText = getResponseText(response).trim();
+            const cleaned = responseText
+                .replace(/^```(?:json)?\s*/i, '')
+                .replace(/\s*```$/i, '')
+                .trim();
+            const parsedData = JSON.parse(cleaned);
             const extractedTopicsRaw = Array.isArray(parsedData.topics) ? parsedData.topics : [];
 
             const formattedExtractedTopics: ExtendedTopic[] = extractedTopicsRaw.map((t: any, idx: number) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { db, storage, auth, ref as dbRef, set, push, update, get, remove, query, limitToLast, storageRef, uploadBytes, getDownloadURL } from "../../lib/backend";
-import { Type, createAvelutAI } from "../../utils/inference";
+import { Type, createAvelutAI, getResponseText } from "../../utils/inference";
 import type { UsageSettings } from "../../types";
 import { useToast } from "../../hooks/useToast";
 import { useAppSettings } from "../../hooks/useAppSettings";
@@ -943,9 +943,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     }
                 });
 
-                const responseText = (response as any).text || '';
+                const responseText = getResponseText(response).trim();
                 if (!responseText) throw new Error('AI returned an empty suggestion.');
-                const data = JSON.parse(responseText);
+                const cleaned = responseText
+                    .replace(/^```(?:json)?\s*/i, '')
+                    .replace(/\s*```$/i, '')
+                    .trim();
+                const data = JSON.parse(cleaned);
                 setAnnouncementTitle((data.title || '').toString());
                 setAnnouncementMessage((data.message || '').toString());
                 addToast('Suggested announcement generated.', 'success');
@@ -1075,7 +1079,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     model: modelToTest,
                     contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
                 });
-                const responseText = (response as any).text ? (typeof (response as any).text === 'function' ? (response as any).text() : (response as any).text) : '';
+                const responseText = getResponseText(response);
                 const preview = (responseText || '').trim();
                 if (!preview) {
                     throw new Error('The test returned an empty response.');
@@ -1874,11 +1878,7 @@ RULES:
                     },
                 });
 
-                const rawText =
-                    typeof (response as any)?.text === 'function'
-                        ? (response as any).text()
-                        : ((response as any)?.text ?? '');
-                const responseText = (rawText || '').toString().trim();
+                const responseText = getResponseText(response).trim();
                 if (!responseText) {
                     throw new Error('AI returned an empty response while extracting questions.');
                 }
@@ -2172,12 +2172,16 @@ FORMAT:
                         }
                     });
 
-                    const responseText = (response as any).text || '';
+                    const responseText = getResponseText(response).trim();
                     if (!responseText) {
                         throw new Error("AI returned an empty response while extracting courses.");
                     }
 
-                    const responseData = JSON.parse(responseText);
+                    const cleaned = responseText
+                        .replace(/^```(?:json)?\s*/i, '')
+                        .replace(/\s*```$/i, '')
+                        .trim();
+                    const responseData = JSON.parse(cleaned);
                     const extractedSession = (responseData?.academic_session || '').toString().trim();
                     if (!extractedSessionLabel && extractedSession) {
                         extractedSessionLabel = extractedSession;

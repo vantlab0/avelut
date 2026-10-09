@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { db, ref as dbRef, get, update } from '@/lib/backend';
-import { Type, createAvelutAI } from '../../../utils/inference';
+import { Type, createAvelutAI, getResponseText } from '../../../utils/inference';
 import { useToast } from '../../../hooks/useToast';
 import { useAppSettings } from '../../../hooks/useAppSettings';
 import { MergeReviewModal, SuggestedMerge } from './MergeReviewModal';
@@ -116,8 +116,9 @@ Rules:
                 },
             });
 
-            const responseText = (response as any).text || '';
-            const parsed = JSON.parse(responseText);
+            const rawText = getResponseText(response).trim();
+            const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+            const parsed = cleaned ? JSON.parse(cleaned) : {};
             const mergesRaw = Array.isArray(parsed.merges) ? parsed.merges : [];
 
             const formattedMerges: SuggestedMerge[] = mergesRaw.map((m: any, idx: number) => ({

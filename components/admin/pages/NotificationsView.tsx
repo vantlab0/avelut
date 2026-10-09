@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db, auth, ref as dbRef, push, update, set } from '@/lib/backend';
-import { Type, createAvelutAI } from '../../../utils/inference';
+import { Type, createAvelutAI, getResponseText } from '../../../utils/inference';
 import { useToast } from '../../../hooks/useToast';
 import type { UserProfile } from '../../../types';
 
@@ -160,9 +160,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                 }
             });
 
-            const responseText = (response as any).text || '';
-            if (!responseText) throw new Error('AI returned an empty suggestion.');
-            const data = JSON.parse(responseText);
+            const rawText = getResponseText(response).trim();
+            if (!rawText) throw new Error('AI returned an empty suggestion.');
+            const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+            const data = JSON.parse(cleaned);
             setAnnouncementTitle((data.title || '').toString());
             setAnnouncementMessage((data.message || '').toString());
             addToast('Suggested announcement generated.', 'success');

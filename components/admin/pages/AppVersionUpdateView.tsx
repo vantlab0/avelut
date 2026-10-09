@@ -1,6 +1,6 @@
 import { auth, db, get, ref as dbRef, set } from '@/lib/backend';
 import React, { useEffect, useState } from 'react';
-import { Type, createAvelutAI } from '../../../utils/inference';
+import { Type, createAvelutAI, getResponseText } from '../../../utils/inference';
 import { useToast } from '../../../hooks/useToast';
 import { useAppSettings } from '../../../hooks/useAppSettings';
 
@@ -114,12 +114,13 @@ Return only JSON with keys: title, message, version_name.`;
                 },
             });
 
-            const responseText = (response as any).text || '';
-            if (!responseText) {
+            const rawText = getResponseText(response).trim();
+            if (!rawText) {
                 throw new Error('AI returned empty update copy.');
             }
 
-            const data = JSON.parse(responseText);
+            const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+            const data = JSON.parse(cleaned);
             const generatedTitle = (data.title || '').toString().trim();
             const generatedMessage = (data.message || '').toString().trim();
             const generatedVersionName = (data.version_name || '').toString().trim();
