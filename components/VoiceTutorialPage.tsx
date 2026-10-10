@@ -123,9 +123,9 @@ export const VoiceTutorialPage: React.FC<VoiceTutorialPageProps> = ({
   const [selectedDuration, setSelectedDuration] = useState<LiveDurationMinutes>(15);
   const [selectedVoice, setSelectedVoice] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('avelut_live_classroom_voice') || 'Katerina';
+      return localStorage.getItem('avelut_live_classroom_voice') || 'Tina';
     }
-    return 'Katerina';
+    return 'Tina';
   });
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [creditCheckData, setCreditCheckData] = useState<any>(null);

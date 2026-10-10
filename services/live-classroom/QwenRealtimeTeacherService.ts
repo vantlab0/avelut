@@ -111,7 +111,7 @@ export class QwenRealtimeTeacherService {
   private isStarting = false;
   private isSessionUpdated = false;
   private retriedWithDefaultVoice = false;
-  private currentVoice: string = typeof window !== 'undefined' ? (localStorage.getItem('avelut_live_classroom_voice') || 'Katerina') : 'Katerina';
+  private currentVoice: string = typeof window !== 'undefined' ? (localStorage.getItem('avelut_live_classroom_voice') || 'Tina') : 'Tina';
   private currentModel = QWEN_REALTIME_MODEL;
   private boardController = avelutBoardController;
   private hasReceivedAudioInCurrentResponse = false;
@@ -1228,9 +1228,9 @@ export class QwenRealtimeTeacherService {
 
     // Voice selection
     const savedVoice = typeof window !== 'undefined' ? localStorage.getItem('avelut_live_classroom_voice') : null;
-    let selectedVoice = overrideVoice || this.currentVoice || savedVoice || this.appSettings?.alibaba_voice_name || 'Katerina';
+    let selectedVoice = overrideVoice || this.currentVoice || savedVoice || this.appSettings?.alibaba_voice_name || 'Tina';
     if (selectedVoice === 'Cherry' || selectedVoice === 'Catherine' || !selectedVoice) {
-      selectedVoice = 'Katerina';
+      selectedVoice = 'Tina';
     }
     this.currentVoice = selectedVoice;
     liveLogger.log('[QwenRealtime] Session voice:', selectedVoice);
@@ -1729,8 +1729,8 @@ export class QwenRealtimeTeacherService {
         this.setResponseLifecycleState('RESPONSE_FAILED');
         if (event.error?.message?.includes('Voice') && !this.retriedWithDefaultVoice) {
           this.retriedWithDefaultVoice = true;
-          liveLogger.warn('[QwenRealtime] Voice error — auto-recovering with "Katerina"');
-          this.sendSessionInit('Katerina');
+          liveLogger.warn('[QwenRealtime] Voice error — auto-recovering with "Tina"');
+          this.sendSessionInit('Tina');
           return;
         }
 

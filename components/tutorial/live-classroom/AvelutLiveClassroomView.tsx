@@ -38,16 +38,13 @@ export interface AlibabaVoiceOption {
 }
 
 export const ALIBABA_FLASH_VOICES: AlibabaVoiceOption[] = [
-  { id: 'Katerina', name: 'Katerina', gender: 'Female', desc: 'Engaging, expressive & articulate (Default)' },
-  { id: 'Ethan', name: 'Ethan', gender: 'Male', desc: 'Conversational, friendly & warm' },
-  { id: 'Harry', name: 'Harry', gender: 'Male', desc: 'Energetic, dynamic & confident' },
-  { id: 'Luna', name: 'Luna', gender: 'Female', desc: 'Gentle, calm & sweet' },
-  { id: 'Mason', name: 'Mason', gender: 'Male', desc: 'Academic, professional & clear' },
-  { id: 'Stella', name: 'Stella', gender: 'Female', desc: 'Lively, bright & cheerful' },
-  { id: 'Dylan', name: 'Dylan', gender: 'Male', desc: 'Relaxed, natural & easygoing' },
-  { id: 'Serena', name: 'Serena', gender: 'Female', desc: 'Supportive, patient & encouraging' },
-  { id: 'Zhiyan', name: 'Zhiyan (知言)', gender: 'Female', desc: 'Standard natural multilingual' },
-  { id: 'Zhidong', name: 'Zhidong (知栋)', gender: 'Male', desc: 'Warm professional multilingual' },
+  { id: 'Tina', name: 'Tina', gender: 'Female', desc: 'Warm, sweet & cozy (Default)' },
+  { id: 'Cindy', name: 'Cindy', gender: 'Female', desc: 'Sweet-talking young woman style (Taiwanese flavor)' },
+  { id: 'Liora Mira', name: 'Liora Mira', gender: 'Female', desc: 'Gentle voice bringing warmth to interactions' },
+  { id: 'Raymond', name: 'Raymond', gender: 'Male', desc: 'Clear-voiced, pragmatic problem solver' },
+  { id: 'Katerina', name: 'Katerina', gender: 'Female', desc: 'Mature, commanding voice with distinct rhythm' },
+  { id: 'Ryan', name: 'Ryan', gender: 'Male', desc: 'High-energy delivery with dramatic presence' },
+  { id: 'Mia', name: 'Mia', gender: 'Female', desc: 'Soothing lifestyle-artist voice for calm aesthetics' },
 ];
 import { ExcalidrawLiveBoard } from './ExcalidrawLiveBoard';
 import {
@@ -343,9 +340,9 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
   const [selectedVoice, setSelectedVoice] = useState<string>(() => {
     if (initialVoice) return initialVoice;
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('avelut_live_classroom_voice') || 'Katerina';
+      return localStorage.getItem('avelut_live_classroom_voice') || 'Tina';
     }
-    return 'Katerina';
+    return 'Tina';
   });
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const voiceMenuRef = useRef<HTMLDivElement>(null);
