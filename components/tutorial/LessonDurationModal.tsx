@@ -131,25 +131,10 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
         className="relative w-full max-w-md bg-[#0F0F12] border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-white"
       >
         {/* Top Header */}
-        <div className="flex items-start justify-between p-5 pb-3 border-b border-white/5">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wider uppercase bg-neutral-900 text-neutral-300 border border-neutral-800">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-600" /> Live Classroom
-              </span>
-              {courseName && (
-                <span className="text-xs text-white/40 truncate max-w-[160px]">
-                  {courseName}
-                </span>
-              )}
-            </div>
-            <h2 className="text-lg font-bold text-white tracking-tight line-clamp-1">
-              {topicTitle}
-            </h2>
-            <p className="text-xs text-white/50 mt-0.5">
-              Select session duration to begin
-            </p>
-          </div>
+        <div className="flex items-center justify-between p-5 pb-4 border-b border-white/5">
+          <h2 className="text-lg font-bold text-white tracking-tight line-clamp-1">
+            {topicTitle}
+          </h2>
 
           <button
             onClick={onClose}
@@ -199,34 +184,23 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
                         isSelected ? 'text-white' : 'text-white/90'
                       }`}
                     >
-                      {item.name}
+                      {item.minutes} Minutes
                     </span>
 
-                    {/* Small label underneath */}
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs font-semibold text-red-500">
-                        {item.tagline}
-                      </span>
-
-                      <span className="text-[11px] text-white/40">•</span>
-
+                    <span className="text-xs text-white/50 mt-0.5">
                       {isIncluded ? (
-                        <span className="text-[11px] font-medium text-emerald-400">
-                          Included with Plan
-                        </span>
+                        <span className="text-emerald-400 font-medium">Included</span>
                       ) : (
-                        <span className="text-[11px] font-medium text-white/50">
-                          {decision?.creditCost} credits
-                        </span>
+                        <span>{decision?.creditCost} credits</span>
                       )}
-                    </div>
+                    </span>
                   </div>
                 </div>
 
-                {/* Right Status / Padlock icon */}
+                {/* Right Status / Selection */}
                 <div className="flex items-center shrink-0 pl-2">
                   {!isAllowed ? (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold">
                       <Lock className="w-3.5 h-3.5" />
                       <span>Locked</span>
                     </div>
@@ -243,7 +217,7 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
 
         {/* Balance Status Footer */}
         <div className="px-5 pb-2 text-xs text-white/40 flex items-center justify-between">
-          <span>Your Credit Balance:</span>
+          <span>Credit Balance:</span>
           <span className="font-semibold text-white/70">
             {userProfile?.ai_credits_balance ?? 0} credits
           </span>
@@ -254,7 +228,7 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
           <button
             type="button"
             onClick={handleStart}
-            className={`w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer ${
+            className={`w-full flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] cursor-pointer ${
               isSelectedLocked
                 ? 'bg-white/10 hover:bg-white/15 text-white border border-white/15'
                 : 'bg-red-600 hover:bg-red-700 text-white'
@@ -263,13 +237,10 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
             {isSelectedLocked ? (
               <>
                 <Lock className="w-4 h-4" />
-                <span>Get Credits to Unlock ({activeDecision?.creditCost} Credits)</span>
+                <span>Unlock ({activeDecision?.creditCost} Credits)</span>
               </>
             ) : (
-              <>
-                <Zap className="w-4 h-4 fill-current" />
-                <span>Continue to Voice Selection ({selectedMode} Mins)</span>
-              </>
+              <span>Continue</span>
             )}
           </button>
         </div>

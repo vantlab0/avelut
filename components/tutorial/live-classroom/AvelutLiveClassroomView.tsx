@@ -872,13 +872,6 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
           </button>
 
           <div className="flex flex-col min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-              <span className="text-[10px] font-bold tracking-widest uppercase text-red-500 shrink-0">LIVE</span>
-              <span className={`text-[10px] ${isDark ? 'text-white/40' : 'text-slate-500'} truncate max-w-[160px] sm:max-w-[260px]`}>
-                • {courseName} • {durationMinutes}m
-              </span>
-            </div>
             <h1
               className={`text-xs sm:text-sm font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'} truncate sm:line-clamp-2 leading-tight`}
               title={topicTitle}
@@ -965,10 +958,10 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
           <div className="flex flex-col items-center gap-4 animate-in fade-in zoom-in">
             <button
               onClick={handleStartLesson}
-              className="flex items-center gap-3 px-8 py-4 rounded-full bg-[#38BDF8] hover:bg-[#0284c7]
-                         active:scale-95 transition-all shadow-[0_0_40px_rgba(56,189,248,0.3)] text-black font-bold text-lg"
+              className="flex items-center gap-2.5 px-7 py-3.5 rounded-2xl bg-red-600 hover:bg-red-700
+                         active:scale-95 transition-all text-white font-bold text-base cursor-pointer"
             >
-              <Ear className="w-6 h-6" />
+              <Ear className="w-5 h-5" />
               Tap to Start Lesson
             </button>
             <p className="text-sm font-medium text-white/60">Teacher is ready</p>
@@ -1053,8 +1046,8 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
             <button
               type="submit"
               disabled={!textInput.trim()}
-              className="flex items-center justify-center w-9 h-9 rounded-xl bg-[#38BDF8] text-black
-                         font-bold disabled:opacity-30 disabled:pointer-events-none transition-all"
+              className="flex items-center justify-center w-9 h-9 rounded-xl bg-red-600 hover:bg-red-700 text-white
+                         font-bold disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
             >
               <Send className="w-4 h-4" />
             </button>

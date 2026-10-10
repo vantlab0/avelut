@@ -169,23 +169,10 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
         className="relative w-full max-w-lg bg-[#0F0F12] border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-white"
       >
         {/* Top Header */}
-        <div className="flex items-start justify-between p-5 pb-3 border-b border-white/5">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wider uppercase bg-neutral-900 text-neutral-300 border border-neutral-800">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-600" /> Teacher Voice Selection
-              </span>
-              <span className="text-[11px] font-medium text-neutral-400 px-2.5 py-1 rounded-md bg-neutral-900 border border-neutral-800">
-                {durationMinutes} Mins Session
-              </span>
-            </div>
-            <h2 className="text-lg font-bold text-white tracking-tight line-clamp-1">
-              {topicTitle}
-            </h2>
-            <p className="text-xs text-white/50 mt-0.5">
-              Choose your AI instructor voice to initialize the session
-            </p>
-          </div>
+        <div className="flex items-center justify-between p-5 pb-4 border-b border-white/5">
+          <h2 className="text-lg font-bold text-white tracking-tight">
+            Select Voice
+          </h2>
 
           <button
             onClick={onClose}
@@ -212,7 +199,7 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
                     : 'bg-[#141418]/60 border-white/5 hover:bg-[#18181D]/80 hover:border-white/10'
                 }`}
               >
-                {/* Left Avatar & Info */}
+                {/* Left Avatar & Name */}
                 <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
                   <div
                     className={`flex items-center justify-center w-11 h-11 rounded-xl shrink-0 transition-colors font-bold text-sm ${
@@ -224,25 +211,9 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
                     {voice.name[0]}
                   </div>
 
-                  <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-white tracking-tight truncate">
-                        {voice.name}
-                      </span>
-                      <span className="text-[10px] font-medium text-neutral-400 bg-neutral-800 px-2 py-0.5 rounded-md">
-                        {voice.gender}
-                      </span>
-                      {voice.tag && (
-                        <span className="text-[10px] font-semibold text-red-500 bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded-md">
-                          {voice.tag}
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-xs text-neutral-400 line-clamp-1 mt-0.5">
-                      {voice.persona}
-                    </p>
-                  </div>
+                  <span className="text-sm font-bold text-white tracking-tight truncate">
+                    {voice.name}
+                  </span>
                 </div>
 
                 {/* Right Actions: Play Preview & Checkmark */}
@@ -290,7 +261,7 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
             type="button"
             className="flex-1 py-3.5 px-6 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm tracking-wide flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
           >
-            <span>Start Session with {selectedVoice}</span>
+            <span>Start Session</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
