@@ -172,10 +172,10 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
         <div className="flex items-start justify-between p-5 pb-3 border-b border-white/5">
           <div className="flex flex-col">
             <div className="flex items-center gap-2 mb-1">
-              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-red-500/10 text-red-400 border border-red-500/20">
-                <Mic className="w-3 h-3 text-red-400" /> Teacher Voice Selection
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wider uppercase bg-neutral-900 text-neutral-300 border border-neutral-800">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600" /> Teacher Voice Selection
               </span>
-              <span className="text-[11px] font-semibold text-white/50 px-2 py-0.5 rounded-full bg-white/5">
+              <span className="text-[11px] font-medium text-neutral-400 px-2.5 py-1 rounded-md bg-neutral-900 border border-neutral-800">
                 {durationMinutes} Mins Session
               </span>
             </div>
@@ -208,17 +208,17 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
                 onClick={() => setSelectedVoice(voice.id)}
                 className={`p-3.5 sm:p-4 rounded-2xl border text-left transition-all duration-150 cursor-pointer flex items-center justify-between ${
                   isSelected
-                    ? 'bg-[#18181D] border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.2)] ring-1 ring-red-500'
+                    ? 'bg-[#18181D] border-red-600'
                     : 'bg-[#141418]/60 border-white/5 hover:bg-[#18181D]/80 hover:border-white/10'
                 }`}
               >
                 {/* Left Avatar & Info */}
                 <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
                   <div
-                    className={`flex items-center justify-center w-11 h-11 rounded-2xl shrink-0 transition-colors font-bold text-sm ${
+                    className={`flex items-center justify-center w-11 h-11 rounded-xl shrink-0 transition-colors font-bold text-sm ${
                       isSelected
-                        ? 'bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-md shadow-red-500/30'
-                        : 'bg-white/10 text-white/90'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-neutral-800 text-white/90'
                     }`}
                   >
                     {voice.name[0]}
@@ -229,17 +229,17 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
                       <span className="text-sm font-bold text-white tracking-tight truncate">
                         {voice.name}
                       </span>
-                      <span className="text-[10px] font-semibold text-white/50 bg-white/5 px-2 py-0.5 rounded-md">
+                      <span className="text-[10px] font-medium text-neutral-400 bg-neutral-800 px-2 py-0.5 rounded-md">
                         {voice.gender}
                       </span>
                       {voice.tag && (
-                        <span className="text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] font-semibold text-red-500 bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded-md">
                           {voice.tag}
                         </span>
                       )}
                     </div>
 
-                    <p className="text-xs text-white/50 line-clamp-1 mt-0.5">
+                    <p className="text-xs text-neutral-400 line-clamp-1 mt-0.5">
                       {voice.persona}
                     </p>
                   </div>
@@ -253,8 +253,8 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
                     title={isPlaying ? 'Pause sample' : 'Listen to preview'}
                     className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
                       isPlaying
-                        ? 'bg-red-500 text-white animate-pulse shadow-md shadow-red-500/40 ring-2 ring-red-400'
-                        : 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700'
                     }`}
                   >
                     {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
@@ -263,7 +263,7 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
                   <div
                     className={`w-6 h-6 rounded-full border flex items-center justify-center transition-colors ${
                       isSelected
-                        ? 'border-red-500 bg-red-500 text-white shadow-sm'
+                        ? 'border-red-600 bg-red-600 text-white'
                         : 'border-white/20 bg-transparent'
                     }`}
                   >
@@ -288,7 +288,7 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
           <button
             onClick={handleConfirmStart}
             type="button"
-            className="flex-1 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-sm tracking-wide flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(239,68,68,0.4)] active:scale-[0.98] transition-all cursor-pointer"
+            className="flex-1 py-3.5 px-6 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm tracking-wide flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
           >
             <span>Start Session with {selectedVoice}</span>
             <ArrowRight className="w-4 h-4" />

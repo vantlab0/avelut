@@ -179,10 +179,10 @@ const LiveVoiceWaveform: React.FC<{
     };
   }, [updateDOM]);
 
-  const barColor = isRecording ? 'bg-rose-500' : 'bg-red-500';
+  const barColor = isRecording ? 'bg-rose-500' : 'bg-red-600';
   const btnColor = isRecording
-    ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/40'
-    : 'bg-gradient-to-tr from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-red-600/35';
+    ? 'bg-red-700 hover:bg-red-800'
+    : 'bg-red-600 hover:bg-red-700';
   const label = isRecording
     ? 'Listening… (auto-sends when you pause)'
     : isTeacherSpeaking
@@ -210,23 +210,18 @@ const LiveVoiceWaveform: React.FC<{
           })}
         </div>
 
-        {/* Center: ripple rings + mic button */}
+        {/* Center: rings + mic button */}
         <div className="relative flex items-center justify-center shrink-0 w-20 h-20 sm:w-24 sm:h-24">
           <div
-            className={`absolute w-32 h-32 sm:w-40 sm:h-40 rounded-full pointer-events-none scale-110 transition-colors duration-500 ${
-              isRecording ? 'bg-rose-500/[0.08]' : 'bg-red-600/[0.08]'
-            }`}
-          />
-          <div
-            className={`absolute w-24 h-24 sm:w-28 sm:h-28 rounded-full pointer-events-none scale-110 animate-pulse transition-colors duration-500 ${
-              isRecording ? 'bg-rose-500/[0.12]' : 'bg-red-600/[0.12]'
+            className={`absolute w-24 h-24 sm:w-28 sm:h-28 rounded-full pointer-events-none ${
+              isRecording ? 'bg-red-600/10 border border-red-600/20' : 'bg-white/5 border border-white/5'
             }`}
           />
           <button
             onClick={onMicClick}
             disabled={disabled}
             className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center
-                       shadow-xl transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer
+                       shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer
                        ${btnColor}`}
             aria-label={isRecording ? 'Stop and send' : 'Tap to speak'}
           >
