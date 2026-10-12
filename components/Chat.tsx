@@ -826,22 +826,36 @@ export const Chat: React.FC<ChatProps> = ({
   }, [userProfile.uid]);
 
   useEffect(() => {
+    let contextText = `STUDENT LEVEL: ${userProfile.level || ''}\nDEPARTMENT: ${userProfile.department_id || ''}\n\n`;
+    try {
+      const cachedProgress = typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem(`avelut_progress_${userProfile.uid}`) || '{}') : null;
+      if (cachedProgress && Object.keys(cachedProgress).length > 0) {
+        contextText += 'STUDENT PROGRESS DATA:\n';
+        Object.keys(cachedProgress).forEach((courseId) => {
+          const courses = cachedProgress[courseId];
+          if (courses && typeof courses === 'object') {
+            contextText += `- ${courseId}: ${Object.keys(courses).filter((k) => courses[k]?.status === 'completed').join(', ')}\n`;
+          }
+        });
+        setCourseContext(contextText);
+      }
+    } catch {}
+
     const fetchCourseContext = async () => {
       try {
         const progressRef = dbRef(db, `user_progress/${userProfile.uid}`);
         const progressSnap = await get(progressRef);
-        let contextText = `STUDENT LEVEL: ${userProfile.level}\nDEPARTMENT: ${userProfile.department_id}\n\n`;
-
         if (progressSnap.exists()) {
-          contextText += 'STUDENT PROGRESS DATA:\n';
+          let updatedText = `STUDENT LEVEL: ${userProfile.level || ''}\nDEPARTMENT: ${userProfile.department_id || ''}\n\nSTUDENT PROGRESS DATA:\n`;
           const progressData = progressSnap.val();
           Object.keys(progressData).forEach((courseId) => {
             const courses = progressData[courseId];
-            contextText += `- ${courseId}: ${Object.keys(courses).filter((k) => courses[k].status === 'completed').join(', ')}\n`;
+            if (courses && typeof courses === 'object') {
+              updatedText += `- ${courseId}: ${Object.keys(courses).filter((k) => courses[k]?.status === 'completed').join(', ')}\n`;
+            }
           });
+          setCourseContext(updatedText);
         }
-
-        setCourseContext(contextText);
       } catch (err) {
         console.error('Error fetching course context:', err);
       }

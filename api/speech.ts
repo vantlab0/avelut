@@ -175,7 +175,7 @@ async function handleTtsSynthesis(
   const baseUrl =
     process.env.ALIBABA_DASHSCOPE_URL ||
     process.env.VITE_ALIBABA_DASHSCOPE_URL ||
-    'https://ws-o3v6mh0i8y9tqdfx.ap-southeast-1.maas.aliyuncs.com/api/v1';
+    'https://dashscope-intl.aliyuncs.com/api/v1';
 
   const alibabaVoice = mapToAlibabaVoice(voiceId);
 

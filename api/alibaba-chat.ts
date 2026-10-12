@@ -91,22 +91,19 @@ export async function POST(req: Request) {
     let attemptedModel = primaryDashscopeModel;
 
     if (alibabaApiKey) {
-      const maasBaseUrl = `https://${workspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`;
-      const customEnvUrl = process.env.ALIBABA_OPENAI_COMPATIBLE_URL || process.env.VITE_ALIBABA_OPENAI_COMPATIBLE_URL;
-      const targetBases = Array.from(new Set([
-        ...(customEnvUrl ? [customEnvUrl] : []),
-        maasBaseUrl,
+      // Prioritize high-speed public DashScope endpoints first to prevent timeouts.
+      const targetBases = [
         'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
         'https://dashscope.aliyuncs.com/compatible-mode/v1',
-      ]));
+      ];
 
       modelLoop: for (const currentModel of candidateModels) {
         attemptedModel = currentModel;
         for (const baseUrl of targetBases) {
           try {
             const controller = new AbortController();
-            // PDF page parsing can take a long time before first token
-            const timer = setTimeout(() => controller.abort(), hasDocument ? 280000 : 45000);
+            // Fast 12s timeout for immediate fallback if unreachable
+            const timer = setTimeout(() => controller.abort(), hasDocument ? 280000 : 12000);
 
             const payload: any = {
               model: currentModel,

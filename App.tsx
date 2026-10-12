@@ -530,9 +530,36 @@ const App: React.FC = () => {
         }
     }, [notifications, addToast]);
 
-    const [isAuthChecking, setIsAuthChecking] = useState(true);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isProfileLoading, setIsProfileLoading] = useState(true);
+    const [isAuthChecking, setIsAuthChecking] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const lastUid = window.localStorage?.getItem('avelut_last_uid') || auth.currentUser?.uid;
+            if (lastUid) {
+                const cached = readCachedJson<UserProfile | null>(`avelut_profile_${lastUid}`, null);
+                if (cached) return false;
+            }
+        }
+        return true;
+    });
+    const [isLoading, setIsLoading] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const lastUid = window.localStorage?.getItem('avelut_last_uid') || auth.currentUser?.uid;
+            if (lastUid) {
+                const cached = readCachedJson<UserProfile | null>(`avelut_profile_${lastUid}`, null);
+                if (cached) return false;
+            }
+        }
+        return true;
+    });
+    const [isProfileLoading, setIsProfileLoading] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const lastUid = window.localStorage?.getItem('avelut_last_uid') || auth.currentUser?.uid;
+            if (lastUid) {
+                const cached = readCachedJson<UserProfile | null>(`avelut_profile_${lastUid}`, null);
+                if (cached) return false;
+            }
+        }
+        return true;
+    });
     const [authView, setAuthView] = useState<'login' | 'signup'>('login');
 
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
