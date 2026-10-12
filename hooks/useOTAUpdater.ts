@@ -176,6 +176,7 @@ async function checkAndUpdate(data: any) {
             const versionInfo = await CapacitorUpdater.download({
                 url: data.downloadUrl,
                 version: data.version,
+                checksum: data.checksum,
             });
 
             if (versionInfo && versionInfo.id) {

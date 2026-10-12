@@ -1,5 +1,6 @@
 import fs from "fs";
 import https from "https";
+import crypto from "crypto";
 import AdmZip from "adm-zip";
 import { execSync } from "child_process";
 import { createClient } from "@supabase/supabase-js";
@@ -130,6 +131,8 @@ async function deployOTA() {
 
     console.log("[OTA] Uploading package to Supabase Storage: ota-releases/app_releases/ota/...");
     const zipBuffer = fs.readFileSync("./dist.zip");
+    const checksum = crypto.createHash("sha256").update(zipBuffer).digest("hex");
+    console.log(`[OTA] Bundle SHA-256 Checksum: ${checksum}`);
     const objectPath = `app_releases/ota/${otaVersion}.zip`;
 
     // Upload using native HTTPS module with retries
@@ -180,6 +183,7 @@ async function deployOTA() {
         value: {
           version: otaVersion,
           downloadUrl: downloadUrl,
+          checksum: checksum,
           releaseDate: new Date().toISOString(),
         },
       },
