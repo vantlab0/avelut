@@ -3,6 +3,26 @@
 
 <head>
   <meta charset="UTF-8" />
+  <script>
+    (function () {
+      try {
+        var m = localStorage.getItem('app_mode') || localStorage.getItem('theme');
+        var isDark = false;
+        if (m) {
+          isDark = m === '"dark"' || m === 'dark';
+        } else {
+          isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.style.backgroundColor = '#000000';
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.style.backgroundColor = '#F6F6F3';
+        }
+      } catch (e) {}
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>Avelut — Live AI Tutor with Voice, Board &amp; Unlimited Chat</title>
   <meta name="theme-color" content="#000000" />
@@ -227,6 +247,10 @@
     .sk-shimmer {
       animation: sk-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
+    #app-launch-skeleton {
+      background-color: #F6F6F3;
+    }
+    html.dark #app-launch-skeleton,
     @media (prefers-color-scheme: dark) {
       #app-launch-skeleton {
         background-color: #000000 !important;
@@ -280,7 +304,7 @@
 <body class="bg-[#F6F6F3] dark:bg-black text-[#0F172A] dark:text-[#F8FAFC] transition-colors duration-300 antialiased overflow-hidden">
   <div id="root">
     <!-- Instant Native Splash Skeleton: renders on frame 0 before JS bundle parse -->
-    <div id="app-launch-skeleton" class="sk-shimmer" style="display:flex;flex-direction:column;height:100vh;width:100vw;background-color:#F6F6F3;overflow:hidden;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif;">
+    <div id="app-launch-skeleton" class="sk-shimmer" style="display:flex;flex-direction:column;height:100vh;width:100vw;overflow:hidden;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif;">
       <!-- Header -->
       <div style="height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:rgba(255,255,255,0.9);border-bottom:1px solid rgba(0,0,0,0.06);box-sizing:border-box;">
         <div style="display:flex;align-items:center;gap:12px;">

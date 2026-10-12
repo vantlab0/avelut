@@ -27,11 +27,11 @@
   },
   "android": {
     "allowMixedContent": true,
-    "backgroundColor": "#F6F6F3"
+    "backgroundColor": "#000000"
   },
   "ios": {
     "contentInset": "always",
-    "backgroundColor": "#FFFFFF"
+    "backgroundColor": "#000000"
   },
   "server": {
     "androidScheme": "https",
