@@ -29,8 +29,47 @@ interface ServiceAccountConfig {
 
 let cachedOAuthToken: { token: string; expiresAt: number } | null = null;
 
+// Direct Embedded Firebase Service Account credentials for FCM v1
+const EMBEDDED_FIREBASE_SERVICE_ACCOUNT: ServiceAccountConfig = {
+  project_id: 'vantlab',
+  client_email: 'firebase-adminsdk-fbsvc@vantlab.iam.gserviceaccount.com',
+  private_key: `-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCUNWvgsv2Nr6XM
+rNscTm2E+oMZd5Wf+LPzv1RUMV2p4Bw1mQKGZ3V+puB+4+FKVvlohnCelJksSH9+
+VKcDVz3VOdwf/bq6SmrJGZDI+HP21LSjjiSo2idfE6JifVzx+x5Wj6+BtzFfwAC5
+VGNEb2lQluuScft9+I7Ois69r9+Kq/rjjqH4v466MZH69cHMoaEzUM0miuQ1Lsrh
+t6JLSKm+kOvxKhzVFBWir5Y+z1TYSeZ26K+jwz+UacxbLB5T9yxnEYTb4tagqwF7
+mL2tMrPvTRju2JzQSziiFjhOc3AelLRrbs6U90l14/i5u3z+yvBfDwsksIwRiKFH
+0bBUmr+xAgMBAAECggEAITS86FnCFGoryClcaEGsKRSlpeGUrQRgcTbHcpui5Co5
+t8qB9dIdUZSbDOMKuYi2FbS1a9pYXUMbCZd22flEec8eYi6LlSySM19egKCl/sIW
+fOSekxRZqOQxyEZVOkQsvnEv/eypC85texiMqysZGfzOZ//QvJ8hg+Y2vuo2OA/L
++rMTKgRuZMMOJw7uMifMHrNLVEqiUHXfbwl7xkWgK3z2877MagEeQJsBcmHGLSeG
+4gS8n6zjgAiInWBJc/UPdvn7SoODClXj3/+VsUUqIzaaj6MlfbjMWfSQJrGqXFwX
+EZq9FqSIMGq7j96+ie2TfsY0TqJzezsYB0E2SfbGSQKBgQDFF0tGVwy6cHFVsm+f
+HH78otGR0CCGsHrDh8C/tMKmd4mSdQP39vl4o8SNhbTcpnZDlXrwrLWXp6/ZIC26
+M5uXrE8rosx11+dbnSm/+fWADqHEbioZXFbz+CAtXL1Yhf5jALzxrUurdwdczD1p
+xfvJuDp+RTZGGnY+9i0p9UKkXQKBgQDAgdNO/W/6Y01X6AW5yG4zBaZc8ylMOvph
+AFoyDNYDHloB+jR9Z1Joc/FjV0zuyRyA1IQuhX5HrcCSmeIE9uXvIH/Uw6JnEDZR
+5bsJgYA2waYlsgkFy7tlPqB7HQ6HJEp83nRpWdadGTucOOiwWQADOjE0Z3rdMqTx
+Zef4OcETZQKBgG0WcZGjSOZAqlpWgzW8HgVTUU+1tOsX7zsefm8da8ebzkeEAQhU
+aMx/SKFUakDe2gKaUAu6bGBebhRtnSG8wtf2hXOPjj+Dmwi4Oo2JmnqgnqUMnLyg
+wXgT1CuHcz32HFFL7UiPNJzZKvgQC8Xp0W1bTPTq9hljOCOtOl5I4/P5AoGAJI/D
+sUnjHZwEkYCIrdtKSrh0+0xXeJnu+cNWXhEgCGGYWK3LkFGyThJPMz3eZ6+ckT9L
+h4ZlEHoIjA9b5PN7gioa/S7WxlpG5tEJ7+k/j6bBxoEEw6wJAFafpiJDoxkaaJLb
+azLb1uR29Nm+H9gXb4V62OgaZq56szpWj0dwyx0CgYEAtJ7qSDLW4z1FmhUX8x8h
+2wdFywejIPE10WeGFimf+Z6gd53D3Yf8qv6kju4RbacYru5S8dC+WCHXEkf5t6uP
+yWNqdhO//OUjUuoCDzAtSivx5ymgRnq7iEKHbcG39zA5l9OvsgU5ZYVySGEBy6MC
+dldEcRIL8Au+tbfvoeJKSu4=
+-----END PRIVATE KEY-----`
+};
+
 async function getServiceAccount(): Promise<ServiceAccountConfig | null> {
-  // 1. Check environment variable (JSON string or base64)
+  // 1. Direct embedded service account
+  if (EMBEDDED_FIREBASE_SERVICE_ACCOUNT?.client_email && EMBEDDED_FIREBASE_SERVICE_ACCOUNT?.private_key) {
+    return EMBEDDED_FIREBASE_SERVICE_ACCOUNT;
+  }
+
+  // 2. Check environment variable (JSON string or base64)
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     try {
       let raw = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
@@ -50,7 +89,7 @@ async function getServiceAccount(): Promise<ServiceAccountConfig | null> {
     }
   }
 
-  // 2. Check individual env variables
+  // 3. Check individual env variables
   if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
     return {
       project_id: process.env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID,
@@ -59,7 +98,7 @@ async function getServiceAccount(): Promise<ServiceAccountConfig | null> {
     };
   }
 
-  // 3. Fallback: Check Supabase app_settings table for 'firebase_service_account'
+  // 4. Fallback: Check Supabase app_settings table for 'firebase_service_account'
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?key=eq.firebase_service_account&select=value_json`, {
       headers: {

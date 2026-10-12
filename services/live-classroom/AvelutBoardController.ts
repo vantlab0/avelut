@@ -277,6 +277,10 @@ export class AvelutBoardController {
   private onFormulaChangeCallback: ((formula: string | null) => void) | null = null;
   private onSvgIllustrationChangeCallback: ((svgString: string | null) => void) | null = null;
 
+  public getElements(): any[] {
+    return Array.isArray(this.elements) ? [...this.elements] : [];
+  }
+
   public getTheme(): 'light' | 'dark' {
     return this.currentTheme;
   }

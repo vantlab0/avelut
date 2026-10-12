@@ -216,8 +216,8 @@
     }
 
     :root {
-      /* Default: no extra safe-area padding (set by JS below for iOS) */
-      --header-safe-top: 0.625rem;
+      /* Extreme top safe-area padding directly from device system status bar */
+      --header-safe-top: env(safe-area-inset-top, 0px);
     }
 
     @keyframes sk-pulse {
@@ -250,11 +250,9 @@
   </style>
   <script>
     /* Set --header-safe-top correctly:
-       - iOS native (standalone / webkit): needs env(safe-area-inset-top) because the
-         WKWebView extends under the status bar.
-       - Android (Capacitor overlaysWebView=false): The OS already offsets the WebView
-         below the status bar, so env(safe-area-inset-top) would double the gap.
-       - Web browser: env() is fine on iOS Safari, no-op on others. */
+       - iOS native / Web: respect env(safe-area-inset-top) directly for extreme top positioning.
+       - Android native (Capacitor): MainActivity already pushes WebView below the status bar,
+         so 0px allows header items to sit flush at the extreme top below the status bar. */
     (function () {
       try {
         const ua = navigator.userAgent || '';
@@ -262,20 +260,16 @@
         const isAndroid = /Android/.test(ua);
         const isCapacitor = window.Capacitor !== undefined || /; wv/.test(ua) || window.navigator.userAgent.includes('wv');
         if (isIOS) {
-          // iOS: always respect safe area — WKWebView extends under notch
           document.documentElement.style.setProperty(
             '--header-safe-top',
-            'max(0.625rem, env(safe-area-inset-top, 0.625rem))'
+            'env(safe-area-inset-top, 0px)'
           );
         } else if (isAndroid && isCapacitor) {
-          // Android Capacitor with overlaysWebView=false:
-          // OS already pushes WebView below status bar — no extra padding needed
-          document.documentElement.style.setProperty('--header-safe-top', '0.625rem');
+          document.documentElement.style.setProperty('--header-safe-top', '0px');
         } else {
-          // PWA/browser: safe to use env() — it will be 0 on Android Chrome
           document.documentElement.style.setProperty(
             '--header-safe-top',
-            'max(0.625rem, env(safe-area-inset-top, 0px))'
+            'env(safe-area-inset-top, 0px)'
           );
         }
       } catch (e) { /* ignore */ }

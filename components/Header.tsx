@@ -98,11 +98,11 @@ export const Header: React.FC<HeaderProps> = ({
       className={`z-40 flex items-center justify-between w-full ${
         isFloating
           ? className
-          : `sticky top-0 flex-shrink-0 px-3 sm:px-6 md:px-8 py-2.5 ${
+          : `sticky top-0 flex-shrink-0 px-3 sm:px-6 md:px-8 pt-1 pb-2 ${
               className || 'bg-white/70 dark:bg-black/60 backdrop-blur-xl border-b border-black/5 dark:border-white/8'
             }`
       }`}
-      style={!isFloating ? { paddingTop: 'var(--header-safe-top, 0.625rem)' } : undefined}
+      style={!isFloating ? { paddingTop: 'calc(var(--header-safe-top, 0px) + 2px)' } : undefined}
     >
       {/* Left Slot: Menu Hamburger Circular Button */}
       <div className="flex items-center gap-2 min-w-[40px] shrink-0">
@@ -161,27 +161,27 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="relative pointer-events-auto overflow-visible" ref={dropdownRef}>
             {/* Combined Pill Container */}
             <div className="h-10 sm:h-11 rounded-full bg-white dark:bg-[#212124] shadow-md hover:shadow-lg border border-black/5 dark:border-white/10 px-1.5 flex items-center gap-1 shrink-0">
-              {/* Colored Calendar Icon Button */}
+              {/* Neutral Black & White Calendar Icon Button */}
               <button
                 type="button"
                 onClick={() => {
                   setIsMenuOpen(false);
                   onNavigate?.('timetable');
                 }}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-white/10 transition active:scale-95 cursor-pointer text-[#0066FF] dark:text-blue-400"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/10 transition active:scale-95 cursor-pointer"
                 aria-label="Study Timetable"
                 title="Study Timetable"
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
-                  <rect x="3" y="4" width="18" height="18" rx="3.5" className="fill-blue-500/15 dark:fill-blue-400/20 stroke-[#0066FF] dark:stroke-blue-400" strokeWidth="2" />
-                  <path d="M3 9.5H21" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" className="dark:stroke-blue-400" />
-                  <line x1="8" y1="2" x2="8" y2="5" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" className="dark:stroke-blue-400" />
-                  <line x1="16" y1="2" x2="16" y2="5" stroke="#0066FF" strokeWidth="2" strokeLinecap="round" className="dark:stroke-blue-400" />
-                  <circle cx="8" cy="14" r="1" className="fill-[#0066FF] dark:fill-blue-400" />
-                  <circle cx="12" cy="14" r="1" className="fill-[#0066FF] dark:fill-blue-400" />
-                  <circle cx="16" cy="14" r="1" className="fill-[#0066FF] dark:fill-blue-400" />
-                  <circle cx="8" cy="18" r="1" className="fill-[#0066FF] dark:fill-blue-400" />
-                  <circle cx="12" cy="18" r="1" className="fill-[#0066FF] dark:fill-blue-400" />
+                <svg className="w-4 h-4 text-neutral-800 dark:text-neutral-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="3.5" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                  <circle cx="8" cy="14" r="1" fill="currentColor" />
+                  <circle cx="12" cy="14" r="1" fill="currentColor" />
+                  <circle cx="16" cy="14" r="1" fill="currentColor" />
+                  <circle cx="8" cy="18" r="1" fill="currentColor" />
+                  <circle cx="12" cy="18" r="1" fill="currentColor" />
                 </svg>
               </button>
 

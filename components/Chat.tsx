@@ -27,6 +27,7 @@ import { MarkdownContent } from './MarkdownContent';
 import { ThinkingTypingIndicator } from './ThinkingTypingIndicator';
 import { ChatLimitBanner } from './ChatLimitBanner';
 import { showKeyboard, hideKeyboard } from '../utils/capacitorUtils';
+import { ExamStreakWidget } from './widgets/ExamStreakWidget';
 
 export type ChatMode = 'context' | 'fast' | 'deep' | 'exam';
 
@@ -755,7 +756,7 @@ export const Chat: React.FC<ChatProps> = ({
       title: null,
       hideDefaultRightActions: false,
       hideProfileAvatar: true,
-      className: 'absolute top-0 left-0 right-0 z-40 flex items-center justify-between bg-transparent border-none px-3 sm:px-6 pt-[max(0.35rem,env(safe-area-inset-top,0.35rem))] pb-1 pointer-events-none [&>*]:pointer-events-auto',
+      className: 'absolute top-0 left-0 right-0 z-40 flex items-center justify-between bg-transparent border-none px-3 sm:px-6 pt-[calc(env(safe-area-inset-top,0px)+2px)] pb-1 pointer-events-none [&>*]:pointer-events-auto',
       onNewChat: handleNewChat,
       onClearChat: handleClearCurrentChat,
       onDeleteChat: handleDeleteCurrentChat,
@@ -1589,7 +1590,7 @@ export const Chat: React.FC<ChatProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-white dark:bg-black overflow-hidden text-neutral-900 dark:text-white">
       {/* MESSAGES / EMPTY STATE AREA */}
-      <div className="flex-1 overflow-y-auto px-4 pt-[calc(max(0.35rem,env(safe-area-inset-top,0.35rem))+3rem)] pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex-1 overflow-y-auto px-4 pt-[calc(env(safe-area-inset-top,0px)+2.75rem)] pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {isSwitchingChat ? (
           <div className="w-full max-w-3xl mx-auto py-10 space-y-6 animate-in fade-in duration-300">
             {/* Soft, beautiful chat skeleton loader */}

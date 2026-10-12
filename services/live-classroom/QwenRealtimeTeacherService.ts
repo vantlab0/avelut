@@ -430,6 +430,11 @@ export class QwenRealtimeTeacherService {
     );
   }
 
+  /** Retrieve rolling lecture transcript recorded across the live session */
+  public getFullTranscript(): string {
+    return this.fullTranscript;
+  }
+
   /** Send a typed message into the realtime conversation */
   public sendTextMessage(text: string): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !text.trim()) return;

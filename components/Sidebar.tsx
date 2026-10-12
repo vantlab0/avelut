@@ -1276,7 +1276,7 @@ export const FloatingMenuButton: React.FC<{
       type="button"
       onClick={onClick}
       aria-label="Open menu"
-      className={`fixed top-[max(0.75rem,env(safe-area-inset-top))] left-3 z-[110] w-10 h-10 rounded-full bg-white/70 dark:bg-black/50 backdrop-blur-md border border-black/5 dark:border-white/10 flex items-center justify-center text-neutral-800 dark:text-white hover:bg-white/90 dark:hover:bg-black/70 active:scale-95 transition-all md:hidden ${className}`}
+      className={`fixed top-[calc(env(safe-area-inset-top,0px)+2px)] left-3 z-[110] w-10 h-10 rounded-full bg-white/70 dark:bg-black/50 backdrop-blur-md border border-black/5 dark:border-white/10 flex items-center justify-center text-neutral-800 dark:text-white hover:bg-white/90 dark:hover:bg-black/70 active:scale-95 transition-all md:hidden ${className}`}
     >
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <path d="M4 9h16M4 15h16" />

@@ -68,6 +68,7 @@ import {
   getOrGenerateTeachingPlan,
   type TeachingPlan,
 } from '../../../services/live-classroom/teachingPlanService';
+import { autoSaveLiveTutorialSessionAsNotebook } from '../../../services/liveTutorialNotesService';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -634,7 +635,27 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
         metadata: sessionMeta,
       });
     }
-  }, [userProfile, durationMinutes, appSettings, topicTitle, courseName]);
+
+    // Auto-save session whiteboard notes, formulas, and transcript into My Notebooks
+    try {
+      const boardElements = avelutBoardController.getElements();
+      const fullTranscript = serviceRef.current?.getFullTranscript() || '';
+      if (boardElements.length > 0 || fullTranscript.length > 30) {
+        void autoSaveLiveTutorialSessionAsNotebook({
+          userProfile,
+          topicTitle,
+          courseName,
+          durationMinutes: actualMinutes,
+          elements: boardElements,
+          activeFormula,
+          fullTranscript,
+          learningPath,
+        });
+      }
+    } catch (saveErr) {
+      console.warn('[AvelutLiveClassroomView] Note auto-save non-fatal warning:', saveErr);
+    }
+  }, [userProfile, durationMinutes, appSettings, topicTitle, courseName, activeFormula, learningPath]);
 
   // Always call the latest finalizeLessonUsage from unmount-only cleanups,
   // so its closure never goes stale while keeping it out of effect deps.
