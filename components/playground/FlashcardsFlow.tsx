@@ -230,13 +230,41 @@ export const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ deckId, userPr
   const [isCardFlipped, setIsCardFlipped] = useState(false);
 
   useEffect(() => {
-    if (userProfile?.uid) {
-      getFlashcardDeckById(userProfile.uid, deckId).then(deck => {
+    // 1. Direct synchronous cache check
+    if (typeof window !== 'undefined') {
+      try {
+        const cachedStr = sessionStorage.getItem(`active_deck_${deckId}`);
+        if (cachedStr) {
+          const cachedDeck: FlashcardDeck = JSON.parse(cachedStr);
+          if (cachedDeck && cachedDeck.id === deckId) {
+            setActiveDeck(cachedDeck);
+            setActiveCardIdx(0);
+            setIsCardFlipped(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Error reading cached deck:', err);
+      }
+    }
+
+    // 2. Storage lookup
+    const uid = userProfile?.uid || (typeof window !== 'undefined' ? localStorage.getItem('avelut_last_uid') : null) || 'local_user';
+    getFlashcardDeckById(uid, deckId).then(deck => {
+      if (deck) {
         setActiveDeck(deck);
         setActiveCardIdx(0);
         setIsCardFlipped(false);
-      });
-    }
+      } else if (uid !== 'local_user') {
+        getFlashcardDeckById('local_user', deckId).then(localDeck => {
+          if (localDeck) {
+            setActiveDeck(localDeck);
+            setActiveCardIdx(0);
+            setIsCardFlipped(false);
+          }
+        });
+      }
+    });
   }, [deckId, userProfile?.uid]);
 
   const renderMarkdownText = (text: string) => (

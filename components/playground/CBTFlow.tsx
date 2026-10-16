@@ -273,8 +273,35 @@ export const CBTExamTaker: React.FC<CBTExamTakerProps> = ({ examId, userProfile,
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (userProfile?.uid) {
-      getCBTExamById(userProfile.uid, examId).then(exam => {
+    // 1. Direct synchronous cache check
+    if (typeof window !== 'undefined') {
+      try {
+        const cachedStr = sessionStorage.getItem(`active_cbt_${examId}`);
+        if (cachedStr) {
+          const cachedExam: CBTExam = JSON.parse(cachedStr);
+          if (cachedExam && cachedExam.id === examId) {
+            setActiveCBTExam(cachedExam);
+            setCbtQuestionIdx(0);
+            setCbtUserAnswers({});
+            setIsCbtSubmitted(false);
+            setCbtAttemptResult(null);
+            if (cachedExam.durationMinutes > 0) {
+              setCbtTimeRemainingSeconds(cachedExam.durationMinutes * 60);
+            } else {
+              setCbtTimeRemainingSeconds(null);
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Error reading cached CBT exam:', err);
+      }
+    }
+
+    // 2. Storage lookup
+    const uid = userProfile?.uid || (typeof window !== 'undefined' ? localStorage.getItem('avelut_last_uid') : null) || 'local_user';
+    getCBTExamById(uid, examId).then(exam => {
+      if (exam) {
         setActiveCBTExam(exam);
         setCbtQuestionIdx(0);
         setCbtUserAnswers({});
@@ -285,8 +312,24 @@ export const CBTExamTaker: React.FC<CBTExamTakerProps> = ({ examId, userProfile,
         } else {
           setCbtTimeRemainingSeconds(null);
         }
-      });
-    }
+      } else if (uid !== 'local_user') {
+        // Fallback to local_user
+        getCBTExamById('local_user', examId).then(localExam => {
+          if (localExam) {
+            setActiveCBTExam(localExam);
+            setCbtQuestionIdx(0);
+            setCbtUserAnswers({});
+            setIsCbtSubmitted(false);
+            setCbtAttemptResult(null);
+            if (localExam && localExam.durationMinutes > 0) {
+              setCbtTimeRemainingSeconds(localExam.durationMinutes * 60);
+            } else {
+              setCbtTimeRemainingSeconds(null);
+            }
+          }
+        });
+      }
+    });
   }, [examId, userProfile?.uid]);
 
   useEffect(() => {

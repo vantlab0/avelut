@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { saveCBTExam, saveFlashcardDeck } from '../services/playgroundStorageService';
-import type { CBTExam, FlashcardDeck } from '../types/playground';
+import type { CBTExam, CBTExamQuestion, FlashcardDeck } from '../types/playground';
 
 interface ActionCardProps {
-  type: 'cbt' | 'flashcards' | 'action:cbt' | 'action:flashcards';
+  type: 'cbt' | 'flashcards' | 'action:cbt' | 'action:flashcards' | 'quiz' | 'action:quiz';
   rawPayload: string;
 }
 
@@ -21,7 +21,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({ type, rawPayload }) => {
 
   if (!data || typeof data !== 'object') return null;
 
-  const isCBT = type.includes('cbt');
+  const isCBT = type.includes('cbt') || type.includes('quiz') || type.includes('test') || Array.isArray(data.questions);
   const title = data.title || (isCBT ? 'Practice CBT Exam' : 'Flashcard Study Deck');
   const topicName = data.topicName || data.topic || 'General Practice';
   const itemCount = Array.isArray(data.questions)
@@ -34,44 +34,116 @@ export const ActionCard: React.FC<ActionCardProps> = ({ type, rawPayload }) => {
   const handleAction = async () => {
     setIsLaunching(true);
     try {
-      const userProfileStr = typeof window !== 'undefined' ? localStorage.getItem('avelut_user_profile') : null;
-      let userId = 'local_user';
-      if (userProfileStr) {
-        try { userId = JSON.parse(userProfileStr).uid || 'local_user'; } catch {}
+      const lastUid = typeof window !== 'undefined' ? localStorage.getItem('avelut_last_uid') : null;
+      let userId = lastUid || 'local_user';
+      if (lastUid) {
+        const cached = localStorage.getItem(`avelut_profile_${lastUid}`);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (parsed?.uid) userId = parsed.uid;
+          } catch {}
+        }
       }
 
       if (isCBT) {
         const examId = data.id || `cbt_${Date.now()}`;
+        const optionLetters = ['a', 'b', 'c', 'd', 'e', 'f'];
+
+        const questions: CBTExamQuestion[] = (data.questions || []).map((q: any, idx: number) => {
+          const rawOptions = Array.isArray(q.options) ? q.options : [];
+          let detectedCorrectId = '';
+
+          // Determine correctOptionId based on various possible AI formats
+          if (typeof q.correctOptionId === 'string' && q.correctOptionId.trim()) {
+            detectedCorrectId = q.correctOptionId.trim().toLowerCase();
+          } else if (typeof q.correct_option_id === 'string' && q.correct_option_id.trim()) {
+            detectedCorrectId = q.correct_option_id.trim().toLowerCase();
+          } else if (typeof q.correctAnswer === 'number' && rawOptions[q.correctAnswer] !== undefined) {
+            detectedCorrectId = optionLetters[q.correctAnswer] || `opt_${q.correctAnswer}`;
+          } else if (typeof q.correctAnswer === 'string') {
+            const trimmed = q.correctAnswer.trim();
+            // Single letter e.g. "A", "b"
+            if (/^[a-fA-F]$/.test(trimmed)) {
+              detectedCorrectId = trimmed.toLowerCase();
+            }
+          }
+
+          const options = rawOptions.map((opt: any, oIdx: number) => {
+            const optLetter = optionLetters[oIdx] || `opt_${oIdx}`;
+            const optText = typeof opt === 'string' ? opt : (opt.text || opt.label || '');
+            const optId = String(opt?.id || optLetter).toLowerCase();
+
+            // Check if this option matches correct answer text
+            if (!detectedCorrectId && typeof q.correctAnswer === 'string' && q.correctAnswer.trim()) {
+              if (optText.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()) {
+                detectedCorrectId = optId;
+              }
+            }
+            if (!detectedCorrectId && (opt.isCorrect || opt.is_correct)) {
+              detectedCorrectId = optId;
+            }
+
+            return {
+              id: optId,
+              text: optText,
+            };
+          });
+
+          // Fallback to first option if not detected
+          if (!detectedCorrectId && options.length > 0) {
+            detectedCorrectId = options[0].id;
+          }
+
+          return {
+            id: q.id || `q_${idx + 1}`,
+            prompt: q.prompt || q.question || '',
+            options,
+            correctOptionId: detectedCorrectId,
+            explanation: q.explanation || '',
+          };
+        });
+
         const exam: CBTExam = {
           id: examId,
           title,
           topicName,
           durationMinutes: duration,
-          questions: (data.questions || []).map((q: any, idx: number) => ({
-            id: q.id || `q_${idx + 1}`,
-            type: 'mcq',
-            prompt: q.prompt || q.question || '',
-            options: Array.isArray(q.options)
-              ? q.options.map((opt: any, oIdx: number) => ({
-                  id: `opt_${oIdx}`,
-                  text: typeof opt === 'string' ? opt : opt.text || '',
-                  isCorrect: typeof opt === 'string'
-                    ? opt === q.correctAnswer
-                    : !!opt.isCorrect || opt.text === q.correctAnswer,
-                }))
-              : [],
-            explanation: q.explanation || '',
-          })),
+          questions,
           createdAt: Date.now(),
         };
 
-        await saveCBTExam(userId, exam);
+        // Cache synchronously in sessionStorage for immediate zero-latency transition
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(`active_cbt_${examId}`, JSON.stringify(exam));
+          sessionStorage.setItem(
+            'avelut_playground_target',
+            JSON.stringify({ type: 'cbt_exam', examId, exam })
+          );
+        }
+
+        // Persist to offline storage
+        try {
+          await saveCBTExam(userId, exam);
+          if (userId !== 'local_user') {
+            await saveCBTExam('local_user', exam);
+          }
+        } catch (e) {
+          console.warn('Error persisting CBT exam:', e);
+        }
+
         setIsSaved(true);
 
         // Open CBT Exam directly in the app
         window.dispatchEvent(
           new CustomEvent('avelut_navigate', {
-            detail: { view: 'playground', path: `/playground/cbt/${examId}`, examId },
+            detail: {
+              view: 'playground',
+              path: `/playground/cbt/${examId}`,
+              examId,
+              type: 'cbt_exam',
+              exam,
+            },
           })
         );
       } else {
@@ -88,13 +160,37 @@ export const ActionCard: React.FC<ActionCardProps> = ({ type, rawPayload }) => {
           createdAt: Date.now(),
         };
 
-        await saveFlashcardDeck(userId, deck);
+        // Cache synchronously in sessionStorage for immediate zero-latency transition
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(`active_deck_${deckId}`, JSON.stringify(deck));
+          sessionStorage.setItem(
+            'avelut_playground_target',
+            JSON.stringify({ type: 'flashcards_study', deckId, deck })
+          );
+        }
+
+        // Persist to offline storage
+        try {
+          await saveFlashcardDeck(userId, deck);
+          if (userId !== 'local_user') {
+            await saveFlashcardDeck('local_user', deck);
+          }
+        } catch (e) {
+          console.warn('Error persisting flashcard deck:', e);
+        }
+
         setIsSaved(true);
 
         // Open Flashcard Deck directly in the app
         window.dispatchEvent(
           new CustomEvent('avelut_navigate', {
-            detail: { view: 'playground', path: `/playground/flashcards/${deckId}`, deckId },
+            detail: {
+              view: 'playground',
+              path: `/playground/flashcards/${deckId}`,
+              deckId,
+              type: 'flashcards_study',
+              deck,
+            },
           })
         );
       }
@@ -160,7 +256,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({ type, rawPayload }) => {
             type="button"
             onClick={handleAction}
             disabled={isLaunching}
-            className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md active:scale-95 text-white ${
+            className={`w-full sm:w-auto px-6 py-3 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md active:scale-95 text-white ${
               isCBT
                 ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
                 : 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800'

@@ -13,6 +13,22 @@ export const Playground: React.FC<PlaygroundProps> = ({
 }) => {
   const parsePathnameToViewState = (): ViewState => {
     if (typeof window === 'undefined') return { type: 'home' };
+
+    // 1. Check for immediate queued action target from ActionCard
+    try {
+      const queued = sessionStorage.getItem('avelut_playground_target');
+      if (queued) {
+        sessionStorage.removeItem('avelut_playground_target');
+        const parsed = JSON.parse(queued);
+        if (parsed?.type) {
+          return parsed as ViewState;
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading avelut_playground_target:', e);
+    }
+
+    // 2. Parse URL path
     const path = window.location.pathname;
     if (path.startsWith('/playground/past/')) {
       const packId = path.substring('/playground/past/'.length).split('/')[0];
@@ -38,11 +54,68 @@ export const Playground: React.FC<PlaygroundProps> = ({
   const [viewState, setViewState] = useState<ViewState>(parsePathnameToViewState);
 
   useEffect(() => {
+    // Check if target was set just as Playground mounted
+    try {
+      const queued = sessionStorage.getItem('avelut_playground_target');
+      if (queued) {
+        sessionStorage.removeItem('avelut_playground_target');
+        const parsed = JSON.parse(queued);
+        if (parsed?.type) {
+          setViewState(parsed as ViewState);
+        }
+      }
+    } catch {}
+
     const handlePopState = () => {
       setViewState(parsePathnameToViewState());
     };
+
+    const handleAvelutNavigate = (e: any) => {
+      const detail = e?.detail;
+      if (!detail) return;
+
+      if (detail.examId || detail.type === 'cbt_exam') {
+        const examId = detail.examId || (detail.path ? detail.path.substring('/playground/cbt/'.length).split('/')[0] : null);
+        if (examId && examId !== 'new') {
+          setViewState({ type: 'cbt_exam', examId });
+          return;
+        }
+      }
+
+      if (detail.deckId || detail.type === 'flashcards_study') {
+        const deckId = detail.deckId || (detail.path ? detail.path.substring('/playground/flashcards/'.length).split('/')[0] : null);
+        if (deckId && deckId !== 'new') {
+          setViewState({ type: 'flashcards_study', deckId });
+          return;
+        }
+      }
+
+      if (detail.packId || detail.type === 'past_viewer') {
+        const packId = detail.packId || (detail.path ? detail.path.substring('/playground/past/'.length).split('/')[0] : null);
+        if (packId) {
+          setViewState({ type: 'past_viewer', packId });
+          return;
+        }
+      }
+
+      if (detail.path) {
+        const path = detail.path;
+        if (path.startsWith('/playground/cbt/')) {
+          const examId = path.substring('/playground/cbt/'.length).split('/')[0];
+          if (examId && examId !== 'new') setViewState({ type: 'cbt_exam', examId });
+        } else if (path.startsWith('/playground/flashcards/')) {
+          const deckId = path.substring('/playground/flashcards/'.length).split('/')[0];
+          if (deckId && deckId !== 'new') setViewState({ type: 'flashcards_study', deckId });
+        }
+      }
+    };
+
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener('avelut_navigate', handleAvelutNavigate);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('avelut_navigate', handleAvelutNavigate);
+    };
   }, []);
 
   const navigateToView = useCallback((nextState: ViewState) => {

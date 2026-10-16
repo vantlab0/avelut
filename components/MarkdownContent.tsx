@@ -67,19 +67,41 @@ const components: Components = {
   hr: () => <hr className="my-6 border-neutral-200 dark:border-neutral-800" />,
 };
 
+class SafeMarkdownBoundary extends React.Component<{ children: React.ReactNode; rawText: string }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(err: any) {
+    console.warn('[MarkdownContent] Safe boundary caught rendering error:', err);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="whitespace-pre-wrap font-sans text-sm text-neutral-800 dark:text-neutral-200 leading-relaxed">
+          {this.props.rawText}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /** Pure presentation shared by live, restored and shared AI responses. */
 // Memoized with React.memo to prevent re-parsing markdown AST and re-rendering heavy KaTeX components
 // when parent component updates (such as input typing or streaming ticks) occur with unchanged content.
 export const MarkdownContent: React.FC<MarkdownContentProps> = React.memo(({ content, className = '' }) => (
-  <div className={`font-reading text-[15.5px] sm:text-[16.5px] leading-[1.8] tracking-[-0.011em] text-neutral-900 dark:text-neutral-100 prose prose-neutral dark:prose-invert max-w-none min-w-0 break-words font-normal select-text [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden ${className}`}>
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-      rehypePlugins={[rehypeMarkdownPresentation, rehypeKatex]}
-      components={components}
-    >
-      {prepareMarkdown(content)}
-    </ReactMarkdown>
-  </div>
+  <SafeMarkdownBoundary rawText={content}>
+    <div className={`font-reading text-[15.5px] sm:text-[16.5px] leading-[1.8] tracking-[-0.011em] text-neutral-900 dark:text-neutral-100 prose prose-neutral dark:prose-invert max-w-none min-w-0 break-words font-normal select-text [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden ${className}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+        rehypePlugins={[rehypeMarkdownPresentation, rehypeKatex]}
+        components={components}
+      >
+        {prepareMarkdown(content)}
+      </ReactMarkdown>
+    </div>
+  </SafeMarkdownBoundary>
 ));
 
 export default MarkdownContent;

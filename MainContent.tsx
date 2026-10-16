@@ -84,6 +84,8 @@ interface MainContentProps {
     onSelectConversation?: (id: string | null) => void;
 }
 
+import { SectionErrorBoundary } from './components/SectionErrorBoundary';
+
 export const MainContent: React.FC<MainContentProps> = ({
     activeItem,
     user,
@@ -113,8 +115,9 @@ export const MainContent: React.FC<MainContentProps> = ({
 
     return (
         <Suspense fallback={getSkeletonFallback(activeItem)}>
-            {(() => {
-                switch (activeItem) {
+            <SectionErrorBoundary activeItem={activeItem} onNavigate={onNavigate} sectionName={activeItem}>
+                {(() => {
+                    switch (activeItem) {
                     case 'onboarding':
                         return (
                             <div className="p-4 sm:p-6 md:p-10 max-w-7xl mx-auto min-h-[calc(100vh-140px)] flex items-center justify-center">
@@ -254,6 +257,7 @@ export const MainContent: React.FC<MainContentProps> = ({
                         />;
                 }
             })()}
+            </SectionErrorBoundary>
         </Suspense>
     );
 };
