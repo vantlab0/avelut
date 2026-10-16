@@ -47,7 +47,7 @@ const CHAT_MODES: ChatModeOption[] = [
   { id: 'exam', label: 'Exam Mode', description: 'Practice exam question style' },
 ];
 
-const CollapsibleUserMessage: React.FC<{ text?: string }> = ({ text = '' }) => {
+export const CollapsibleUserMessage: React.FC<{ text?: string }> = ({ text = '' }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -120,8 +120,30 @@ const timeAgo = (timestamp: number): string => {
   return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+export const parseFollowUpsAndContent = (text: string) => {
+  if (!text) return { cleanedText: '', followUps: [] as string[] };
+  const lines = text.split('\n');
+  const followUps: string[] = [];
+  const contentLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed.startsWith('↳')) {
+      const prompt = trimmed.replace(/^↳\s*/, '').trim();
+      if (prompt) followUps.push(prompt);
+    } else {
+      contentLines.push(lines[i]);
+    }
+  }
+
+  return {
+    cleanedText: contentLines.join('\n').trim(),
+    followUps,
+  };
+};
+
 // --- CAMERA CAPTURE VIEW ---
-const CameraCaptureView: React.FC<{
+export const CameraCaptureView: React.FC<{
   onClose: () => void;
   onConfirm: (base64Image: string) => void;
 }> = ({ onClose, onConfirm }) => {
@@ -245,7 +267,7 @@ const CameraCaptureView: React.FC<{
 const MAX_CHAT_IMAGES = 6;
 const MAX_SAFE_PAYLOAD_BYTES = 10 * 1024 * 1024; // 10MB safe cap
 
-const ImageGridRenderer: React.FC<{ images: string[] }> = ({ images }) => {
+export const ImageGridRenderer: React.FC<{ images: string[] }> = ({ images }) => {
   if (!images || images.length === 0) return null;
 
   if (images.length === 1) {
@@ -273,7 +295,7 @@ const ImageGridRenderer: React.FC<{ images: string[] }> = ({ images }) => {
   );
 };
 
-const GrokChatComposer: React.FC<{
+export const GrokChatComposer: React.FC<{
   input: string;
   setInput: (val: string) => void;
   isLoading: boolean;
@@ -1612,27 +1634,6 @@ export const Chat: React.FC<ChatProps> = ({
     };
   }, []);
 
-  const parseFollowUpsAndContent = (text: string) => {
-    if (!text) return { cleanedText: '', followUps: [] };
-    const lines = text.split('\n');
-    const followUps: string[] = [];
-    const contentLines: string[] = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
-      if (trimmed.startsWith('↳')) {
-        const prompt = trimmed.replace(/^↳\s*/, '').trim();
-        if (prompt) followUps.push(prompt);
-      } else {
-        contentLines.push(lines[i]);
-      }
-    }
-
-    return {
-      cleanedText: contentLines.join('\n').trim(),
-      followUps,
-    };
-  };
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-white dark:bg-black overflow-hidden text-neutral-900 dark:text-white">

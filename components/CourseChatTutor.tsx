@@ -1,53 +1,31 @@
-import { MarkdownContent } from './MarkdownContent';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createAvelutAI, getResponseText, getResponseReasoningText, accumulateUsageMetadata, type AiUsageMetadata } from '../utils/inference';
-import { checkAICredits, deductAICredits, getFeatureCost, hasLiveTutorialAccess } from '../utils/usage';
-import { readCachedJson, writeCachedJson, clearCachedKey } from '../utils/cache';
+import { checkAICredits, deductAICredits, getFeatureCost, getFeatureModel, hasLiveTutorialAccess } from '../utils/usage';
+import { readCachedJson, writeCachedJson } from '../utils/cache';
 import { LimitExceededModal } from './LimitExceededModal';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useToast } from '../hooks/useToast';
 import { useApiLimiter } from '../hooks/useApiLimiter';
-import { XIcon } from './icons/XIcon';
+import { MarkdownContent } from './MarkdownContent';
 import { ThinkingTypingIndicator } from './ThinkingTypingIndicator';
 import { ChatLimitBanner } from './ChatLimitBanner';
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
+import { compressBase64Image } from '../utils/mediaUpload';
+import {
+  GrokChatComposer,
+  CollapsibleUserMessage,
+  CameraCaptureView,
+  ImageGridRenderer,
+  parseFollowUpsAndContent,
+  type ChatMode,
+} from './Chat';
 import {
   getOrGenerateTopicStructure,
   saveTopicStructureProgress,
-  TopicStructureData,
+  type TopicStructureData,
 } from '../services/topicStructureService';
 import type { Course, Topic, UserProfile } from '../types';
-
-const PlusIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-
-const CameraOutlineIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-    <circle cx="12" cy="13" r="4" />
-  </svg>
-);
-
-const PhotoOutlineIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-    <circle cx="8.5" cy="8.5" r="1.5" />
-    <polyline points="21 15 16 10 5 21" />
-  </svg>
-);
-
-const FolderOutlineIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <polyline points="14 2 14 8 20 8" />
-    <line x1="16" y1="13" x2="8" y2="13" />
-    <line x1="16" y1="17" x2="8" y2="17" />
-  </svg>
-);
 
 export interface CourseChatTutorMessage {
   id: string;
@@ -72,6 +50,8 @@ export interface CourseChatTutorProps {
   setCustomHeaderConfig?: (config: any) => void;
 }
 
+const MAX_CHAT_IMAGES = 6;
+
 export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
   course,
   topic,
@@ -92,21 +72,22 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
 
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
-  const [expandedUserMessageIds, setExpandedUserMessageIds] = useState<Set<string>>(new Set());
-  const [attachments, setAttachments] = useState<File[]>([]);
-  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [attachedImages, setAttachedImages] = useState<string[]>([]);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [showLimitBanner, setShowLimitBanner] = useState(false);
   const [limitCost, setLimitCost] = useState(1);
   const [topicStructure, setTopicStructure] = useState<TopicStructureData | null>(null);
+  const [selectedMode, setSelectedMode] = useState<ChatMode>('deep');
+  const [voiceStatus, setVoiceStatus] = useState<'idle' | 'listening' | 'processing'>('idle');
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [likedMessages, setLikedMessages] = useState<Record<string, 'up' | 'down'>>({});
+  const [moreMenuMsgId, setMoreMenuMsgId] = useState<string | null>(null);
 
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputElementRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   // Check live tutorial access
   const liveAccess = hasLiveTutorialAccess(userProfile);
@@ -131,7 +112,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     onOpenVoiceTutorial();
   }, [liveAccess.allowed, onOpenVoiceTutorial, course, topic, topicStructure]);
 
-  // Load or generate topic structure JSON stored on the user's device
+  // Load topic structure
   useEffect(() => {
     let isMounted = true;
     getOrGenerateTopicStructure({
@@ -151,7 +132,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     };
   }, [topic.topic_id, topic.topic_name, topic.topic_context, topic.start_point, course.course_name, userProfile, appSettings]);
 
-  // Configure Main App Header for Course Chat Tutor
+  // Configure Custom Header for Study Guide Chat
   useEffect(() => {
     if (setCustomHeaderConfig) {
       setCustomHeaderConfig({
@@ -159,50 +140,50 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
         hideTitle: true,
         hideDefaultRightActions: true,
         leftActions: (
-          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 max-w-[calc(100vw-150px)] sm:max-w-md">
-            {/* Back Arrow Button */}
+          <div className="flex items-center gap-2.5 min-w-0 max-w-[calc(100vw-130px)] sm:max-w-none">
             <button
               onClick={onBack}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-2xl border border-[#E3E9F1] dark:border-[#2A2A2A] bg-white dark:bg-[#141414] hover:bg-slate-50 dark:hover:bg-[#1C1C1C] text-[#0F172A] dark:text-white text-xs sm:text-sm font-bold active:scale-95 cursor-pointer transition-all shrink-0 shadow-2xs"
-              aria-label="Back to study guide"
-              title="Back"
+              className="w-10 h-10 rounded-full bg-white dark:bg-[#1A1A1A] hover:bg-neutral-100 dark:hover:bg-[#252528] border border-neutral-200 dark:border-neutral-800 flex items-center justify-center text-neutral-800 dark:text-white transition-all cursor-pointer shrink-0 shadow-2xs active:scale-95"
+              aria-label="Back"
             >
-              <i className="bi bi-arrow-left text-sm font-bold text-[#2563EB] dark:text-[#3B82F6]"></i>
-              <span className="hidden sm:inline">Back</span>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
             </button>
-
-            {/* Topic & Course Info */}
-            <div className="min-w-0 flex flex-col justify-center">
-              <span className="text-[10px] font-bold text-[#64748B] dark:text-slate-400 uppercase tracking-wider block truncate">
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[14px] sm:text-[15px] font-semibold text-neutral-900 dark:text-white truncate">
+                  {topic.topic_name}
+                </span>
+                <span className="px-1.5 py-0.2 rounded-md bg-neutral-100 dark:bg-neutral-800 text-[10px] font-semibold tracking-wider text-neutral-600 dark:text-neutral-400 uppercase shrink-0">
+                  Study Guide
+                </span>
+              </div>
+              <span className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
                 {course.course_code || course.course_name}
               </span>
-              <h2 className="text-xs sm:text-sm font-bold text-[#0F172A] dark:text-white truncate">
-                {topic.topic_name}
-              </h2>
             </div>
           </div>
         ),
         rightActions: (
-          <div className="flex items-center shrink-0">
-            {/* Live Tutorial Button */}
+          <div className="flex items-center gap-1.5">
             <button
               onClick={handleTriggerLiveTutorial}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-2xl border border-[#2563EB]/30 dark:border-[#3B82F6]/30 hover:border-[#2563EB] dark:hover:border-[#3B82F6] bg-white dark:bg-[#141414] hover:bg-[#F3F3F3] dark:hover:bg-[#1C1C1C] text-[#0F172A] dark:text-white text-xs sm:text-sm font-extrabold active:scale-95 cursor-pointer transition-all shrink-0 shadow-2xs group"
-              title={liveAccess.allowed ? "Launch Live Voice & Whiteboard Tutorial" : "Live Tutorial Locked"}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-xs cursor-pointer active:scale-95 border ${
+                liveAccess.allowed
+                  ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 border-neutral-900 dark:border-white'
+                  : 'bg-white dark:bg-[#1A1A1A] text-neutral-800 dark:text-neutral-200 border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-[#222]'
+              }`}
+              title="Launch Live Voice Tutor"
             >
-              <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#2563EB]/10 dark:bg-[#3B82F6]/20 flex items-center justify-center text-[#2563EB] dark:text-[#3B82F6] shrink-0">
-                <i className="bi bi-broadcast text-[10px] sm:text-xs font-bold animate-pulse"></i>
-              </div>
-              <span className="whitespace-nowrap font-black tracking-tight text-[#0F172A] dark:text-white text-xs sm:text-sm">Live Tutorial</span>
-              {!liveAccess.allowed && (
-                <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded-md bg-[#F3F3F3] dark:bg-[#1C1C1C] text-[#525252] dark:text-[#A3A3A3] text-[9px] font-extrabold border border-[#E6E6E6] dark:border-[#2A2A2A]">
-                  <i className="bi bi-lock-fill text-[9px]"></i>
-                </span>
-              )}
+              <svg className="w-3.5 h-3.5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.757 3.63 8.25 4.51 8.25H6.75z" />
+              </svg>
+              <span>Live Voice</span>
             </button>
           </div>
         ),
-        className: 'bg-[#F6F6F3]/95 dark:bg-[#141414]/95 border-b border-[#E3E9F1] dark:border-[#2A2A2A] backdrop-blur-md',
+        className: 'bg-white/95 dark:bg-black/95 border-b border-neutral-200/80 dark:border-neutral-800/80 backdrop-blur-md',
       });
     }
     return () => {
@@ -210,44 +191,134 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
         setCustomHeaderConfig(null);
       }
     };
-  }, [setCustomHeaderConfig, onBack, handleTriggerLiveTutorial, course, topic, liveAccess.allowed, topicStructure]);
-
-  const toggleUserMessageExpand = (id: string) => {
-    setExpandedUserMessageIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  }, [setCustomHeaderConfig, onBack, handleTriggerLiveTutorial, course, topic, liveAccess.allowed]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTo({
-        top: messagesContainerRef.current.scrollHeight,
-        behavior,
-      });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
 
-  // WhatsApp-style instant bottom anchor on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      scrollToBottom('instant' as ScrollBehavior);
-    }, 40);
+    const timer = setTimeout(() => scrollToBottom('instant'), 50);
     return () => clearTimeout(timer);
   }, [scrollToBottom]);
 
-  // Only scroll to bottom when a new message is added (e.g. user sends message), NOT on every streaming chunk
-  const prevMsgCountRef = useRef(messages.length);
   useEffect(() => {
-    if (messages.length > prevMsgCountRef.current) {
-      scrollToBottom('smooth');
-    }
-    prevMsgCountRef.current = messages.length;
+    scrollToBottom('smooth');
   }, [messages.length, scrollToBottom]);
 
-  // Auto-initiate first Socratic bite-sized step if chat is empty
+  const addOptimizedImage = useCallback(async (base64Img: string) => {
+    try {
+      const optimized = await compressBase64Image(base64Img, 1600, 0.82);
+      setAttachedImages((prev) => {
+        if (prev.length >= MAX_CHAT_IMAGES) {
+          addToast(`Maximum ${MAX_CHAT_IMAGES} images allowed per message.`, 'warning');
+          return prev;
+        }
+        return [...prev, optimized];
+      });
+    } catch {
+      setAttachedImages((prev) => (prev.length < MAX_CHAT_IMAGES ? [...prev, base64Img] : prev));
+    }
+  }, [addToast]);
+
+  const handleStopGenerating = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsSending(false);
+  }, []);
+
+  // Voice dictation toggle
+  const toggleVoice = useCallback(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      addToast('Voice input is not supported in this browser.', 'info');
+      return;
+    }
+
+    if (voiceStatus === 'listening') {
+      recognitionRef.current?.stop();
+      setVoiceStatus('idle');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+
+      recognition.onstart = () => {
+        setVoiceStatus('listening');
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((res: any) => res[0].transcript)
+          .join('');
+        setInputValue(transcript);
+      };
+
+      recognition.onerror = () => {
+        setVoiceStatus('idle');
+      };
+
+      recognition.onend = () => {
+        setVoiceStatus('idle');
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setVoiceStatus('idle');
+    }
+  }, [voiceStatus, addToast]);
+
+  // System prompt that forces generating a structured Study Plan first before teaching in bytes
+  const buildSocraticSystemPrompt = useCallback(() => {
+    return [
+      `You are AVELUT Socratic Course Tutor for "${course.course_name}" (${course.course_code || ''}).`,
+      `TOPIC: "${topic.topic_name}"`,
+      topic.topic_context ? `CURRICULUM CONTEXT: ${topic.topic_context}` : '',
+      '',
+      'CRITICAL TEACHING WORKFLOW (Strictly Follow):',
+      '1. FIRST, CREATE AND PRESENT A STRUCTURED STUDY PLAN:',
+      '   Whenever starting a new topic session or when no study plan has been shown yet, you MUST begin your message with the Master Study Plan outlining the progressive bytes required to master this topic:',
+      '   ### 📋 Master Study Plan: ' + topic.topic_name,
+      '   1. **Byte 1: Foundational Intuition & Core Concept** — Everyday real-world Nigerian analogy and big-picture explanation.',
+      '   2. **Byte 2: Underlying Mechanics & Principles** — How the concepts work systematically behind the scenes.',
+      '   3. **Byte 3: Formulas, Math & Theoretical Rules** — Key equations with LaTeX notation and breakdown of variables.',
+      '   4. **Byte 4: Step-by-Step Worked Problems & Code** — Practical calculation examples and methods.',
+      '   5. **Byte 5: Tricky Exam Traps & Misconceptions** — What examiners look for and pitfalls to avoid.',
+      '   6. **Byte 6: Final Synthesis & Knowledge Check** — Rapid recall questions and mastery check.',
+      '',
+      '2. IMMEDIATELY TEACH BYTE 1:',
+      '   Right below the study plan, begin Byte 1 immediately:',
+      '   ### Byte 1: The Intuition & Big Picture',
+      '   - Explain the concept with a vivid, relatable everyday Nigerian analogy (e.g. POS service charges, NEPA light vs generator, traffic at Ojuelegba, bargaining at the market).',
+      '   - Keep this opening byte bite-sized (90-130 words). Never dump giant multi-paragraph lectures.',
+      '   - Conclude with ONE simple, engaging check question to test the student\'s understanding before Byte 2.',
+      '   - Always append 2 interactive follow-up suggestions starting with ↳ (e.g. "↳ Ready for Byte 2: Mechanics", "↳ Can you explain with another example?").',
+      '',
+      '3. SUBSEQUENT BYTE PROGRESSION:',
+      '   - Assess the student\'s answer warmly and accurately.',
+      '   - If correct, praise briefly and smoothly proceed to deliver the NEXT BYTE from the study plan.',
+      '   - If confused, break it down simply with clearer intuition before advancing.',
+      '   - Keep every turn strictly bite-sized (90-130 words). Teach ONE concept at a time.',
+      '   - End every turn with ONE check question and 2 follow-ups starting with ↳.',
+      '',
+      '4. TYPOGRAPHIC HIERARCHY:',
+      '   - Use ### for Byte / Section headings.',
+      '   - Use **bold** for essential definitions and key terms.',
+      '   - Highlight critical takeaways with ==this== or <mark>this</mark>.',
+      '   - Format all equations and symbols with LaTeX ($...$ inline or $$...$$ block).',
+      '   - Use code fences with syntax highlighting for code.',
+      '   - No robotic greetings or emojis.',
+    ].filter(Boolean).join('\n');
+  }, [course, topic]);
+
+  // Auto-initiate study plan & Byte 1 if chat is empty
   useEffect(() => {
     if (messages.length === 0 && !isSending) {
       void initFirstBiteSizedStep();
@@ -271,54 +342,37 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
       timestamp: Date.now(),
     };
     setMessages([initialPlaceholder]);
-    setStreamingMsgId(starterAiMsgId);
 
-    const socraticSystemPrompt = [
-      `You are AVELUT Socratic Course Tutor for "${course.course_name}" (${course.course_code || ''}).`,
-      `TOPIC: "${topic.topic_name}"`,
-      topic.topic_context ? `CURRICULUM CONTEXT: ${topic.topic_context}` : '',
-      '',
-      'MISSION: Conduct a dynamic, comprehensive Socratic tutorial session. Your goal is to guide the student to understand EVERY essential area possible to know on this topic — intuition, definitions, mechanisms, formulas/theories, practical step-by-step worked examples, edge cases, exam traps, and real-world applications.',
-      '',
-      'SESSION COMMENCEMENT:',
-      '- Welcome the student warmly to the tutorial on this topic.',
-      '- Introduce the foundational intuition and core concept with a vivid, relatable everyday Nigerian analogy (e.g. POS charges, NEPA power vs generator, Danfo bus routes, market bargaining).',
-      '- Keep this opening bite-sized (80-110 words).',
-      '- Conclude with 1 simple, engaging check question or thought prompt to gauge their current understanding before diving into mechanics.',
-      '',
-      'TYPOGRAPHIC HIERARCHY (Strictly Follow):',
-      '- Use ### Subheadings for sections.',
-      '- Use **bold** for key concepts and definitions.',
-      '- Highlight critical terms with ==this== or <mark>this</mark>.',
-      '- Format all math, formulas, and symbols with LaTeX ($...$ inline, $$...$$ block).',
-      '- Use code fences for code examples.',
-      '- Provide teaching directly without meta-commentary, robot greetings, or emojis.',
-    ].filter(Boolean).join('\n');
+    const socraticPrompt = buildSocraticSystemPrompt();
+    const chatModel = getFeatureModel('chat_interaction', appSettings) || 'qwen3.8-omni-flash';
 
     const aiParams = {
-      model: 'qwen3.8-omni-flash',
+      model: chatModel,
       contents: [
         {
           role: 'user',
-          parts: [{ text: `Hello! I am ready to learn "${topic.topic_name}". Please begin our dynamic tutorial session.` }],
+          parts: [{ text: `Hello! Please create our study plan for "${topic.topic_name}" and start teaching me byte by byte.` }],
         },
       ],
       config: {
-        systemInstruction: socraticSystemPrompt,
+        systemInstruction: socraticPrompt,
         temperature: 0.35,
-        maxOutputTokens: 450,
+        maxOutputTokens: 600,
       },
     };
 
     let streamedText = '';
+    let streamedReasoning = '';
     try {
       const responseStream = await ai.models.generateContentStream(aiParams);
       for await (const chunk of responseStream) {
         const chunkText = getResponseText(chunk);
+        const chunkReasoning = getResponseReasoningText(chunk);
+        if (chunkReasoning) streamedReasoning += chunkReasoning;
         if (chunkText) {
           streamedText += chunkText;
           setMessages((prev) =>
-            prev.map((m) => (m.id === starterAiMsgId ? { ...m, text: streamedText } : m))
+            prev.map((m) => (m.id === starterAiMsgId ? { ...m, text: streamedText, reasoningText: streamedReasoning } : m))
           );
         }
       }
@@ -334,7 +388,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     }
 
     if (!streamedText.trim()) {
-      streamedText = `Welcome to **${topic.topic_name}**!\n\nLet's break down this topic thoroughly step by step, covering every single area you need to master. Ready to begin?`;
+      streamedText = `### 📋 Master Study Plan: ${topic.topic_name}\n1. **Byte 1: Intuition & Big Picture**\n2. **Byte 2: Underlying Mechanics**\n3. **Byte 3: Formulas & Mathematics**\n4. **Byte 4: Practical Examples**\n5. **Byte 5: Exam Traps**\n\n---\n\n### Byte 1: The Intuition & Big Picture\nWelcome to **${topic.topic_name}**! Let's break this down step-by-step so you master every essential concept. Are you ready to dive into the core intuition?\n\n↳ Yes, let's begin Byte 1\n↳ Can you summarize the goals?`;
     }
 
     setMessages((prev) => {
@@ -343,12 +397,11 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
       return updated;
     });
     setIsSending(false);
-    setStreamingMsgId(null);
   };
 
   const handleSendMessage = async (customText?: string) => {
     const textToSend = (customText || inputValue).trim();
-    if (!textToSend && attachments.length === 0) return;
+    if (!textToSend && attachedImages.length === 0) return;
     if (isSending) return;
 
     const cost = getFeatureCost('chat_interaction', appSettings);
@@ -368,30 +421,19 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
       return;
     }
 
-    // Process attachments
-    const attachedData: Array<{ id: string; name: string; url: string; isImage: boolean }> = [];
+    const currentImages = [...attachedImages];
     const inlineParts: any[] = [];
-
-    for (const file of attachments) {
-      const isImg = file.type.startsWith('image/');
-      const dataUrl = await fileToDataUrl(file);
-      attachedData.push({
-        id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        name: file.name,
-        url: dataUrl,
-        isImage: isImg,
-      });
-
-      if (isImg) {
-        const base64Data = dataUrl.split(',')[1];
+    currentImages.forEach((dataUrl) => {
+      const base64Data = dataUrl.split(',')[1];
+      if (base64Data) {
         inlineParts.push({
           inlineData: {
             data: base64Data,
-            mimeType: file.type || 'image/jpeg',
+            mimeType: 'image/jpeg',
           },
         });
       }
-    }
+    });
 
     const now = Date.now();
     const userMsgId = `msg_user_${now}`;
@@ -402,7 +444,12 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
       sender: 'user',
       text: textToSend,
       timestamp: now,
-      attachments: attachedData.length > 0 ? attachedData : undefined,
+      attachments: currentImages.length > 0 ? currentImages.map((img, i) => ({
+        id: `att_${now}_${i}`,
+        name: `Image ${i + 1}`,
+        url: img,
+        isImage: true,
+      })) : undefined,
     };
 
     const aiPlaceholderMsg: CourseChatTutorMessage = {
@@ -415,55 +462,14 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     const nextMessages = [...messages, userMessage, aiPlaceholderMsg];
     setMessages(nextMessages);
     setInputValue('');
-    setAttachments([]);
-    setShowAttachmentMenu(false);
+    setAttachedImages([]);
     setIsSending(true);
-    setStreamingMsgId(aiMsgId);
 
-    if (inputElementRef.current) {
-      inputElementRef.current.style.height = 'auto';
-    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
-    // Advance dynamic progress and assess areas
-    let currentStepIdx = topicStructure?.currentStepIndex || 0;
-    const userMsgCount = messages.filter((m) => m.sender === 'user').length;
-
-    if (userMsgCount > 0 && userMsgCount % 2 === 0) {
-      currentStepIdx = currentStepIdx + 1;
-      if (topicStructure) {
-        const updatedStruct = { ...topicStructure, currentStepIndex: currentStepIdx };
-        setTopicStructure(updatedStruct);
-        saveTopicStructureProgress(updatedStruct, userProfile?.uid);
-      }
-    }
-
-    const socraticSystemPrompt = [
-      `You are AVELUT Socratic Course Tutor for "${course.course_name}" (${course.course_code || ''}).`,
-      `TOPIC: "${topic.topic_name}"`,
-      topic.topic_context ? `CURRICULUM CONTEXT: ${topic.topic_context}` : '',
-      '',
-      'MISSION: Conduct a dynamic, adaptive masterclass tutorial session that ensures the student thoroughly understands EVERY area possible to know on this topic.',
-      'Do NOT limit or truncate the tutorial to 4 steps or any artificial limits. Guide the student continuously and progressively through all dimensions of the topic:',
-      '- Foundational intuition & core definitions',
-      '- Mathematical / theoretical mechanics, laws & formulas (formatted with LaTeX)',
-      '- Step-by-step worked calculations & concrete derivations',
-      '- Real-world Nigerian applications & case scenarios',
-      '- Tricky exam traps, edge cases & common misconceptions',
-      '- Active problem-solving checks & student synthesis',
-      '',
-      'CRITICAL TEACHING RULES:',
-      '1. ADAPTIVE PROGRESSION: Evaluate the student\'s response. If they answered correctly or showed grasp, briefly validate, reinforce the key takeaway, and smoothly transition to the next essential area of the topic. If they are confused or made an error, break it down with simpler intuition before moving forward.',
-      '2. STRICTLY BITE-SIZED: Keep each turn focused and bite-sized (80-120 words). Never dump long textbook text walls or multi-paragraph lectures.',
-      '3. ALWAYS INCLUDE 1 INTERACTIVE CHECK: Conclude your response with ONE specific question or problem for the student to solve or explain next.',
-      '4. TYPOGRAPHIC HIERARCHY:',
-      '   - Use ### Subheadings to organize concept sections.',
-      '   - Use **bold** for crucial terms and definitions.',
-      '   - Highlight critical terms with ==this== or <mark>this</mark>.',
-      '   - Format all math, equations, and variables with LaTeX ($...$ inline or $$...$$ block).',
-      '   - Use code fences for code examples.',
-      '5. PRACTICAL EXAMPLES: Use relatable Nigerian real-world scenarios when illustrating ideas.',
-      '6. DIRECT RESPONSE: Provide response directly without meta commentary or emojis.',
-    ].filter(Boolean).join('\n');
+    const socraticPrompt = buildSocraticSystemPrompt();
+    const chatModel = getFeatureModel('chat_interaction', appSettings) || 'qwen3.8-omni-flash';
 
     const historyContents = messages
       .filter((m) => m.text && m.text.trim())
@@ -476,8 +482,8 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     const latestUserParts: any[] = [...inlineParts];
     if (textToSend) {
       latestUserParts.push({ text: textToSend });
-    } else if (latestUserParts.length === 0) {
-      latestUserParts.push({ text: '(Student requested clarification on this topic)' });
+    } else {
+      latestUserParts.push({ text: '(Student provided image for tutorial review)' });
     }
 
     historyContents.push({
@@ -486,429 +492,426 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     });
 
     const aiParams = {
-      model: 'qwen3.8-omni-flash',
+      model: chatModel,
       contents: historyContents,
       config: {
-        systemInstruction: socraticSystemPrompt,
+        systemInstruction: socraticPrompt,
         temperature: 0.35,
-        maxOutputTokens: 450,
+        maxOutputTokens: 550,
       },
     };
 
     let streamedText = '';
     let streamedReasoning = '';
     let usageAcc: AiUsageMetadata = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+
     try {
       const responseStream = await ai.models.generateContentStream(aiParams);
-
       for await (const chunk of responseStream) {
+        if (abortController.signal.aborted) break;
         usageAcc = accumulateUsageMetadata(usageAcc, chunk);
         const chunkText = getResponseText(chunk);
         const chunkReasoning = getResponseReasoningText(chunk);
-        if (chunkReasoning) {
-          streamedReasoning += chunkReasoning;
-        }
+        if (chunkReasoning) streamedReasoning += chunkReasoning;
         if (chunkText) {
           streamedText += chunkText;
+          setMessages((prev) =>
+            prev.map((m) => (m.id === aiMsgId ? { ...m, text: streamedText, reasoningText: streamedReasoning } : m))
+          );
         }
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === aiMsgId
-              ? { ...m, text: streamedText, reasoningText: streamedReasoning }
-              : m
-          )
-        );
       }
-    } catch (streamErr: any) {
-      console.warn('[CourseChatTutor] Stream failed or interrupted, falling back to generateContent:', streamErr);
-      const fallbackResult = await attemptApiCall(async () => {
-        const result = await ai.models.generateContent(aiParams);
-        usageAcc = accumulateUsageMetadata(usageAcc, result);
-        const resText = getResponseText(result);
-        if (!resText) throw new Error('Course Tutor returned an empty response.');
-        return resText;
-      });
-
-      if (fallbackResult.success && fallbackResult.data) {
-        streamedText = fallbackResult.data.trim();
-        setMessages((prev) =>
-          prev.map((m) => (m.id === aiMsgId ? { ...m, text: streamedText } : m))
-        );
-      } else {
-        const errMsg = fallbackResult.message || streamErr?.message || 'Could not reach tutor server';
-        streamedText = `I apologize, but I had trouble processing your question (${errMsg}). Please check your connection and send your question again.`;
-        setMessages((prev) =>
-          prev.map((m) => (m.id === aiMsgId ? { ...m, text: streamedText } : m))
-        );
+    } catch (err: any) {
+      if (!abortController.signal.aborted) {
+        console.warn('[CourseChatTutor] Stream error, trying fallback:', err);
+        const fallbackRes = await attemptApiCall(async () => {
+          const res = await ai.models.generateContent(aiParams);
+          return getResponseText(res);
+        });
+        if (fallbackRes.success && fallbackRes.data) {
+          streamedText = fallbackRes.data.trim();
+        }
       }
     }
 
-    if (!streamedText.trim()) {
-      const fallbackResult = await attemptApiCall(async () => {
-        const result = await ai.models.generateContent(aiParams);
-        usageAcc = accumulateUsageMetadata(usageAcc, result);
-        const resText = getResponseText(result);
-        if (!resText) throw new Error('Course Tutor returned an empty response.');
-        return resText;
-      });
-
-      if (fallbackResult.success && fallbackResult.data) {
-        streamedText = fallbackResult.data.trim();
-      } else {
-        streamedText = `Let's take a look at ${topic.topic_name}. What specific concept or step would you like to explore next?`;
-      }
-      setMessages((prev) =>
-        prev.map((m) => (m.id === aiMsgId ? { ...m, text: streamedText } : m))
-      );
+    if (!streamedText.trim() && !abortController.signal.aborted) {
+      streamedText = 'I encountered a brief network delay. Could you please rephrase or continue with our study plan?';
     }
 
-    setMessages((prev) => {
-      const final = prev.map((m) => (m.id === aiMsgId ? { ...m, text: streamedText } : m));
-      writeCachedJson(cacheKey, final, userProfile?.uid);
-      return final;
-    });
+    const finalMessages = nextMessages.map((m) =>
+      m.id === aiMsgId ? { ...m, text: streamedText, reasoningText: streamedReasoning } : m
+    );
 
-    if (streamedText.trim() && userProfile?.uid) {
-      await deductAICredits(userProfile.uid, cost, 'Course Chat Tutor', appSettings, {
+    setMessages(finalMessages);
+    writeCachedJson(cacheKey, finalMessages, userProfile?.uid);
+
+    if (userProfile?.uid && !abortController.signal.aborted) {
+      void deductAICredits(userProfile.uid, cost, 'Study Guide Chat Tutor', appSettings, {
         promptTokens: usageAcc.promptTokens,
         completionTokens: usageAcc.completionTokens,
         totalTokens: usageAcc.totalTokens,
-        model: 'qwen3.8-omni-flash',
-        metadata: { path: 'course_chat', topic: topic?.topic_name },
-      }).catch(console.warn);
+        model: chatModel,
+        metadata: { path: 'study_guide_chat', course_id: course.course_id, topic_id: topic.topic_id },
+      });
     }
 
     setIsSending(false);
-    setStreamingMsgId(null);
+    abortControllerRef.current = null;
   };
 
-  const handleSend = handleSendMessage;
-
-  const fileToDataUrl = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+  const handleCopyMessage = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      addToast('Copied to clipboard', 'success');
+    }).catch(() => {
+      addToast('Failed to copy text', 'error');
     });
   };
 
-  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const filesArr = Array.from(e.target.files);
-      setAttachments((prev) => [...prev, ...filesArr]);
-      setShowAttachmentMenu(false);
+  const handleShareMessage = async (text: string) => {
+    if (!text) return;
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await Share.share({
+          title: `${topic.topic_name} - Avelut Study Guide`,
+          text: text,
+          dialogTitle: 'Share tutorial byte',
+        });
+        return;
+      }
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({
+          title: `${topic.topic_name} - Avelut Study Guide`,
+          text: text,
+        });
+        return;
+      }
+    } catch (e: any) {
+      if (e?.name === 'AbortError' || e?.message?.includes('canceled') || e?.message?.includes('cancelled')) {
+        return;
+      }
+    }
+    handleCopyMessage(text);
+  };
+
+  const handleToggleLike = (msgId: string, rating: 'up' | 'down') => {
+    setLikedMessages((prev) => {
+      const current = prev[msgId];
+      if (current === rating) {
+        const next = { ...prev };
+        delete next[msgId];
+        return next;
+      }
+      return { ...prev, [msgId]: rating };
+    });
+    addToast(rating === 'up' ? 'Feedback submitted (Helpful byte)' : 'Feedback submitted (Needs improvement)', 'info');
+  };
+
+  const handleToggleTTS = useCallback((msgId: string, rawText: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      addToast('Speech playback is not supported on this device.', 'info');
+      return;
+    }
+    if (speakingMsgId === msgId) {
+      window.speechSynthesis.cancel();
+      setSpeakingMsgId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const cleanSpeechText = rawText
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/[#*_~>]/g, '')
+      .replace(/↳\s.*$/gm, '')
+      .trim();
+
+    if (!cleanSpeechText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanSpeechText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onend = () => setSpeakingMsgId(null);
+    utterance.onerror = () => setSpeakingMsgId(null);
+    setSpeakingMsgId(msgId);
+    window.speechSynthesis.speak(utterance);
+  }, [speakingMsgId, addToast]);
+
+  const handleRegenerateMessage = (msgIndex: number) => {
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (messages[i].sender === 'user') {
+        void handleSendMessage(messages[i].text);
+        break;
+      }
     }
   };
 
-  const removeAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const renderStreamingContent = (text: string) => (
-    <div className="min-w-0">
-      <MarkdownContent content={text} />
-      <span aria-hidden="true" className="inline-block w-2 h-4 ml-1 bg-blue-600 dark:bg-blue-400 rounded-sm animate-pulse align-middle" />
-    </div>
-  );
   return (
-    <div className="w-full h-full flex flex-col bg-[#F6F6F3] dark:bg-[#0A0A0A] overflow-hidden select-none relative">
-      {/* Hidden File Inputs */}
-      <input type="file" ref={fileInputRef} onChange={handleFileSelection} multiple className="hidden" />
-      <input type="file" ref={cameraInputRef} onChange={handleFileSelection} accept="image/*" capture="environment" className="hidden" />
-      <input type="file" ref={photoInputRef} onChange={handleFileSelection} accept="image/*" multiple className="hidden" />
-
-      {/* ── Scrollable Messages Area ── */}
-      <div
-        ref={messagesContainerRef}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-6 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <div className="max-w-4xl mx-auto w-full min-h-full flex flex-col justify-end py-3 sm:py-4 space-y-4">
-          {messages.map((message) => {
-            const isUser = message.sender === 'user';
-            const isLongUserMsg = isUser && (message.text.length > 220 || (message.text.match(/\n/g) || []).length >= 4);
-            const isExpanded = expandedUserMessageIds.has(message.id);
-            const isCurrentlyStreaming = streamingMsgId === message.id;
-
-            return (
-              <div
-                key={message.id}
-                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} w-full animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
-              >
-                {!isUser && (
-                  <div className="flex items-center gap-2 mb-1.5 px-1">
-                    <div className="w-6 h-6 rounded-full bg-[#0066FF]/10 dark:bg-brand-900/40 flex items-center justify-center p-0.5 shrink-0 border border-[#0066FF]/20">
-                      <img src="/logo_icon.png" alt="Avelut Tutor" className="w-full h-full object-contain" />
-                    </div>
-                    <span className="text-[12px] font-bold text-[#002D62] dark:text-[#60A5FA]">
-                      Course Tutor
-                    </span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                      {topic.topic_name}
-                    </span>
-                  </div>
-                )}
-
-                <div
-                  className={`p-4 sm:p-5 rounded-2xl leading-relaxed text-sm ${
-                    isUser
-                      ? 'min-w-[33%] max-w-[85%] sm:max-w-[76%] rounded-3xl bg-[#002D62] text-white shadow-xs rounded-tr-none'
-                      : 'w-full text-slate-800 dark:text-slate-100 bg-transparent px-1 sm:px-2 py-1'
-                  }`}
-                >
-                  {/* User Attachments */}
-                  {message.attachments && message.attachments.length > 0 && (
-                    <div className="mb-3">
-                      {message.attachments.length === 1 && message.attachments[0].isImage ? (
-                        <a
-                          href={message.attachments[0].url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-block overflow-hidden rounded-3xl border border-transparent bg-transparent transition-transform hover:scale-[1.01]"
-                        >
-                          <img
-                            src={message.attachments[0].url}
-                            alt={message.attachments[0].name}
-                            className="max-h-64 sm:max-h-80 w-auto rounded-3xl object-cover border border-transparent shadow-xs"
-                          />
-                        </a>
-                      ) : (
-                        <div className={`grid gap-2 ${message.attachments.some(item => item.isImage) ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-                          {message.attachments.map((att) => (
-                            <a
-                              key={att.id}
-                              href={att.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="overflow-hidden rounded-2xl border border-transparent bg-transparent text-slate-900 dark:text-white"
-                            >
-                              {att.isImage ? (
-                                <img src={att.url} alt={att.name} className="max-h-56 w-full object-cover rounded-2xl border border-transparent" />
-                              ) : (
-                                <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/10 dark:bg-black/20 border border-white/10">
-                                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-[10px] font-black uppercase text-white">
-                                    DOC
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold text-white">{att.name}</p>
-                                    <p className="text-[10px] uppercase tracking-[0.2em] opacity-70 text-brand-200">Open attachment</p>
-                                  </div>
-                                </div>
-                              )}
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+    <div className="flex-1 flex flex-col h-full w-full bg-white dark:bg-black overflow-hidden text-neutral-900 dark:text-white">
+      {/* MESSAGES SCROLL CONTAINER */}
+      <div className="flex-1 overflow-y-auto px-4 pt-3 sm:pt-4 pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="w-full max-w-3xl mx-auto space-y-8">
+          {messages.map((msg, index) => (
+            <div
+              key={msg.id}
+              style={{ contentVisibility: 'auto', containIntrinsicSize: '0 80px' }}
+              className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
+            >
+              {msg.sender === 'user' ? (
+                <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <ImageGridRenderer images={msg.attachments.map((a) => a.url)} />
                   )}
-
-                  {isUser ? (
-                    <div>
-                      <div className={`relative ${isLongUserMsg && !isExpanded ? 'max-h-[125px] overflow-hidden' : ''}`}>
-                        <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>
-                        {isLongUserMsg && !isExpanded && (
-                          <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#002D62] via-[#002D62]/85 to-transparent pointer-events-none" />
-                        )}
-                      </div>
-
-                      {isLongUserMsg && (
-                        <div className="mt-2 flex justify-center">
-                          <button
-                            type="button"
-                            onClick={() => toggleUserMessageExpand(message.id)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-full text-xs font-bold transition shadow-[0_3px_10px_rgba(0,0,0,0.3)] active:scale-95 cursor-pointer border border-white/25 backdrop-blur-xs"
-                          >
-                            <span>{isExpanded ? 'Show less' : 'Read full message'}</span>
-                            <i className={`bi ${isExpanded ? 'bi-chevron-up' : 'bi-chevron-down'} text-xs drop-shadow-md`}></i>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ) : !message.text ? (
-                    <ThinkingTypingIndicator
-                      label="thinking"
-                      reasoningText={message.reasoningText}
-                      isStreaming={isCurrentlyStreaming}
-                    />
-                  ) : (
-                    <>
-
-                      {isCurrentlyStreaming ? (
-                        <div className="w-full font-reading text-[15.5px] sm:text-[16.5px] leading-[1.75] tracking-[-0.011em] font-normal text-[#24292F] dark:text-[#E2E8F0]">
-                          {renderStreamingContent(message.text)}
-                        </div>
-                      ) : (
-                        <div className="w-full font-reading text-[15.5px] sm:text-[16.5px] leading-[1.75] tracking-[-0.011em] font-normal text-[#24292F] dark:text-[#E2E8F0]">
-                          <MarkdownContent content={message.text} />
-                        </div>
-                      )}
-                    </>
-                  )}
+                  {msg.text && <CollapsibleUserMessage text={msg.text} />}
                 </div>
-              </div>
-            );
-          })}
-
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-
-      {/* ── Fullscreen Bottom Input Bar ── */}
-      <footer className="shrink-0 px-3 sm:px-6 pt-2 pb-[max(14px,env(safe-area-inset-bottom))] bg-[#F6F6F3]/90 dark:bg-[#0A0A0A]/90 backdrop-blur-md z-20">
-        <div className="max-w-4xl mx-auto w-full space-y-2">
-          {/* LIMIT REACHED BANNER */}
-          {showLimitBanner && (
-            <div className="w-full pb-1">
-              <ChatLimitBanner
-                title="Free tier limit reached"
-                subtitle="Try again later or upgrade to Pro for much higher limits and premium features."
-                actionText="Upgrade to Pro"
-              />
-            </div>
-          )}
-
-          {/* Multi-Image Attachment Preview Chips */}
-          {attachments.length > 0 && (
-            <div className="w-full flex items-center gap-2 overflow-x-auto py-1 px-1 no-scrollbar animate-fade-in">
-              {attachments.map((file, idx) => {
-                const isImg = file.type.startsWith('image/');
-                return (
-                  <div
-                    key={`${file.name}-${idx}`}
-                    className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-[#111111] border border-transparent shadow-xs px-3 py-1 text-xs text-slate-800 dark:text-slate-200 shrink-0"
-                  >
-                    {isImg ? (
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={file.name}
-                        className="w-5 h-5 rounded-full object-cover shrink-0 border border-transparent"
-                      />
+              ) : (
+                <div className="w-full bg-transparent border-0 shadow-none p-0 min-w-0">
+                  <div className="w-full min-w-0">
+                    {!msg.text ? (
+                      <div className="py-1">
+                        <ThinkingTypingIndicator
+                          label="structuring byte..."
+                          reasoningText={msg.reasoningText}
+                          isStreaming={isSending}
+                        />
+                      </div>
                     ) : (
-                      <span className="w-5 h-5 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center text-[10px] font-bold shrink-0">
-                        DOC
-                      </span>
+                      (() => {
+                        const { cleanedText, followUps } = parseFollowUpsAndContent(msg.text);
+                        return (
+                          <div className="min-w-0">
+                            <MarkdownContent content={cleanedText || msg.text} />
+                            {isSending && index === messages.length - 1 && (
+                              <span aria-hidden="true" className="inline-block w-2.5 h-2.5 ml-1.5 bg-neutral-900 dark:bg-white rounded-full animate-dot-breathe align-middle" />
+                            )}
+
+                            {/* Interactive Suggested Follow-Up Prompts */}
+                            {followUps.length > 0 && (!isSending || index < messages.length - 1) && (
+                              <div className="flex flex-col items-start gap-2.5 mt-5 mb-2 pl-0.5">
+                                {followUps.map((prompt, pIdx) => (
+                                  <button
+                                    key={pIdx}
+                                    type="button"
+                                    onClick={() => void handleSendMessage(prompt)}
+                                    className="group flex items-start sm:items-center gap-2.5 text-left text-[14px] sm:text-[15px] text-neutral-800 dark:text-neutral-200 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
+                                  >
+                                    <span className="text-neutral-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white text-base leading-none select-none font-sans">↳</span>
+                                    <span className="underline underline-offset-[5px] decoration-neutral-400 dark:decoration-neutral-600 group-hover:decoration-black dark:group-hover:decoration-white font-medium dark:font-normal transition-colors">
+                                      {prompt}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Exact Action Row: Copy, Thumbs Up, Thumbs Down, Speaker, Share, More */}
+                            <div className="pt-2">
+                              <div className="flex items-center gap-4 text-neutral-600 dark:text-neutral-400 select-none">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyMessage(cleanedText || msg.text)}
+                                  className="p-1 rounded-md hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                                  title="Copy text"
+                                  aria-label="Copy text"
+                                >
+                                  <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                  </svg>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleLike(msg.id, 'up')}
+                                  className={`p-1 rounded-md transition-colors cursor-pointer ${
+                                    likedMessages[msg.id] === 'up' ? 'text-black dark:text-white' : 'hover:text-neutral-900 dark:hover:text-white'
+                                  }`}
+                                  title="Helpful byte"
+                                  aria-label="Helpful byte"
+                                >
+                                  <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                                  </svg>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleLike(msg.id, 'down')}
+                                  className={`p-1 rounded-md transition-colors cursor-pointer ${
+                                    likedMessages[msg.id] === 'down' ? 'text-red-500' : 'hover:text-neutral-900 dark:hover:text-white'
+                                  }`}
+                                  title="Unclear explanation"
+                                  aria-label="Unclear explanation"
+                                >
+                                  <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                                  </svg>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleTTS(msg.id, cleanedText || msg.text)}
+                                  className={`p-1 rounded-md transition-colors cursor-pointer ${
+                                    speakingMsgId === msg.id ? 'text-neutral-900 dark:text-white animate-pulse' : 'hover:text-neutral-900 dark:hover:text-white'
+                                  }`}
+                                  title={speakingMsgId === msg.id ? 'Stop reading' : 'Read aloud'}
+                                  aria-label={speakingMsgId === msg.id ? 'Stop reading' : 'Read aloud'}
+                                >
+                                  <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                                  </svg>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleShareMessage(cleanedText || msg.text)}
+                                  className="p-1 rounded-md hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                                  title="Share response"
+                                  aria-label="Share response"
+                                >
+                                  <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="18" cy="5" r="3" />
+                                    <circle cx="6" cy="12" r="3" />
+                                    <circle cx="18" cy="19" r="3" />
+                                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                                  </svg>
+                                </button>
+
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={() => setMoreMenuMsgId((prev) => (prev === msg.id ? null : msg.id))}
+                                    className="p-1 rounded-md hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                                    title="More options"
+                                    aria-label="More options"
+                                  >
+                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="currentColor">
+                                      <circle cx="12" cy="5" r="1.75" />
+                                      <circle cx="12" cy="12" r="1.75" />
+                                      <circle cx="12" cy="19" r="1.75" />
+                                    </svg>
+                                  </button>
+
+                                  {moreMenuMsgId === msg.id && (
+                                    <div className="absolute left-0 bottom-full mb-2 w-40 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-150">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMoreMenuMsgId(null);
+                                          handleRegenerateMessage(index);
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
+                                      >
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        Regenerate byte
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMoreMenuMsgId(null);
+                                          addToast('Thank you for your feedback.', 'info');
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
+                                      >
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        Report issue
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="w-full border-b border-neutral-200 dark:border-neutral-800/80 mt-3" />
+                            </div>
+                          </div>
+                        );
+                      })()
                     )}
-                    <span className="max-w-[120px] truncate font-medium text-[11px]">{file.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(idx)}
-                      className="text-slate-400 hover:text-rose-500 transition-colors p-0.5 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer"
-                      title="Remove attachment"
-                    >
-                      <XIcon className="h-3.5 w-3.5" />
-                    </button>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Fluid Input Bar */}
-          <div className="relative w-full bg-white dark:bg-[#141414] rounded-full flex items-center justify-between pl-3 pr-2 py-1.5 min-h-[54px] sm:min-h-[56px] border border-[#E3E9F1] dark:border-[#2A2A2A] shadow-[0_4px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.35)]">
-            
-            {/* Left: Plus Menu Button */}
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                disabled={isSending}
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-[#1C1C1C] transition-all active:scale-95 disabled:opacity-40 cursor-pointer ${showAttachmentMenu ? 'bg-slate-100 dark:bg-[#1C1C1C]' : ''}`}
-                title="Add photo or document"
-              >
-                <PlusIcon />
-              </button>
-
-              {/* Plus Popup Menu */}
-              {showAttachmentMenu && (
-                <div className="absolute bottom-14 left-0 w-56 bg-white/95 dark:bg-[#141414]/95 backdrop-blur-xl border border-[#E3E9F1] dark:border-[#2A2A2A] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 z-50 p-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      cameraInputRef.current?.click();
-                      setShowAttachmentMenu(false);
-                    }}
-                    className="w-full text-left px-3.5 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-3 cursor-pointer"
-                  >
-                    <CameraOutlineIcon className="w-5 h-5 text-slate-700 dark:text-slate-200" />
-                    <span>Camera</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      photoInputRef.current?.click();
-                      setShowAttachmentMenu(false);
-                    }}
-                    className="w-full text-left px-3.5 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-3 cursor-pointer"
-                  >
-                    <PhotoOutlineIcon className="w-5 h-5 text-slate-700 dark:text-slate-200" />
-                    <span>Photos</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      fileInputRef.current?.click();
-                      setShowAttachmentMenu(false);
-                    }}
-                    className="w-full text-left px-3.5 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-3 cursor-pointer"
-                  >
-                    <FolderOutlineIcon className="w-5 h-5 text-slate-700 dark:text-slate-200" />
-                    <span>Files</span>
-                  </button>
                 </div>
               )}
             </div>
-
-            {/* Center: Auto-Expanding Textarea */}
-            <div className="flex-1 mx-2 relative flex items-center min-h-[40px]">
-              <textarea
-                ref={inputElementRef}
-                rows={1}
-                value={inputValue}
-                onChange={(e) => {
-                  setInputValue(e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
-                }}
-                onPaste={(e) => {
-                  const items = e.clipboardData?.items;
-                  if (!items || items.length === 0) return;
-                  for (let i = 0; i < items.length; i++) {
-                    const item = items[i];
-                    if (item.type.startsWith('image/')) {
-                      const file = item.getAsFile();
-                      if (file) {
-                        e.preventDefault();
-                        setAttachments((prev) => [...prev, file]);
-                        return;
-                      }
-                    }
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    void handleSend();
-                  }
-                }}
-                placeholder={`Ask about ${topic.topic_name} or paste image...`}
-                className="w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-[15px] sm:text-[16px] font-normal leading-relaxed focus:outline-none resize-none py-2 px-1 max-h-[140px] overflow-y-auto"
-                style={{ height: 'auto' }}
-              />
-            </div>
-
-            {/* Right: Send Button */}
-            <button
-              onClick={() => void handleSend()}
-              disabled={(!inputValue.trim() && attachments.length === 0) || isSending}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#0066FF] hover:bg-[#0052cc] disabled:opacity-30 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0"
-              title="Send message"
-            >
-              <i className="bi bi-arrow-up text-sm sm:text-base font-bold"></i>
-            </button>
-          </div>
+          ))}
+          <div ref={messagesEndRef} className="h-2" />
         </div>
-      </footer>
+      </div>
 
+      {/* LIMIT BANNER */}
+      {showLimitBanner && (
+        <div className="px-3 sm:px-6 pb-2 w-full">
+          <ChatLimitBanner
+            title="Free tier limit reached"
+            subtitle="Upgrade to Pro for higher limits and unlimited study guide tutoring."
+            actionText="Upgrade to Pro"
+            onNavigate={() => {}}
+          />
+        </div>
+      )}
+
+      {/* HIDDEN FILE INPUT FOR GALLERY */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = e.target.files;
+          if (files && files.length > 0) {
+            const selected = Array.from(files);
+            if (selected.length + attachedImages.length > MAX_CHAT_IMAGES) {
+              addToast(`You can attach a maximum of ${MAX_CHAT_IMAGES} images.`, 'warning');
+            }
+            selected.slice(0, MAX_CHAT_IMAGES - attachedImages.length).forEach((file) => {
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                const res = ev.target?.result as string;
+                if (res) {
+                  void addOptimizedImage(res);
+                }
+              };
+              reader.readAsDataURL(file);
+            });
+          }
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }}
+      />
+
+      {/* AVELUT AI CHAT COMPOSER */}
+      <GrokChatComposer
+        input={inputValue}
+        setInput={setInputValue}
+        isLoading={isSending}
+        selectedMode={selectedMode}
+        onSelectMode={setSelectedMode}
+        voiceStatus={voiceStatus}
+        onToggleVoice={toggleVoice}
+        attachedImages={attachedImages}
+        onRemoveImage={(idx) => setAttachedImages((prev) => prev.filter((_, i) => i !== idx))}
+        onAttachImage={(img) => void addOptimizedImage(img)}
+        onOpenGallery={() => fileInputRef.current?.click()}
+        onOpenCamera={() => setIsCameraOpen(true)}
+        onSend={() => handleSendMessage()}
+        onStop={handleStopGenerating}
+        autoFocus={true}
+      />
+
+      {/* CAMERA CAPTURE VIEW */}
+      {isCameraOpen && (
+        <CameraCaptureView
+          onClose={() => setIsCameraOpen(false)}
+          onConfirm={(base64Img) => {
+            void addOptimizedImage(base64Img);
+            setIsCameraOpen(false);
+          }}
+        />
+      )}
+
+      {/* LIMIT EXCEEDED MODAL */}
       <LimitExceededModal
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
