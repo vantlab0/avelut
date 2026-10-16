@@ -92,6 +92,10 @@ export default defineConfig(({ command, mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+          'node:stream': path.resolve(__dirname, 'utils/emptyStub.ts'),
+          'stream': path.resolve(__dirname, 'utils/emptyStub.ts'),
+          'fs': path.resolve(__dirname, 'utils/emptyStub.ts'),
+          'path': path.resolve(__dirname, 'utils/emptyStub.ts'),
         }
       },
       build: {

@@ -477,51 +477,51 @@ const GrokChatComposer: React.FC<{
                 </svg>
               </button>
 
-              {/* Popup Menu — Gallery / Camera */}
+              {/* Popup Menu — Gallery / Camera (Clean, neutral monochrome design) */}
               {showAttachMenu && (
-                <div className="absolute bottom-full left-0 mb-3 w-52 bg-white dark:bg-[#222] rounded-3xl shadow-2xl border border-black/8 dark:border-white/10 overflow-hidden z-50 animate-in slide-in-from-bottom-3 fade-in duration-200">
-                  <div className="px-4 pt-4 pb-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400 dark:text-neutral-500">Attach Image</p>
-                  </div>
+                <div className="absolute bottom-full left-0 mb-2.5 w-48 sm:w-52 bg-white dark:bg-[#18181b] rounded-2xl shadow-xl border border-neutral-200 dark:border-neutral-800 p-1.5 z-50 animate-in slide-in-from-bottom-2 fade-in duration-150">
                   <button
+                    type="button"
                     onClick={() => {
                       setShowAttachMenu(false);
                       onOpenGallery();
                     }}
-                    className="w-full flex items-center gap-4 px-4 py-4 text-[15px] font-semibold text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/8 transition-all active:scale-[0.98] cursor-pointer"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer text-left no-underline select-none group"
                   >
-                    <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                         <circle cx="8.5" cy="8.5" r="1.5" />
                         <polyline points="21 15 16 10 5 21" />
                       </svg>
                     </div>
-                    <div className="text-left">
-                      <span className="block font-bold text-sm">Gallery</span>
-                      <span className="block text-xs text-neutral-400 dark:text-neutral-500 font-normal">Pick from photos</span>
+                    <div className="min-w-0">
+                      <span className="block font-semibold text-xs sm:text-sm text-neutral-900 dark:text-white no-underline">Gallery</span>
+                      <span className="block text-[11px] text-neutral-500 dark:text-neutral-400 font-normal no-underline">Upload photos</span>
                     </div>
                   </button>
-                  <div className="h-[1px] bg-neutral-100 dark:bg-white/8 mx-4" />
+
+                  <div className="h-[1px] bg-neutral-100 dark:bg-neutral-800/60 my-1 mx-2" />
+
                   <button
+                    type="button"
                     onClick={() => {
                       setShowAttachMenu(false);
                       onOpenCamera();
                     }}
-                    className="w-full flex items-center gap-4 px-4 py-4 text-[15px] font-semibold text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/8 transition-all active:scale-[0.98] cursor-pointer"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer text-left no-underline select-none group"
                   >
-                    <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-500/15 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2-2h6l2 2h4a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
                         <circle cx="12" cy="13" r="4" />
                       </svg>
                     </div>
-                    <div className="text-left">
-                      <span className="block font-bold text-sm">Camera</span>
-                      <span className="block text-xs text-neutral-400 dark:text-neutral-500 font-normal">Take a photo now</span>
+                    <div className="min-w-0">
+                      <span className="block font-semibold text-xs sm:text-sm text-neutral-900 dark:text-white no-underline">Camera</span>
+                      <span className="block text-[11px] text-neutral-500 dark:text-neutral-400 font-normal no-underline">Snap a photo</span>
                     </div>
                   </button>
-                  <div className="pb-2" />
                 </div>
               )}
             </div>
@@ -1285,8 +1285,8 @@ export const Chat: React.FC<ChatProps> = ({
         '  ]',
         '}',
         '```',
-        '- VISUAL SVG DIAGRAMS: When explaining workflows, structures, architectures, biological/chemical systems, algorithms, geometric layouts, or flowcharts, output a complete, responsive SVG visual diagram inside a ```svg code fence. Use clean viewBox (e.g. viewBox="0 0 600 350"), modern rounded shapes, and clear contrasting colors suited for dark backgrounds (#3b82f6, #10b981, #8b5cf6, #f59e0b, #ffffff, #94a3b8). NEVER just talk about a diagram—render it!',
-        '- EDUCATIONAL REFERENCE IMAGES: When explaining real-world entities, science, nature, anatomy, historical events, laboratory equipment, or physical phenomena, embed an educational Unsplash reference image using markdown: `![Caption description](https://images.unsplash.com/photo-...?...&auto=format&fit=crop&w=800&q=80)` to make learning visually engaging.',
+        '- VISUAL SVG DIAGRAMS: When explaining workflows, structures, architectures, biological/chemical systems, algorithms, geometric layouts, or flowcharts, output a complete, responsive SVG visual diagram inside a ```svg code fence. Always include xmlns="http://www.w3.org/2000/svg", a viewBox (e.g. viewBox="0 0 600 350"), clean labels, and contrasting modern colors (#3b82f6, #10b981, #8b5cf6, #f59e0b, #ffffff, #94a3b8). NEVER just talk about a diagram—render it!',
+        '- VISUAL IMAGES & ILLUSTRATIONS: When explaining physical objects, science, nature, anatomy, history, or real-world concepts, embed an educational visual using markdown: `![Caption description](https://image.pollinations.ai/prompt/detailed%20educational%20illustration%20of%20SUBJECT?width=800&height=500&nologo=true)` where SUBJECT is the specific topic. This guarantees real, high-resolution visuals.',
         '- SUGGESTED NEXT STEPS / FOLLOW-UPS: For substantive or educational answers (but NOT on simple greetings like "hi" or "hello"), provide 2 to 3 relevant follow-up actions or questions that the user can tap. Prefix EACH follow-up on its own line with "↳ ", for example:',
         '↳ Test me on this concept with 5 CBT questions',
         '↳ Generate flashcards for key definitions',

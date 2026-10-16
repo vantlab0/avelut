@@ -60,8 +60,16 @@ const normalizeLanguage = (lang?: string): string => {
 export const CodeBlock: React.FC<CodeBlockProps> = ({ language = 'code', value }) => {
   const [copied, setCopied] = useState(false);
   const normalizedLang = normalizeLanguage(language);
-  const isSvg = normalizedLang === 'svg' || (value.trim().startsWith('<svg') && value.trim().includes('</svg>'));
+  const svgMatch = value.match(/<svg[\s\S]*?<\/svg>/i);
+  const isSvg = normalizedLang === 'svg' || !!svgMatch;
+  const svgContent = svgMatch ? svgMatch[0] : value;
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>(isSvg ? 'preview' : 'code');
+
+  useEffect(() => {
+    if (isSvg) {
+      setActiveTab('preview');
+    }
+  }, [isSvg]);
 
   const cacheKey = `${normalizedLang}:${value}`;
 
@@ -191,8 +199,8 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language = 'code', value }
 
       {/* SVG Interactive Visual Preview */}
       {isSvg && activeTab === 'preview' ? (
-        <div className="p-6 overflow-x-auto flex items-center justify-center bg-white dark:bg-[#0c0d10] border-t border-neutral-800/40 min-h-[180px] text-neutral-900 dark:text-neutral-100 [&_svg]:max-w-full [&_svg]:max-h-[420px] [&_svg]:h-auto [&_svg]:mx-auto select-none">
-          <div dangerouslySetInnerHTML={{ __html: value }} />
+        <div className="p-6 overflow-x-auto flex items-center justify-center bg-white dark:bg-[#111215] border-t border-neutral-200 dark:border-neutral-800/80 min-h-[200px] text-neutral-900 dark:text-neutral-100 [&_svg]:max-w-full [&_svg]:max-h-[460px] [&_svg]:h-auto [&_svg]:w-auto [&_svg]:mx-auto select-none rounded-b-2xl">
+          <div className="w-full flex justify-center" dangerouslySetInnerHTML={{ __html: svgContent }} />
         </div>
       ) : (
         /* Syntax Highlighted Code Body */

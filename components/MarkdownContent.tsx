@@ -14,6 +14,43 @@ interface MarkdownContentProps {
   className?: string;
 }
 
+const ChatImageRenderer: React.FC<{ src?: string; alt?: string }> = ({ src, alt }) => {
+  const [imgSrc, setImgSrc] = React.useState(src || '');
+  const [hasFailed, setHasFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setImgSrc(src || '');
+    setHasFailed(false);
+  }, [src]);
+
+  const handleError = () => {
+    if (!hasFailed) {
+      setHasFailed(true);
+      const cleanAlt = (alt || 'educational illustration concept').replace(/[^a-zA-Z0-9\s]/g, ' ').trim();
+      const promptQuery = encodeURIComponent(cleanAlt.slice(0, 80));
+      setImgSrc(`https://image.pollinations.ai/prompt/${promptQuery}?width=800&height=500&nologo=true`);
+    }
+  };
+
+  return (
+    <div className="not-prose my-5 w-full rounded-3xl overflow-hidden border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 shadow-md">
+      <img
+        src={imgSrc}
+        alt={alt || 'Visual Reference'}
+        loading="lazy"
+        onError={handleError}
+        className="w-full max-h-[420px] object-contain bg-neutral-50 dark:bg-neutral-950 transition-all duration-300"
+      />
+      {alt && (
+        <div className="px-4 py-2.5 text-xs text-neutral-600 dark:text-neutral-400 font-medium italic border-t border-neutral-200/80 dark:border-neutral-800/80 bg-neutral-50 dark:bg-neutral-950/60 flex items-center gap-1.5">
+          <span className="text-neutral-900 dark:text-neutral-200 font-bold not-italic">Visual Reference:</span>
+          <span>{alt}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const components: Components = {
   h1: ({ children }) => <h1 className="text-xl sm:text-2xl font-bold tracking-tight mt-7 mb-3.5 leading-snug text-neutral-900 dark:text-white">{children}</h1>,
   h2: ({ children }) => <h2 className="text-lg sm:text-xl font-bold tracking-tight mt-6 mb-3 leading-snug text-neutral-900 dark:text-white">{children}</h2>,
@@ -35,29 +72,16 @@ const components: Components = {
   thead: ({ children }) => <thead className="bg-neutral-100 dark:bg-neutral-800/80 font-semibold text-neutral-900 dark:text-white">{children}</thead>,
   th: ({ children, style }) => <th style={style} className="p-3 border-b border-neutral-200 dark:border-neutral-700 font-semibold">{children}</th>,
   td: ({ children, style }) => <td style={style} className="p-3 border-b border-neutral-100 dark:border-neutral-800/60 text-neutral-800 dark:text-neutral-200">{children}</td>,
-  img: ({ src, alt }) => (
-    <div className="not-prose my-5 w-full rounded-3xl overflow-hidden border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 shadow-md">
-      <img
-        src={src}
-        alt={alt || 'Visual Reference'}
-        loading="lazy"
-        className="w-full max-h-[420px] object-cover hover:scale-[1.01] transition-transform duration-300"
-      />
-      {alt && (
-        <div className="px-4 py-2 text-xs text-neutral-600 dark:text-neutral-400 font-medium italic border-t border-neutral-200/80 dark:border-neutral-800/80 bg-neutral-50 dark:bg-neutral-950/60 flex items-center gap-1.5">
-          <span className="text-blue-500 font-bold not-italic">📷 Visual Reference:</span>
-          <span>{alt}</span>
-        </div>
-      )}
-    </div>
-  ),
+  img: ({ src, alt }) => <ChatImageRenderer src={src} alt={alt} />,
   code: ({ node, className, children }) => {
     if (node?.properties?.['data-block']) {
-      const language = /language-([^\s]+)/.exec(className || '')?.[1] || 'code';
+      const rawLanguage = /language-([^\s]+)/.exec(className || '')?.[1] || 'code';
       const cleanVal = String(children ?? '').replace(/\n$/, '');
-      if (language.startsWith('action:') || language === 'cbt' || language === 'flashcards') {
-        return <ActionCard type={language as any} rawPayload={cleanVal} />;
+      if (rawLanguage.startsWith('action:') || rawLanguage === 'cbt' || rawLanguage === 'flashcards') {
+        return <ActionCard type={rawLanguage as any} rawPayload={cleanVal} />;
       }
+      const isSvgBlock = rawLanguage === 'svg' || (cleanVal.includes('<svg') && cleanVal.includes('</svg>'));
+      const language = isSvgBlock ? 'svg' : rawLanguage;
       return <CodeBlock language={language} value={cleanVal} />;
     }
     return <code className="bg-neutral-100 dark:bg-neutral-800 text-[#2563EB] dark:text-[#60A5FA] font-mono px-1.5 py-0.5 rounded text-[13px] font-medium">{children}</code>;

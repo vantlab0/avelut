@@ -24,8 +24,13 @@ export function preprocessMarkdown(content: string): string {
 }
 
 export function prepareMarkdown(content: string): string {
+  // If raw <svg> tags exist in prose, wrap them in ```svg code fences so they render visually
+  const svgFenced = transformProse(content, (text) => {
+    return text.replace(/<svg[\s\S]*?<\/svg>/gi, (svg) => `\n\n\`\`\`svg\n${svg.trim()}\n\`\`\`\n\n`);
+  }, true);
+
   // Keep the existing math repair helper, but never rewrite source code or URLs.
-  const formatted = transformProse(preprocessMarkdown(content), formatLatexMath, false);
+  const formatted = transformProse(preprocessMarkdown(svgFenced), formatLatexMath, false);
   // Inline sentinels avoid CommonMark treating a leading <mark> as an HTML
   // block. Markdown emphasis and math inside the highlight still get parsed.
   return transformProse(formatted, (text) => text.replace(/<mark>/g, '\uE000').replace(/<\/mark>/g, '\uE001'), true);

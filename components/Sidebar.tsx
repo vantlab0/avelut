@@ -7,6 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { deleteLocalConversation, getLocalMessages, renameLocalConversation } from '../services/chatStorageService';
 import { Capacitor } from '@capacitor/core';
 import { Pin, Pencil, FolderPlus, Archive, Trash2, ChevronRight, X } from 'lucide-react';
+import { db, ref, remove } from '../lib/backend';
 
 export interface SidebarProps {
   activeItem: string;
@@ -642,10 +643,8 @@ const SidebarPanel: React.FC<{
         const uid = userProfile?.uid || 'anon';
         await deleteLocalConversation(convoId, uid);
         if (userProfile?.uid) {
-            import('../lib/backend').then(({ db, ref, remove }) => {
-                remove(ref(db, `chat_conversations/${userProfile.uid}/${convoId}`)).catch(console.error);
-                remove(ref(db, `chat_messages/${convoId}`)).catch(console.error);
-            }).catch(console.error);
+          remove(ref(db, `chat_conversations/${userProfile.uid}/${convoId}`)).catch(console.error);
+          remove(ref(db, `chat_messages/${convoId}`)).catch(console.error);
         }
         setPinnedIds((prev) => {
           if (!prev.has(convoId)) return prev;

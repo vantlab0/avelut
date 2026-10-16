@@ -67,9 +67,19 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, []);
 
-  const removeToast = useCallback((id: string) => {
+    const removeToast = useCallback((id: string) => {
     setToasts((prevToasts) => prevToasts.filter((toast) => toast.id !== id));
   }, []);
+
+  React.useEffect(() => {
+    const handleGlobalToast = (e: any) => {
+      if (e?.detail?.message) {
+        addToast(e.detail.message, e.detail.type || 'info', e.detail.duration, e.detail.action);
+      }
+    };
+    window.addEventListener('avelut_toast', handleGlobalToast);
+    return () => window.removeEventListener('avelut_toast', handleGlobalToast);
+  }, [addToast]);
 
   return React.createElement(ToastContext.Provider, { value: { addToast } },
     children,
