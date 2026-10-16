@@ -31,7 +31,8 @@ export async function POST(req: Request) {
     const apiKey =
       process.env.ALIBABA_API_KEY ||
       process.env.VITE_ALIBABA_API_KEY ||
-      req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+      req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
+      'sk-ws-H.DDLPMIE.fbaD.MEQCIFkao1-I0HQyUMxmrty8-k1S70b0xjgF1BoNksO2pM6WAiACzxp1ojlxhmc6YQFNodecye0oQOBAalaHxCVNdJfQjA';
 
     if (!apiKey) {
       return new Response(
@@ -65,7 +66,32 @@ export async function POST(req: Request) {
       requestHeaders['X-DashScope-WorkSpace'] = workspaceId;
     }
 
-    const voice = body.voice || 'Jennifer';
+    // Supported official voices for qwen3-tts-flash / CosyVoice
+    const ALIBABA_VOICE_MAP: Record<string, string> = {
+      cherry: 'Cherry',
+      serena: 'Serena',
+      ethan: 'Ethan',
+      chelsie: 'Chelsie',
+      momo: 'Momo',
+      vivian: 'Vivian',
+      ryan: 'Ryan',
+      jennifer: 'Jennifer',
+      mia: 'Mia',
+      bella: 'Bella',
+      kai: 'Kai',
+      maia: 'Maia',
+      moon: 'Moon',
+      // Legacy / alias mappings
+      tina: 'Cherry',
+      cindy: 'Serena',
+      'liora mira': 'Serena',
+      liora: 'Serena',
+      raymond: 'Ethan',
+      katerina: 'Vivian',
+    };
+
+    const rawVoice = (body.voice || 'Cherry').toString().trim();
+    const voice = ALIBABA_VOICE_MAP[rawVoice.toLowerCase()] || 'Cherry';
     const model = body.model || 'qwen3-tts-flash';
 
     const response = await fetch(

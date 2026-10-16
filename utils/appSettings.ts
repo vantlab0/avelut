@@ -241,8 +241,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   primary_ai_provider: 'alibaba_qwen',
   openrouter_api_key: '',
   openrouter_model: 'qwen/qwen3.7-flash',
-  openrouter_base_url: 'https://openrouter.ai/api/v1',
-  alibaba_api_key: '',
+  alibaba_api_key: 'sk-ws-H.DDLPMIE.fbaD.MEQCIFkao1-I0HQyUMxmrty8-k1S70b0xjgF1BoNksO2pM6WAiACzxp1ojlxhmc6YQFNodecye0oQOBAalaHxCVNdJfQjA',
   alibaba_base_url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
   alibaba_model: 'qwen3.8-omni-flash',
   active_voice_provider: 'grok',
@@ -346,7 +345,7 @@ export const getAlibabaApiKey = (appSettings?: AppSettings | Partial<AppSettings
     fromEnv = process.env.VITE_ALIBABA_API_KEY || process.env.ALIBABA_API_KEY || '';
   }
 
-  return fromEnv ? fromEnv.trim() : '';
+  return fromEnv ? fromEnv.trim() : 'sk-ws-H.DDLPMIE.fbaD.MEQCIFkao1-I0HQyUMxmrty8-k1S70b0xjgF1BoNksO2pM6WAiACzxp1ojlxhmc6YQFNodecye0oQOBAalaHxCVNdJfQjA';
 };
 
 export const cleanQwenModel = (model?: any, fallback: string = 'qwen3.8-omni-flash'): string => {

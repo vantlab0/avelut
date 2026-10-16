@@ -15,53 +15,53 @@ export interface VoiceOption {
 
 export const TUTORIAL_VOICES: VoiceOption[] = [
   {
-    id: 'Tina',
-    name: 'Tina',
+    id: 'Cherry',
+    name: 'Cherry',
     gender: 'Female',
-    persona: 'A warm, sweet, and cozy voice that remains sharp during problem-solving.',
-    sampleText: "Hello! I'm Tina, your live tutor. Let's break down this topic together step by step on the whiteboard.",
+    persona: 'A bright, clear, and cheerful voice perfect for interactive problem-solving on the whiteboard.',
+    sampleText: "Hello! I'm Cherry, your live tutor. Let's break down this topic together step by step on the whiteboard.",
   },
   {
-    id: 'Cindy',
-    name: 'Cindy',
+    id: 'Serena',
+    name: 'Serena',
     gender: 'Female',
-    persona: 'A sweet-talking young woman style (features a Taiwanese accent flavor).',
-    sampleText: "Hi there! I'm Cindy. I'm excited to explore this lesson with you on the whiteboard.",
+    persona: 'A gentle, warm, and comforting voice that explains complex theories calmly and patiently.',
+    sampleText: "Hi there! I'm Serena. Take your time as we explore each concept warmly and thoroughly.",
   },
   {
-    id: 'Liora Mira',
-    name: 'Liora Mira',
-    gender: 'Female',
-    persona: 'A gentle voice designed to bring warmth to everyday interactions.',
-    sampleText: "Welcome. I'm Liora Mira. Take your time as we walk through each idea warmly and gently.",
-  },
-  {
-    id: 'Raymond',
-    name: 'Raymond',
+    id: 'Ethan',
+    name: 'Ethan',
     gender: 'Male',
-    persona: 'A clear-voiced persona described as a takeout-loving homebody.',
-    sampleText: "Hey! I'm Raymond. Let's dig right into the core principles and solve these problems together.",
+    persona: 'A clear, confident, and professional male voice with great articulation.',
+    sampleText: "Hey! I'm Ethan. Let's dig right into the core principles and solve these problems together.",
   },
   {
-    id: 'Katerina',
-    name: 'Katerina',
+    id: 'Chelsie',
+    name: 'Chelsie',
     gender: 'Female',
-    persona: 'A mature, commanding voice with distinct rhythm and resonance.',
-    sampleText: "Greetings. I'm Katerina. Today we analyze the foundational mechanisms and theoretical frameworks of our subject.",
+    persona: 'A youthful, enthusiastic voice that keeps lessons engaging and upbeat.',
+    sampleText: "Welcome! I'm Chelsie. We are going to make this lesson exciting and easy to grasp!",
   },
   {
     id: 'Ryan',
     name: 'Ryan',
     gender: 'Male',
-    persona: 'A high-energy delivery style with a strong dramatic presence.',
+    persona: 'A high-energy, dynamic delivery style with a strong presence for calculations.',
     sampleText: "Awesome to have you here! I'm Ryan, and we're going to power through this lesson with high energy!",
   },
   {
     id: 'Mia',
     name: 'Mia',
     gender: 'Female',
-    persona: 'A soothing lifestyle-artist voice tailored for comfort and calm aesthetics.',
-    sampleText: "Hello. I'm Mia. Let's take a calm, thoughtful journey through today's topic together.",
+    persona: 'A soothing, focused lifestyle voice ideal for steady, thoughtful study sessions.',
+    sampleText: "Hello. I'm Mia. Let's take a calm, structured journey through today's topic together.",
+  },
+  {
+    id: 'Vivian',
+    name: 'Vivian',
+    gender: 'Female',
+    persona: 'A mature, commanding academic voice with distinct rhythm and clarity.',
+    sampleText: "Greetings. I'm Vivian. Today we analyze the foundational mechanisms and theoretical frameworks of our subject.",
   },
 ];
 
@@ -82,7 +82,7 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
   topicTitle = 'Live Interactive Tutorial',
   courseName,
   durationMinutes = 15,
-  initialVoice = 'Tina',
+  initialVoice = 'Cherry',
 }) => {
   const { settings: appSettings } = useAppSettings();
   const { addToast } = useToast();
