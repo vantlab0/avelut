@@ -5,6 +5,7 @@ import { triggerPaystackPurchase } from '../../utils/usage';
 import { useToast } from '../../hooks/useToast';
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
 import { saveLocalCredits } from '../../services/creditsStorageService';
+import { DedicatedAccountCard } from '../DedicatedAccountCard';
 
 interface RefillCreditsWebProps {
     appSettings: AppSettings;
@@ -163,6 +164,30 @@ export const RefillCreditsWeb: React.FC<RefillCreditsWebProps> = ({ appSettings,
                         Top up Live Tutorial minutes on demand without a recurring subscription.
                     </p>
                 </div>
+
+                {/* Instant Virtual Bank Account Topup Option */}
+                {userProfile && appSettings?.enable_dedicated_accounts ? (
+                    <div className="max-w-xl mx-auto space-y-3">
+                        <div className="flex items-center gap-2 px-1">
+                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <h3 className="text-xs font-black uppercase tracking-wider text-[#0F172A]">
+                                Option 1: Direct Bank Transfer (Instant • Zero Redirect)
+                            </h3>
+                        </div>
+                        <DedicatedAccountCard userProfile={userProfile} />
+                    </div>
+                ) : null}
+
+                {/* Or Card / Online Checkout */}
+                {appSettings?.enable_dedicated_accounts && userProfile ? (
+                    <div className="relative flex py-2 items-center max-w-xl mx-auto">
+                        <div className="flex-grow border-t border-[#E3E9F1]"></div>
+                        <span className="flex-shrink mx-4 text-xs font-black text-[#64748B] uppercase tracking-wider">
+                            Option 2: Pay Online with Card / USSD / Transfer
+                        </span>
+                        <div className="flex-grow border-t border-[#E3E9F1]"></div>
+                    </div>
+                ) : null}
 
                 {/* Email Input for Receipt */}
                 <div className="max-w-md mx-auto">

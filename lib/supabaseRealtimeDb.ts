@@ -19,6 +19,8 @@ const channelByPath = new Map<string, ReturnType<typeof supabase.channel>>();
 function realtimeChannelName(path: string): string | null {
   const parts = parsePath(path);
   if ((parts[0] === 'messages' || parts[0] === 'private_messages') && parts.length === 2) return `messages:${parts[1]}`;
+  if (parts[0] === 'chat_messages' && parts.length === 2) return `chat_messages:${parts[1]}`;
+  if (parts[0] === 'chat_conversations' && parts.length >= 2) return `chat_conversations:${parts[1]}`;
   if (parts[0] === 'user_chats' && parts.length >= 2) return `user_chats:${parts[1]}`;
   if (parts[0] === 'notifications' && parts.length === 2) return `notifications:${parts[1]}`;
   if (parts[0] === 'study_partners' && parts.length >= 2) return `study_partners:${parts[1]}`;
@@ -1247,6 +1249,49 @@ export function onValue(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
           async () => notify(path, await loadPath(path))
+        )
+        .subscribe();
+      channelByPath.set(chName, ch);
+    }
+  }
+
+  if (parts[0] === 'chat_conversations' && parts.length >= 2) {
+    const userId = parts[1];
+    const chName = `chat_conversations:${userId}`;
+    let ch = channelByPath.get(chName);
+    if (!ch) {
+      ch = supabase
+        .channel(chName)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'app_kv', filter: `key=eq.chat_conversations/${userId}` },
+          async (payload: any) => {
+            const updatedMap = payload?.new?.value || (await loadPath(`chat_conversations/${userId}`)) || {};
+            notify(`chat_conversations/${userId}`, updatedMap);
+            if (parts.length === 3) {
+              notify(path, updatedMap?.[parts[2]] ?? null);
+            }
+          }
+        )
+        .subscribe();
+      channelByPath.set(chName, ch);
+    }
+  }
+
+  if (parts[0] === 'chat_messages' && parts.length === 2) {
+    const convoId = parts[1];
+    const chName = `chat_messages:${convoId}`;
+    let ch = channelByPath.get(chName);
+    if (!ch) {
+      ch = supabase
+        .channel(chName)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'app_kv', filter: `key=eq.chat_messages/${convoId}` },
+          async (payload: any) => {
+            const updated = payload?.new?.value || (await loadPath(path)) || {};
+            notify(path, updated);
+          }
         )
         .subscribe();
       channelByPath.set(chName, ch);

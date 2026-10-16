@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { notifyTableChanged } from '../lib/sqlite/sqliteService';
 import {
   getPendingSyncQueue,
   removeSyncQueueItem,
@@ -42,6 +43,7 @@ class CloudSyncEngine {
   private listeners: Set<SyncListener> = new Set();
   private isSyncing = false;
   private syncIntervalId: any = null;
+  private realtimeChannel: any = null;
   private currentUserId: string | null = null;
 
   constructor() {
@@ -59,7 +61,7 @@ class CloudSyncEngine {
   }
 
   /**
-   * Start background sync engine for the logged-in user.
+   * Start background sync engine and instant Realtime WebSocket listeners.
    */
   public start(userId: string): void {
     if (!userId) return;
@@ -69,10 +71,13 @@ class CloudSyncEngine {
       clearInterval(this.syncIntervalId);
     }
 
-    // Trigger immediate sync on start
+    // 1. Setup instant Supabase Realtime WebSocket subscription
+    this.setupRealtimeSubscription(userId);
+
+    // 2. Trigger immediate sync on start
     void this.triggerSync();
 
-    // Background interval sync every 60 seconds
+    // 3. Fallback background sync interval
     this.syncIntervalId = setInterval(() => {
       if (this.isOnline()) {
         void this.triggerSync();
@@ -81,15 +86,91 @@ class CloudSyncEngine {
   }
 
   /**
-   * Stop background sync engine (e.g. on logout).
+   * Stop background sync engine and release Realtime WebSockets.
    */
   public stop(): void {
     if (this.syncIntervalId) {
       clearInterval(this.syncIntervalId);
       this.syncIntervalId = null;
     }
+    if (this.realtimeChannel) {
+      void supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
     this.currentUserId = null;
     this.updateStatus('synced', 0);
+  }
+
+  /**
+   * Establish Realtime WebSocket connection for live database reactions.
+   */
+  private setupRealtimeSubscription(userId: string): void {
+    if (!isSupabaseConfigured || !userId) return;
+    const uuid = toDeterministicUUID(userId);
+
+    if (this.realtimeChannel) {
+      void supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
+
+    this.realtimeChannel = supabase
+      .channel(`cloud-sync-live:${uuid}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messenger_conversations',
+        },
+        async (payload) => {
+          if (payload.new) {
+            const item = payload.new as any;
+            if (item.user1_id === uuid || item.user2_id === uuid) {
+              await bulkUpsertRemoteConversations([
+                {
+                  id: item.id,
+                  user_id: userId,
+                  title: item.last_message_preview || 'Chat',
+                  created_at: new Date(item.last_message_time || item.updated_at).getTime(),
+                  last_updated_at: new Date(item.updated_at).getTime(),
+                  sync_status: 'synced',
+                  is_deleted: 0,
+                },
+              ]);
+              notifyTableChanged('conversations');
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messenger_messages',
+        },
+        async (payload) => {
+          if (payload.new) {
+            const item = payload.new as any;
+            await bulkUpsertRemoteMessages([
+              {
+                id: item.id,
+                conversation_id: item.conversation_id,
+                user_id: item.sender_id,
+                sender: item.sender_id === userId ? 'user' : 'assistant',
+                text: item.text_content || '',
+                attachments_json: null,
+                image_url: item.media_url || null,
+                timestamp: new Date(item.created_at).getTime(),
+                sync_status: 'synced',
+                is_deleted: 0,
+              },
+            ]);
+            notifyTableChanged('messages');
+          }
+        }
+      )
+      .subscribe();
   }
 
   public isOnline(): boolean {
@@ -278,6 +359,7 @@ class CloudSyncEngine {
           is_deleted: 0,
         }));
         await bulkUpsertRemoteConversations(remoteConversations);
+        notifyTableChanged('conversations');
       }
     } catch (err) {
       console.warn('[CloudSync] Failed to pull downstream changes from Supabase:', err);
@@ -316,6 +398,7 @@ class CloudSyncEngine {
           is_deleted: 0,
         }));
         await bulkUpsertRemoteMessages(remoteMessages);
+        notifyTableChanged('messages');
       }
     } catch (err) {
       console.warn(`[CloudSync] Failed to pull messages for conversation ${conversationId}:`, err);

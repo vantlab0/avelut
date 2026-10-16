@@ -7,6 +7,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { prepareMarkdown, rehypeMarkdownPresentation } from '../utils/markdownPreprocess';
 import { CodeBlock } from './CodeBlock';
+import { ActionCard } from './ActionCard';
 
 interface MarkdownContentProps {
   content: string;
@@ -34,10 +35,30 @@ const components: Components = {
   thead: ({ children }) => <thead className="bg-neutral-100 dark:bg-neutral-800/80 font-semibold text-neutral-900 dark:text-white">{children}</thead>,
   th: ({ children, style }) => <th style={style} className="p-3 border-b border-neutral-200 dark:border-neutral-700 font-semibold">{children}</th>,
   td: ({ children, style }) => <td style={style} className="p-3 border-b border-neutral-100 dark:border-neutral-800/60 text-neutral-800 dark:text-neutral-200">{children}</td>,
+  img: ({ src, alt }) => (
+    <div className="not-prose my-5 w-full rounded-3xl overflow-hidden border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 shadow-md">
+      <img
+        src={src}
+        alt={alt || 'Visual Reference'}
+        loading="lazy"
+        className="w-full max-h-[420px] object-cover hover:scale-[1.01] transition-transform duration-300"
+      />
+      {alt && (
+        <div className="px-4 py-2 text-xs text-neutral-600 dark:text-neutral-400 font-medium italic border-t border-neutral-200/80 dark:border-neutral-800/80 bg-neutral-50 dark:bg-neutral-950/60 flex items-center gap-1.5">
+          <span className="text-blue-500 font-bold not-italic">📷 Visual Reference:</span>
+          <span>{alt}</span>
+        </div>
+      )}
+    </div>
+  ),
   code: ({ node, className, children }) => {
     if (node?.properties?.['data-block']) {
       const language = /language-([^\s]+)/.exec(className || '')?.[1] || 'code';
-      return <CodeBlock language={language} value={String(children ?? '').replace(/\n$/, '')} />;
+      const cleanVal = String(children ?? '').replace(/\n$/, '');
+      if (language.startsWith('action:') || language === 'cbt' || language === 'flashcards') {
+        return <ActionCard type={language as any} rawPayload={cleanVal} />;
+      }
+      return <CodeBlock language={language} value={cleanVal} />;
     }
     return <code className="bg-neutral-100 dark:bg-neutral-800 text-[#2563EB] dark:text-[#60A5FA] font-mono px-1.5 py-0.5 rounded text-[13px] font-medium">{children}</code>;
   },

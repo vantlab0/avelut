@@ -36,6 +36,10 @@ export interface UserProfile {
   personal_api_key?: string;
   use_personal_token?: boolean;
   paystack_reference?: string;
+  dva_account_number?: string;
+  dva_bank_name?: string;
+  dva_account_name?: string;
+  paystack_customer_code?: string;
   selected_free_course_id?: string;
   fcm_token?: string;
   default_semester_tab?: string;
@@ -341,6 +345,7 @@ export interface AppSettings {
   upload_center_uploads_enabled?: boolean;
   coming_soon_enabled?: boolean;
   paystack_public_key?: string;
+  enable_dedicated_accounts?: boolean;
   custom_user_limit_rpm?: number;
   custom_user_limit_tpm?: number;
   usage_settings?: UsageSettings;

@@ -6,6 +6,9 @@ import { DEFAULT_USAGE_SETTINGS } from '../utils/appSettings';
 import { Browser } from '@capacitor/browser';
 import { isNative } from '../utils/capacitorUtils';
 import { TransactionRowSkeleton } from './Skeleton';
+import { DedicatedAccountCard } from './DedicatedAccountCard';
+import { triggerPaystackPurchase } from '../utils/usage';
+import { useToast } from '../hooks/useToast';
 
 interface BillingSettingsProps {
   userProfile: UserProfile;
@@ -13,11 +16,60 @@ interface BillingSettingsProps {
   onProfileUpdate: (updatedData: Partial<UserProfile>) => Promise<{ success: boolean; error?: string }>;
 }
 
-export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProfile, appSettings }) => {
+export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProfile, appSettings, onProfileUpdate }) => {
   const usageSettings = appSettings?.usage_settings || DEFAULT_USAGE_SETTINGS;
   const tiers = usageSettings?.tiers || (usageSettings as any)?.plans || DEFAULT_USAGE_SETTINGS.tiers;
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isLoadingTx, setIsLoadingTx] = useState(true);
+
+  const { addToast } = useToast();
+  const [isProcessingPaystack, setIsProcessingPaystack] = useState(false);
+  const [selectedTopupAmount, setSelectedTopupAmount] = useState<number>(300);
+
+  const handleInstantPaystackTopup = async (amount: number) => {
+    // Google Play Store Policy Guard:
+    // If running inside the native Android APK/AAB, 3rd party embedded popups for digital goods are restricted by Google.
+    // We open the external browser (Chrome Custom Tabs) to keep the app 100% compliant with Google Play.
+    if (isNative()) {
+      const billingUrl = `https://avelut.xyz/refill-credits?uid=${userProfile.uid}&amount=${amount}`;
+      await Browser.open({ url: billingUrl });
+      return;
+    }
+
+    if (!appSettings?.paystack_public_key) {
+      handleManageBilling();
+      return;
+    }
+    if (!userProfile?.email) {
+      addToast('Please ensure your account has a valid email address.', 'warning');
+      return;
+    }
+    setIsProcessingPaystack(true);
+    try {
+      await triggerPaystackPurchase({
+        publicKey: appSettings.paystack_public_key,
+        email: userProfile.email,
+        amount,
+        userId: userProfile.uid,
+        purchaseType: 'additional_credits',
+        metadata: { credit_amount: amount, pack_label: `Credit Refill ₦${amount}` },
+        addToast,
+        onSuccess: async (reference) => {
+          const currentBal = userProfile.ai_credits_balance ?? userProfile.ai_credits ?? 0;
+          const newBal = currentBal + amount;
+          await onProfileUpdate({
+            ai_credits: newBal,
+            ai_credits_balance: newBal,
+          });
+          addToast(`Successfully credited ₦${amount.toLocaleString()} to your balance!`, 'success');
+        },
+      });
+    } catch (err: any) {
+      console.warn('Paystack checkout error:', err);
+    } finally {
+      setIsProcessingPaystack(false);
+    }
+  };
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -91,16 +143,91 @@ export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProf
               View Subscription Plans
             </button>
             <button
-              onClick={handleManageBilling}
-              className="px-6 py-3 bg-[#F1F5F9] dark:bg-slate-800 hover:bg-[#E3E9F1] text-[#0F172A] dark:text-white rounded-2xl text-xs font-bold transition-all w-full md:w-auto border border-[#E3E9F1] dark:border-slate-700 cursor-pointer active:scale-95 text-center"
+              onClick={() => handleInstantPaystackTopup(300)}
+              disabled={isProcessingPaystack}
+              className="px-6 py-3 bg-[#F1F5F9] dark:bg-slate-800 hover:bg-[#E3E9F1] text-[#0F172A] dark:text-white rounded-2xl text-xs font-bold transition-all w-full md:w-auto border border-[#E3E9F1] dark:border-slate-700 cursor-pointer active:scale-95 text-center disabled:opacity-50"
             >
-              Refill Credits (₦300 Pass)
+              {isProcessingPaystack ? 'Opening Paystack...' : 'Instant Refill (₦300 Pass)'}
             </button>
           </div>
         </div>
       </div>
 
+      {/* Payment Method Switcher: Dedicated Virtual Account vs In-App Paystack Modal */}
+      {appSettings?.enable_dedicated_accounts ? (
+        <DedicatedAccountCard
+          userProfile={userProfile}
+          onAccountCreated={(acct) => {
+            void onProfileUpdate({
+              dva_account_number: acct.account_number,
+              dva_bank_name: acct.bank_name,
+              dva_account_name: acct.account_name,
+            });
+          }}
+        />
+      ) : (
+        /* In-App Paystack Top-Up Card (Zero Redirect) */
+        <div className="bg-white dark:bg-[#0A0A0A] border border-[#E3E9F1] dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h3 className="text-lg font-black text-[#0F172A] dark:text-white tracking-tight">
+                  Instant Credit Refill (In-App Checkout)
+                </h3>
+              </div>
+              <p className="text-xs text-[#64748B] dark:text-slate-400 mt-1">
+                Top up your credits in seconds via Card, Bank Transfer, or USSD without leaving the app.
+              </p>
+            </div>
+            <span className="text-[11px] font-bold px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-200 dark:border-emerald-800 self-start sm:self-auto">
+              Zero Redirect • Instant Credit
+            </span>
+          </div>
 
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { amount: 300, label: 'Single Topic Pass', badge: '₦300' },
+              { amount: 500, label: 'Standard Refill', badge: '₦500' },
+              { amount: 1000, label: 'Plus Pack', badge: '₦1,000' },
+              { amount: 2500, label: 'Power Pack', badge: '₦2,500' },
+            ].map((pack) => (
+              <button
+                key={pack.amount}
+                type="button"
+                onClick={() => setSelectedTopupAmount(pack.amount)}
+                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  selectedTopupAmount === pack.amount
+                    ? 'border-[#0066FF] bg-blue-50/50 dark:bg-blue-950/20 shadow-2xs'
+                    : 'border-[#E3E9F1] dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-700 bg-[#F8FAFC] dark:bg-slate-900/40'
+                }`}
+              >
+                <div className="text-lg font-black text-[#0F172A] dark:text-white mb-1">
+                  {pack.badge}
+                </div>
+                <div className="text-[11px] font-semibold text-[#64748B] dark:text-slate-400">
+                  {pack.label}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-[#E3E9F1] dark:border-slate-800">
+            <div className="text-xs text-[#64748B] dark:text-slate-400 font-medium">
+              You will receive <strong className="text-[#0F172A] dark:text-white font-bold">{selectedTopupAmount.toLocaleString()} AI Credits</strong> immediately after payment.
+            </div>
+            <button
+              type="button"
+              onClick={() => handleInstantPaystackTopup(selectedTopupAmount)}
+              disabled={isProcessingPaystack}
+              className="w-full sm:w-auto px-8 py-3.5 bg-[#0066FF] hover:bg-[#002D62] disabled:opacity-50 text-white rounded-2xl font-black text-xs transition-all cursor-pointer shadow-md active:scale-95 flex items-center justify-center gap-2"
+            >
+              <i className="bi bi-shield-check"></i>
+              {isProcessingPaystack ? 'Loading Checkout...' : `Pay ₦${selectedTopupAmount.toLocaleString()} via Paystack`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Recent Transactions */}
       <div className="bg-white dark:bg-black p-6 sm:p-8 rounded-3xl border border-slate-200 dark:border-white/10 shadow-sm flex flex-col gap-6">

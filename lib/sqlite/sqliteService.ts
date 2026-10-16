@@ -314,30 +314,73 @@ export async function runQuery<T = any>(sql: string, params: any[] = []): Promis
   }
 }
 
+// =========================================================================
+// REACTIVE TABLE EVENT BUS (Instant 0ms UI Updates on DB Changes)
+// =========================================================================
+type TableListener = () => void;
+const tableListeners = new Map<string, Set<TableListener>>();
+
+export function extractTableName(sql: string): string | null {
+  const match = sql.match(/(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+([a-zA-Z0-9_]+)/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+export function subscribeTable(table: string, listener: TableListener): () => void {
+  const t = table.toLowerCase();
+  if (!tableListeners.has(t)) {
+    tableListeners.set(t, new Set());
+  }
+  tableListeners.get(t)!.add(listener);
+  return () => {
+    tableListeners.get(t)?.delete(listener);
+  };
+}
+
+export function notifyTableChanged(table: string): void {
+  const t = table.toLowerCase();
+  const listeners = tableListeners.get(t);
+  if (listeners && listeners.size > 0) {
+    listeners.forEach((cb) => {
+      try {
+        cb();
+      } catch (err) {
+        console.warn(`[SQLite] Error in table listener for ${table}:`, err);
+      }
+    });
+  }
+}
+
 /**
  * Safe run statement helper for INSERT, UPDATE, DELETE.
  */
 export async function runStatement(sql: string, params: any[] = []): Promise<{ changes?: number; lastId?: number }> {
+  const targetTable = extractTableName(sql);
   try {
     const db = await getDatabaseConnection();
     if (!db) {
-      return runFallbackStatement(sql, params);
+      const res = runFallbackStatement(sql, params);
+      if (targetTable) notifyTableChanged(targetTable);
+      return res;
     }
     const isConn = (await db.isDBOpen())?.result;
     if (!isConn) {
-      return runFallbackStatement(sql, params);
+      const res = runFallbackStatement(sql, params);
+      if (targetTable) notifyTableChanged(targetTable);
+      return res;
     }
     const res = await db.run(sql, params);
     await persistWebStore();
+    if (targetTable) notifyTableChanged(targetTable);
     return {
       changes: res.changes?.changes || 0,
       lastId: res.changes?.lastId || 0,
     };
   } catch (error) {
-    return runFallbackStatement(sql, params);
+    const res = runFallbackStatement(sql, params);
+    if (targetTable) notifyTableChanged(targetTable);
+    return res;
   }
 }
-
 
 /**
  * Execute batch statements in transaction.
@@ -348,6 +391,12 @@ export async function runBatch(statements: string): Promise<void> {
     if (!db) return;
     await db.execute(statements);
     await persistWebStore();
+    // Notify all common tables that could have been updated in batch
+    ['conversations', 'messages', 'exams', 'flashcards', 'app_state'].forEach((tbl) => {
+      if (statements.toLowerCase().includes(tbl)) {
+        notifyTableChanged(tbl);
+      }
+    });
   } catch (error) {
     console.error('[SQLite] Batch execution error:', error);
   }

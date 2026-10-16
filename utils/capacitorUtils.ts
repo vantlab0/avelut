@@ -63,14 +63,45 @@ export const setStatusBarNavy = async (): Promise<void> => {
 
 /**
  * Trigger a light haptic impact — use on button presses for tactile feedback.
+ * Works seamlessly across both native Capacitor and mobile browsers (via navigator.vibrate).
  */
 export const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Light): Promise<void> => {
-  if (!isNative()) return;
   try {
-    await Haptics.impact({ style });
-  } catch (err) {
-    // Silently ignore — haptics not critical
+    if (isNative()) {
+      await Haptics.impact({ style });
+    } else if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(style === ImpactStyle.Heavy ? 25 : style === ImpactStyle.Medium ? 15 : 8);
+    }
+  } catch {
+    // Silently ignore if device doesn't support haptics
   }
+};
+
+/**
+ * Initialize automatic subtle touch feedback on interactive elements across the application.
+ */
+let hapticsInitialized = false;
+export const initGlobalTouchHaptics = (): void => {
+  if (hapticsInitialized || typeof window === 'undefined') return;
+  hapticsInitialized = true;
+
+  let lastHapticTime = 0;
+  window.addEventListener(
+    'pointerdown',
+    (e: PointerEvent) => {
+      const target = (e.target as HTMLElement)?.closest?.(
+        'button, [role="button"], a, input[type="submit"], .clickable-card, [data-haptic]'
+      );
+      if (!target || (target as HTMLButtonElement).disabled) return;
+
+      const now = performance.now();
+      if (now - lastHapticTime > 75) {
+        lastHapticTime = now;
+        void triggerHaptic(ImpactStyle.Light);
+      }
+    },
+    { passive: true, capture: true }
+  );
 };
 
 /**

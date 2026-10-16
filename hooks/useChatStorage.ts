@@ -11,6 +11,8 @@ import {
   LocalMessage
 } from '../services/chatStorageService';
 import { cloudSyncEngine } from '../services/cloudSyncService';
+import { subscribeTable } from '../lib/sqlite/sqliteService';
+import { triggerHaptic } from '../utils/capacitorUtils';
 
 export interface UseChatStorageProps {
   userId: string;
@@ -79,6 +81,22 @@ export function useChatStorage({ userId, activeConversationId }: UseChatStorageP
     void loadMessages(activeConversationId);
   }, [activeConversationId, loadMessages]);
 
+  // Live Reactive Subscriptions: auto-update UI when SQLite rows change locally or via Supabase Realtime
+  useEffect(() => {
+    const unsubConvos = subscribeTable('conversations', () => {
+      void loadConversations();
+    });
+    const unsubMsgs = subscribeTable('messages', () => {
+      if (activeConvoRef.current) {
+        void loadMessages(activeConvoRef.current);
+      }
+    });
+    return () => {
+      unsubConvos();
+      unsubMsgs();
+    };
+  }, [loadConversations, loadMessages]);
+
   /**
    * Save a message locally with zero network latency and queue background sync.
    */
@@ -117,6 +135,9 @@ export function useChatStorage({ userId, activeConversationId }: UseChatStorageP
         }
         return [...prev, newMsg];
       });
+
+      // Subtle tactile feedback (0ms)
+      void triggerHaptic();
 
       // 2. Instant SQLite write & background sync enqueue
       await saveLocalMessage({

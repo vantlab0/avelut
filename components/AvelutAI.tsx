@@ -30,11 +30,12 @@ export default function AvelutAI({
     if (!userProfile?.uid || !onConversationsUpdate) return;
     let isMounted = true;
 
+    // Load purely from local storage / SQLite on user device
     getLocalConversations(userProfile.uid)
       .then((local) => {
-        if (isMounted && local.length > 0) {
+        if (isMounted) {
           onConversationsUpdate(
-            local.map((c) => ({
+            (local || []).map((c) => ({
               id: c.id,
               user_id: c.user_id || userProfile.uid,
               title: c.title || 'New Chat',
@@ -46,40 +47,8 @@ export default function AvelutAI({
       })
       .catch(() => {});
 
-    const conversationsRef = dbRef(db, `chat_conversations/${userProfile.uid}`);
-    const unsubscribe = onValue(conversationsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data: any[] = [];
-        snapshot.forEach((child) => {
-          const val = child.val() || {};
-          data.push({ id: child.key, user_id: val.user_id || userProfile.uid, ...val });
-        });
-        const sorted = data.sort((a, b) => b.last_updated_at - a.last_updated_at);
-        if (isMounted) onConversationsUpdate(sorted as ChatConversation[]);
-      } else {
-        getLocalConversations(userProfile.uid)
-          .then((local) => {
-            if (isMounted && local.length > 0) {
-              onConversationsUpdate(
-                local.map((c) => ({
-                  id: c.id,
-                  user_id: c.user_id || userProfile.uid,
-                  title: c.title || 'New Chat',
-                  created_at: c.created_at || 0,
-                  last_updated_at: c.last_updated_at || c.created_at || 0,
-                }))
-              );
-            } else if (isMounted) {
-              onConversationsUpdate([]);
-            }
-          })
-          .catch(() => {});
-      }
-    });
-
     return () => {
       isMounted = false;
-      off(conversationsRef);
     };
   }, [userProfile?.uid, onConversationsUpdate]);
 

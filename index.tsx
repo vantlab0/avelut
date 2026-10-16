@@ -1,6 +1,10 @@
 import './utils/domPolyfill';
 import { Capacitor } from '@capacitor/core';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
+import { initGlobalTouchHaptics } from './utils/capacitorUtils';
+
+// Initialize zero-latency touch tactile feedback immediately
+initGlobalTouchHaptics();
 
 // Immediately notify native layer that JavaScript loaded successfully.
 // This prevents Capgo's automatic rollback timer from reverting OTA updates.

@@ -455,10 +455,46 @@ export const SystemSettingsView: React.FC = () => {
                         {/* Paystack */}
                         <div className="space-y-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                             <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                <i className="bi bi-credit-card text-emerald-500"></i> Paystack
+                                <i className="bi bi-credit-card text-emerald-500"></i> Paystack (Nigeria & Africa)
                             </h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <input type="text" placeholder="Public Key" value={appSettings.paystack_public_key || ''} onChange={e => setAppSettings({...appSettings, paystack_public_key: e.target.value})} className="p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl outline-none focus:border-amber-500 text-sm" />
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Paystack Public Key</label>
+                                    <input type="text" placeholder="pk_live_... or pk_test_..." value={appSettings.paystack_public_key || ''} onChange={e => setAppSettings({...appSettings, paystack_public_key: e.target.value})} className="w-full p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl outline-none focus:border-amber-500 text-sm font-mono" />
+                                </div>
+                            </div>
+
+                            <div className="pt-3 border-t border-slate-200 dark:border-slate-700/60 space-y-3">
+                                <label className="flex items-start justify-between gap-4 cursor-pointer">
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-bold text-sm text-slate-900 dark:text-white">
+                                                Dedicated Virtual Bank Accounts (DVA)
+                                            </p>
+                                            {appSettings.enable_dedicated_accounts ? (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                                    Dedicated NUBAN Active
+                                                </span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                                    In-App Paystack Popup
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl">
+                                            When enabled, users receive a permanent 10-digit virtual bank account (Wema / Titan Paystack) to top up via bank transfers. 
+                                            <strong className="block text-amber-600 dark:text-amber-400 font-semibold mt-1">
+                                                Note: Requires a verified Paystack Registered Business (CAC approval). Keep toggled OFF while on a Starter Business to use the instant in-app Paystack popup checkout.
+                                            </strong>
+                                        </p>
+                                    </div>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={appSettings.enable_dedicated_accounts || false}
+                                        onChange={e => setAppSettings({...appSettings, enable_dedicated_accounts: e.target.checked})}
+                                        className="w-5 h-5 rounded text-amber-500 focus:ring-amber-500 cursor-pointer mt-1"
+                                    />
+                                </label>
                             </div>
                         </div>
 

@@ -93,6 +93,17 @@
 }
 
 @layer base {
+  /* Native Mobile Touch & Tap Latency Elimination */
+  *, *::before, *::after {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
@@ -126,23 +137,33 @@
     color: #ffffff;
   }
 
-  /* Global Button Animations */
+  /* Global Instant Native Button Reactions & Tactile Press */
   button, 
   [role="button"],
   .clickable-card {
-    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease, background-color 0.15s ease, opacity 0.15s ease, color 0.15s ease;
+    transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.12s ease, background-color 0.12s ease, opacity 0.12s ease, color 0.12s ease;
+    will-change: transform;
+    -webkit-user-select: none;
+    user-select: none;
   }
   
   button:not(:disabled):active, 
   [role="button"]:not(:disabled):active,
   .clickable-card:active {
-    transform: scale(0.96);
+    transform: scale(0.96) translateZ(0);
   }
   
   /* Prevent interaction on disabled */
   button:disabled {
     transform: none !important;
   }
+}
+
+/* GPU Accelerated Native Scrolling and Surface Rendering */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 @layer utilities {

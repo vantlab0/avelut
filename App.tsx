@@ -935,6 +935,7 @@ const App: React.FC = () => {
             userProfileRef.current = null;
             tourStatusRef.current = 'unknown';
             cleanupNativeNotifications();
+            cloudSyncEngine.stop();
           } else {
             const uid = currentUser.uid;
             try {
@@ -965,6 +966,7 @@ const App: React.FC = () => {
             }
 
             initNativeNotifications(currentUser, addToast, setActiveItem, setPendingMessengerChatId);
+            cloudSyncEngine.start(currentUser.uid);
           }
           setIsAuthChecking(false);
           setIsLoading(false);
@@ -1059,6 +1061,21 @@ const App: React.FC = () => {
             appStateListener.then(listener => listener.remove());
         };
     }, [user, addToast]);
+
+    useEffect(() => {
+        const handleAvelutNavigate = (e: any) => {
+            if (e?.detail?.path && typeof window !== 'undefined') {
+                window.history.pushState(null, '', e.detail.path);
+            }
+            if (e?.detail?.view) {
+                setActiveItem(e.detail.view);
+            }
+        };
+        window.addEventListener('avelut_navigate', handleAvelutNavigate);
+        return () => {
+            window.removeEventListener('avelut_navigate', handleAvelutNavigate);
+        };
+    }, []);
 
 
 

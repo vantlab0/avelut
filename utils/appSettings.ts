@@ -257,6 +257,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   show_playstore_modal: true,
   playstore_modal_collect_emails: true,
   paystack_public_key: '',
+  enable_dedicated_accounts: false,
   custom_user_limit_rpm: 10,
   custom_user_limit_tpm: 250000,
   usage_settings: DEFAULT_USAGE_SETTINGS as any,

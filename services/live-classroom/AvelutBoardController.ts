@@ -698,10 +698,6 @@ export class AvelutBoardController {
     this.lessonTitle = title;
   }
 
-  public getElements(): any[] {
-    return [...this.elements];
-  }
-
   public initBoard(title: string): void {
     this.lessonTitle = title;
     this.cursorY = 50;

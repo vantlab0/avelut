@@ -26,7 +26,8 @@ import { ConfirmationModal } from './ConfirmationModal';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingTypingIndicator } from './ThinkingTypingIndicator';
 import { ChatLimitBanner } from './ChatLimitBanner';
-import { showKeyboard, hideKeyboard } from '../utils/capacitorUtils';
+import { showKeyboard, hideKeyboard, triggerHaptic } from '../utils/capacitorUtils';
+import { subscribeTable } from '../lib/sqlite/sqliteService';
 import { ExamStreakWidget } from './widgets/ExamStreakWidget';
 
 export type ChatMode = 'context' | 'fast' | 'deep' | 'exam';
@@ -346,15 +347,17 @@ const GrokChatComposer: React.FC<{
     } catch {}
   }, []);
 
-  // Only soft autofocus on large screens when explicitly requested, never force on mobile
+  // Auto-focus textarea on mount so users can immediately start typing
   useEffect(() => {
-    if (autoFocus && typeof window !== 'undefined' && window.innerWidth > 768) {
+    if (autoFocus) {
       const timer = setTimeout(() => {
-        activateKeyboard();
+        if (textareaRef.current) {
+          textareaRef.current.focus({ preventScroll: true });
+        }
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [autoFocus, activateKeyboard]);
+  }, [autoFocus]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -602,6 +605,10 @@ interface ChatProps {
   onSelectConversation?: (id: string | null) => void;
 }
 
+// Memory cache for instantaneous 0ms frame-0 chat rendering (native instant feel)
+const chatMessagesMemoryCache = new Map<string, Message[]>();
+let chatConversationsMemoryCache: ChatConversation[] = [];
+
 export const Chat: React.FC<ChatProps> = ({ 
   userProfile, 
   onNavigate, 
@@ -610,9 +617,14 @@ export const Chat: React.FC<ChatProps> = ({
   activeConversationId: propActiveConversationId,
   onSelectConversation,
 }) => {
-  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [conversations, setConversations] = useState<ChatConversation[]>(() => chatConversationsMemoryCache);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(propActiveConversationId ?? null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (propActiveConversationId && chatMessagesMemoryCache.has(propActiveConversationId)) {
+      return chatMessagesMemoryCache.get(propActiveConversationId)!;
+    }
+    return [];
+  });
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMode, setSelectedMode] = useState<ChatMode>('context');
@@ -625,6 +637,8 @@ export const Chat: React.FC<ChatProps> = ({
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [isSwitchingChat, setIsSwitchingChat] = useState(false);
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [moreMenuMsgId, setMoreMenuMsgId] = useState<string | null>(null);
   const switchingConvoIdRef = useRef<string | null>(null);
   const newlyCreatedConvoIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -708,18 +722,11 @@ export const Chat: React.FC<ChatProps> = ({
       confirmText: 'Clear',
       onConfirm: async () => {
         setMessages([]);
-        if (activeConversationId) {
-          try {
-            await remove(dbRef(db, `chat_messages/${activeConversationId}`));
-          } catch (e) {
-            console.error('Error clearing messages in db:', e);
-          }
-        }
         setModalState((s) => ({ ...s, isOpen: false }));
         addToast('Messages cleared', 'info');
       },
     });
-  }, [messages.length, activeConversationId, addToast]);
+  }, [messages.length, addToast]);
 
   const handleDeleteCurrentChat = useCallback(() => {
     if (!activeConversationId) return;
@@ -732,8 +739,6 @@ export const Chat: React.FC<ChatProps> = ({
         setIsDeleting(true);
         try {
           await deleteLocalConversation(activeConversationId);
-          await remove(dbRef(db, `chat_conversations/${userProfile.uid}/${activeConversationId}`));
-          await remove(dbRef(db, `chat_messages/${activeConversationId}`));
           setActiveConversationId(null);
           setMessages([]);
           onSelectConversation?.(null);
@@ -747,7 +752,7 @@ export const Chat: React.FC<ChatProps> = ({
         }
       },
     });
-  }, [activeConversationId, userProfile.uid, onSelectConversation, addToast]);
+  }, [activeConversationId, onSelectConversation, addToast]);
 
   useEffect(() => {
     if (!setCustomHeaderConfig) return;
@@ -756,7 +761,6 @@ export const Chat: React.FC<ChatProps> = ({
       title: null,
       hideDefaultRightActions: false,
       hideProfileAvatar: true,
-      className: 'absolute top-0 left-0 right-0 z-40 flex items-center justify-between bg-transparent border-none px-3 sm:px-6 pt-[calc(env(safe-area-inset-top,0px)+2px)] pb-1 pointer-events-none [&>*]:pointer-events-auto',
       onNewChat: handleNewChat,
       onClearChat: handleClearCurrentChat,
       onDeleteChat: handleDeleteCurrentChat,
@@ -778,9 +782,9 @@ export const Chat: React.FC<ChatProps> = ({
   useEffect(() => {
     let isMounted = true;
     getLocalConversations(userProfile.uid).then((localConvos) => {
-      if (isMounted && localConvos.length > 0) {
+      if (isMounted) {
         setConversations(
-          localConvos.map((c) => ({
+          (localConvos || []).map((c) => ({
             id: c.id,
             user_id: c.user_id || userProfile.uid,
             title: c.title || 'New Chat',
@@ -791,37 +795,8 @@ export const Chat: React.FC<ChatProps> = ({
       }
     }).catch(() => {});
 
-    const conversationsRef = dbRef(db, `chat_conversations/${userProfile.uid}`);
-    const unsubscribe = onValue(conversationsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data: any[] = [];
-        snapshot.forEach((child) => {
-          data.push({ id: child.key, ...child.val() });
-        });
-        const sorted = data.sort((a, b) => b.last_updated_at - a.last_updated_at);
-        if (isMounted) setConversations(sorted as ChatConversation[]);
-      } else {
-        getLocalConversations(userProfile.uid).then((localConvos) => {
-          if (isMounted && localConvos.length > 0) {
-            setConversations(
-              localConvos.map((c) => ({
-                id: c.id,
-                user_id: c.user_id || userProfile.uid,
-                title: c.title || 'New Chat',
-                created_at: c.created_at || 0,
-                last_updated_at: c.last_updated_at || c.created_at || 0,
-              }))
-            );
-          } else if (isMounted) {
-            setConversations([]);
-          }
-        }).catch(() => {});
-      }
-    });
-
     return () => {
       isMounted = false;
-      off(conversationsRef);
     };
   }, [userProfile.uid]);
 
@@ -915,87 +890,68 @@ export const Chat: React.FC<ChatProps> = ({
 
     let isMounted = true;
     switchingConvoIdRef.current = activeConversationId;
-    if (!isLoadingRef.current) {
+
+    // Instant native render from memory cache if available (0ms - zero skeleton flicker)
+    if (chatMessagesMemoryCache.has(activeConversationId)) {
+      setMessages(chatMessagesMemoryCache.get(activeConversationId)!);
+      setIsSwitchingChat(false);
+    } else if (!isLoadingRef.current) {
       setIsSwitchingChat(true);
     }
 
-    getLocalMessages(activeConversationId).then((localMsgs) => {
-      if (isMounted && switchingConvoIdRef.current === activeConversationId) {
-        const localFormatted: Message[] = localMsgs.map((m) => {
-          let attachments: any[] | undefined = undefined;
-          if (m.attachments_json) {
-            try {
-              attachments = JSON.parse(m.attachments_json);
-            } catch {}
-          }
-          return {
-            id: m.id,
-            text: m.text,
-            image_url: m.image_url || undefined,
-            attachments,
-            sender: (m.sender === 'user' ? 'user' : 'bot') as 'user' | 'bot',
-            timestamp: m.timestamp,
-          };
-        });
-        setMessages((current) => {
-          if (isLoadingRef.current) {
-            const dbIds = new Set(localFormatted.map((m) => m.id));
-            const inFlight = current.filter((m) => !dbIds.has(m.id));
-            const inFlightUsers = inFlight.filter((m) => m.sender === 'user');
-            const inFlightBots = inFlight.filter((m) => m.sender !== 'user');
-            const merged = [...localFormatted, ...inFlightUsers].sort((a, b) => a.timestamp - b.timestamp);
-            return [...merged, ...inFlightBots] as Message[];
-          }
-          return localFormatted.sort((a, b) => a.timestamp - b.timestamp);
-        });
-        setIsSwitchingChat(false);
-      }
-    }).catch(() => {
-      if (isMounted && switchingConvoIdRef.current === activeConversationId) {
-        setIsSwitchingChat(false);
-      }
-    });
-
-    const messagesRef = dbRef(db, `chat_messages/${activeConversationId}`);
-    const unsubscribe = onValue(messagesRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data: any[] = [];
-        snapshot.forEach((child) => {
-          let attachments: any[] | undefined = undefined;
-          const val = child.val();
-          if (val.attachments_json) {
-            try { attachments = JSON.parse(val.attachments_json); } catch {}
-          }
-          data.push({ id: child.key, ...val, attachments });
-        });
-        const sorted = data.sort((a, b) => a.timestamp - b.timestamp);
+    const loadLocal = () => {
+      getLocalMessages(activeConversationId).then((localMsgs) => {
         if (isMounted && switchingConvoIdRef.current === activeConversationId) {
+          const localFormatted: Message[] = localMsgs.map((m) => {
+            let attachments: any[] | undefined = undefined;
+            if (m.attachments_json) {
+              try {
+                attachments = JSON.parse(m.attachments_json);
+              } catch {}
+            }
+            return {
+              id: m.id,
+              text: m.text,
+              image_url: m.image_url || undefined,
+              attachments,
+              sender: (m.sender === 'user' ? 'user' : 'bot') as 'user' | 'bot',
+              timestamp: m.timestamp,
+            };
+          });
+          const sorted = localFormatted.sort((a, b) => a.timestamp - b.timestamp);
+          chatMessagesMemoryCache.set(activeConversationId, sorted);
           setMessages((current) => {
-            const dbTexts = new Set(sorted.map((m: any) => `${m.sender === 'user' ? 'user' : 'bot'}:${m.text}`));
-            const dbIds = new Set(sorted.map((m: any) => m.id));
-            const inFlight = current.filter(
-              (m) => !dbIds.has(m.id) && !dbTexts.has(`${m.sender}:${m.text}`)
-            );
-            const inFlightUsers = inFlight.filter((m) => m.sender === 'user');
-            const inFlightBots = inFlight.filter((m) => m.sender !== 'user');
-            const merged = [...sorted, ...inFlightUsers].sort((a, b) => a.timestamp - b.timestamp);
-            return [...merged, ...inFlightBots] as Message[];
+            if (isLoadingRef.current) {
+              const dbIds = new Set(sorted.map((m) => m.id));
+              const inFlight = current.filter((m) => !dbIds.has(m.id));
+              const inFlightUsers = inFlight.filter((m) => m.sender === 'user');
+              const inFlightBots = inFlight.filter((m) => m.sender !== 'user');
+              const merged = [...sorted, ...inFlightUsers].sort((a, b) => a.timestamp - b.timestamp);
+              return [...merged, ...inFlightBots] as Message[];
+            }
+            return sorted;
           });
           setIsSwitchingChat(false);
         }
-      } else {
+      }).catch(() => {
         if (isMounted && switchingConvoIdRef.current === activeConversationId) {
           setIsSwitchingChat(false);
-          if (!isLoadingRef.current) {
-            setMessages([]);
-          }
         }
+      });
+    };
+
+    loadLocal();
+
+    // Reactive SQLite table change subscription for live updates
+    const unsubSqlite = subscribeTable('messages', () => {
+      if (isMounted && switchingConvoIdRef.current === activeConversationId) {
+        loadLocal();
       }
     });
 
     return () => {
       isMounted = false;
-      off(messagesRef);
+      unsubSqlite();
     };
   }, [activeConversationId]);
 
@@ -1231,13 +1187,6 @@ export const Chat: React.FC<ChatProps> = ({
           last_updated_at: now,
         });
 
-        const conversationsRef = dbRef(db, `chat_conversations/${userProfile.uid}/${currentConvoId}`);
-        // Fire-and-forget background sync
-        void set(conversationsRef, {
-          title: initialTitle,
-          created_at: now,
-          last_updated_at: now,
-        });
         setActiveConversationId(currentConvoId);
         onSelectConversation?.(currentConvoId);
       }
@@ -1262,7 +1211,6 @@ export const Chat: React.FC<ChatProps> = ({
             const generatedTitle = getResponseText(titleResult).trim().replace(/^["']|["']$/g, '');
             if (generatedTitle && generatedTitle.length > 0) {
               void renameLocalConversation(convoIdForTitle, generatedTitle, userProfile.uid);
-              void update(dbRef(db, `chat_conversations/${userProfile.uid}/${convoIdForTitle}`), { title: generatedTitle });
             }
           } catch (e) {
             console.warn('[Chat] Non-blocking title generation skipped on error:', (e as any)?.message || e);
@@ -1270,7 +1218,7 @@ export const Chat: React.FC<ChatProps> = ({
         })();
       };
 
-      // Save user message to local SQLite asynchronously
+      // Save user message to local SQLite asynchronously (no cloud writes for speed & privacy)
       void saveLocalMessage({
         id: userMsgId,
         conversation_id: currentConvoId,
@@ -1293,35 +1241,53 @@ export const Chat: React.FC<ChatProps> = ({
         });
       };
 
-      const messagesRef = dbRef(db, `chat_messages/${currentConvoId}`);
-      try {
-        push(messagesRef, {
-          text: displayInput,
-          sender: 'user',
-          image_url: currentImages[0] || null,
-          attachments_json: userMsgAttachments.length > 0 ? JSON.stringify(userMsgAttachments) : null,
-          timestamp: serverTimestamp(),
-        });
-      } catch (e) {
-        console.error(e);
-      }
-
-      update(dbRef(db, `chat_conversations/${userProfile.uid}/${currentConvoId}`), { last_updated_at: Date.now() });
-
       const baseSystemInstruction = [
-        'You are Avelut, a smart, concise, and direct AI assistant.',
-        'Respond directly, clearly, and naturally to the user prompt.',
+        'You are Avelut, an elite, interactive AI tutor and academic study partner for students.',
+        'Respond directly, engagingly, clearly, and with rich visual and educational tools.',
         'Guidelines:',
-        '- Be concise and straightforward. Do not include excessive background context or wordy preambles.',
-        '- For simple greetings, reply directly and naturally.',
+        '- Be concise, clear, and structured. Do not include excessive background fluff or wordy preambles.',
         '- When formatting math or equations, use standard LaTeX ($...$ for inline, $$...$$ for blocks).',
         '- When explaining concepts:',
         '  * Use ## and ### headings for sections',
         '  * Use **bold** for key terms and *italics* for emphasis',
-        '  * Highlight critical terms with ==this== or <mark>this</mark>',
         '  * Use bullet lists and numbered steps for readability',
         '  * Use code fences with syntax highlighting for code/examples',
-        '- When given images, thoroughly inspect and solve any mathematical problems, diagrams, text, or questions shown across all provided images.',
+        '- INTERACTIVE TESTING & CBT EXAMS: When a student asks you to test them, quiz them, practice exam questions, or create a mock exam on any topic, output an interactive CBT action card block:',
+        '```action:cbt',
+        '{',
+        '  "title": "Topic Quiz Title",',
+        '  "topic": "Subject/Topic",',
+        '  "durationMinutes": 10,',
+        '  "questions": [',
+        '    {',
+        '      "id": "q1",',
+        '      "question": "Clear multiple choice question?",',
+        '      "options": ["Option A", "Option B", "Option C", "Option D"],',
+        '      "correctAnswer": 0,',
+        '      "explanation": "Brief explanation of why this answer is correct."',
+        '    }',
+        '  ]',
+        '}',
+        '```',
+        '- FLASHCARDS CREATION: When a student asks to generate flashcards or summarize concepts for revision, output an interactive flashcard action card block:',
+        '```action:flashcards',
+        '{',
+        '  "title": "Topic Flashcards Deck",',
+        '  "topic": "Subject/Topic",',
+        '  "cards": [',
+        '    {',
+        '      "front": "Front concept, term, or question",',
+        '      "back": "Clear concise definition or explanation"',
+        '    }',
+        '  ]',
+        '}',
+        '```',
+        '- VISUAL SVG DIAGRAMS: When explaining workflows, structures, architectures, biological/chemical systems, algorithms, geometric layouts, or flowcharts, output a complete, responsive SVG visual diagram inside a ```svg code fence. Use clean viewBox (e.g. viewBox="0 0 600 350"), modern rounded shapes, and clear contrasting colors suited for dark backgrounds (#3b82f6, #10b981, #8b5cf6, #f59e0b, #ffffff, #94a3b8). NEVER just talk about a diagram—render it!',
+        '- EDUCATIONAL REFERENCE IMAGES: When explaining real-world entities, science, nature, anatomy, historical events, laboratory equipment, or physical phenomena, embed an educational Unsplash reference image using markdown: `![Caption description](https://images.unsplash.com/photo-...?...&auto=format&fit=crop&w=800&q=80)` to make learning visually engaging.',
+        '- SUGGESTED NEXT STEPS / FOLLOW-UPS: At the very end of your response, always provide 2 to 3 relevant, highly useful follow-up actions or questions that the student can tap. Prefix EACH follow-up on its own line with "↳ ", for example:',
+        '↳ Test me on this concept with 5 CBT questions',
+        '↳ Generate flashcards for key definitions',
+        '↳ Explain this with an interactive visual SVG diagram',
       ].join('\n');
 
       let modeInstruction = '';
@@ -1505,16 +1471,6 @@ export const Chat: React.FC<ChatProps> = ({
           timestamp: Date.now(),
         });
 
-        try {
-          push(messagesRef, {
-            text: responseText,
-            sender: 'ai',
-            timestamp: serverTimestamp(),
-          });
-        } catch (e) {
-          console.error(e);
-        }
-
         void deductAICredits(userProfile.uid, cost, 'AI Chat Assistant', appSettings, {
           promptTokens: usageAcc.promptTokens,
           completionTokens: usageAcc.completionTokens,
@@ -1601,10 +1557,69 @@ export const Chat: React.FC<ChatProps> = ({
     }
   };
 
+  const handleToggleTTS = useCallback((msgId: string, rawText: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      addToast('Speech playback is not supported on this device.', 'info');
+      return;
+    }
+    if (speakingMsgId === msgId) {
+      window.speechSynthesis.cancel();
+      setSpeakingMsgId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const cleanSpeechText = rawText
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/[#*_~>]/g, '')
+      .replace(/↳\s.*$/gm, '')
+      .trim();
+
+    if (!cleanSpeechText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanSpeechText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onend = () => setSpeakingMsgId(null);
+    utterance.onerror = () => setSpeakingMsgId(null);
+    setSpeakingMsgId(msgId);
+    window.speechSynthesis.speak(utterance);
+  }, [speakingMsgId, addToast]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const parseFollowUpsAndContent = (text: string) => {
+    if (!text) return { cleanedText: '', followUps: [] };
+    const lines = text.split('\n');
+    const followUps: string[] = [];
+    const contentLines: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (trimmed.startsWith('↳')) {
+        const prompt = trimmed.replace(/^↳\s*/, '').trim();
+        if (prompt) followUps.push(prompt);
+      } else {
+        contentLines.push(lines[i]);
+      }
+    }
+
+    return {
+      cleanedText: contentLines.join('\n').trim(),
+      followUps,
+    };
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-white dark:bg-black overflow-hidden text-neutral-900 dark:text-white">
       {/* MESSAGES / EMPTY STATE AREA */}
-      <div className="flex-1 overflow-y-auto px-4 pt-[calc(env(safe-area-inset-top,0px)+2.75rem)] pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex-1 overflow-y-auto px-4 pt-3 sm:pt-4 pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {isSwitchingChat ? (
           <div className="w-full max-w-3xl mx-auto py-10 space-y-6 animate-in fade-in duration-300">
             {/* Soft, beautiful chat skeleton loader */}
@@ -1635,7 +1650,8 @@ export const Chat: React.FC<ChatProps> = ({
             {messages.map((msg, index) => (
               <div
                 key={msg.id}
-                className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
+                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 80px' }}
+                className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} gpu-accelerated animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
               >
                 {msg.sender === 'user' ? (
                   <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
@@ -1658,96 +1674,175 @@ export const Chat: React.FC<ChatProps> = ({
                           />
                         </div>
                       ) : (
-                        <div className="min-w-0">
-                          <MarkdownContent content={msg.text} />
-                          {isLoading && index === messages.length - 1 && (
-                            <span aria-hidden="true" className="inline-block w-2 h-2 ml-1.5 bg-blue-500 dark:bg-blue-400 rounded-full animate-pulse shadow-[0_0_6px_rgba(59,130,246,0.8)] align-middle" />
-                          )}
-                        </div>
+                        (() => {
+                          const { cleanedText, followUps } = parseFollowUpsAndContent(msg.text);
+                          return (
+                            <div className="min-w-0">
+                              <MarkdownContent content={cleanedText || msg.text} />
+                              {isLoading && index === messages.length - 1 && (
+                                <span aria-hidden="true" className="inline-block w-2 h-2 ml-1.5 bg-blue-500 dark:bg-blue-400 rounded-full animate-pulse shadow-[0_0_6px_rgba(59,130,246,0.8)] align-middle" />
+                              )}
+
+                              {/* Interactive Suggested Follow-Up Prompts (matching user screenshot) */}
+                              {followUps.length > 0 && (!isLoading || index < messages.length - 1) && (
+                                <div className="flex flex-col items-start gap-2.5 mt-5 mb-2 pl-0.5">
+                                  {followUps.map((prompt, pIdx) => (
+                                    <button
+                                      key={pIdx}
+                                      type="button"
+                                      onClick={() => {
+                                        triggerHaptic();
+                                        void handleSendMessage(prompt);
+                                      }}
+                                      className="group flex items-start sm:items-center gap-2.5 text-left text-[14px] sm:text-[15px] text-neutral-200 dark:text-neutral-200 hover:text-white transition-colors cursor-pointer"
+                                    >
+                                      <span className="text-neutral-400 group-hover:text-white text-base leading-none select-none font-sans">↳</span>
+                                      <span className="underline underline-offset-[5px] decoration-neutral-500/80 group-hover:decoration-white font-normal transition-colors">
+                                        {prompt}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Exact Action Row Matching Screenshot: Copy, Thumbs Up, Thumbs Down, Speaker, Share, More */}
+                              <div className="pt-2">
+                                <div className="flex items-center gap-4 text-neutral-400 dark:text-neutral-400 select-none">
+                                  {/* Copy button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyMessage(cleanedText || msg.text)}
+                                    className="p-1 rounded-md hover:text-white transition-colors cursor-pointer"
+                                    title="Copy text"
+                                    aria-label="Copy text"
+                                  >
+                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                    </svg>
+                                  </button>
+
+                                  {/* Thumbs up button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleLike(msg.id, 'up')}
+                                    className={`p-1 rounded-md transition-colors cursor-pointer ${
+                                      likedMessages[msg.id] === 'up' ? 'text-blue-500 fill-blue-500/20' : 'hover:text-white'
+                                    }`}
+                                    title="Good response"
+                                    aria-label="Good response"
+                                  >
+                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                                    </svg>
+                                  </button>
+
+                                  {/* Thumbs down button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleLike(msg.id, 'down')}
+                                    className={`p-1 rounded-md transition-colors cursor-pointer ${
+                                      likedMessages[msg.id] === 'down' ? 'text-red-500 fill-red-500/20' : 'hover:text-white'
+                                    }`}
+                                    title="Bad response"
+                                    aria-label="Bad response"
+                                  >
+                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                                    </svg>
+                                  </button>
+
+                                  {/* Speaker (Read aloud TTS) button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleTTS(msg.id, cleanedText || msg.text)}
+                                    className={`p-1 rounded-md transition-colors cursor-pointer ${
+                                      speakingMsgId === msg.id ? 'text-blue-400 animate-pulse' : 'hover:text-white'
+                                    }`}
+                                    title={speakingMsgId === msg.id ? 'Stop reading' : 'Read aloud'}
+                                    aria-label={speakingMsgId === msg.id ? 'Stop reading' : 'Read aloud'}
+                                  >
+                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                                    </svg>
+                                  </button>
+
+                                  {/* Share button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleShareMessage(cleanedText || msg.text)}
+                                    className="p-1 rounded-md hover:text-white transition-colors cursor-pointer"
+                                    title="Share response"
+                                    aria-label="Share response"
+                                  >
+                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                                      <circle cx="18" cy="5" r="3" />
+                                      <circle cx="6" cy="12" r="3" />
+                                      <circle cx="18" cy="19" r="3" />
+                                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                                    </svg>
+                                  </button>
+
+                                  {/* More button (vertical 3-dots) with popover dropdown */}
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => setMoreMenuMsgId((prev) => (prev === msg.id ? null : msg.id))}
+                                      className="p-1 rounded-md hover:text-white transition-colors cursor-pointer"
+                                      title="More options"
+                                      aria-label="More options"
+                                    >
+                                      <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="currentColor">
+                                        <circle cx="12" cy="5" r="1.75" />
+                                        <circle cx="12" cy="12" r="1.75" />
+                                        <circle cx="12" cy="19" r="1.75" />
+                                      </svg>
+                                    </button>
+
+                                    {moreMenuMsgId === msg.id && (
+                                      <div className="absolute left-0 bottom-full mb-2 w-40 bg-neutral-900 border border-neutral-800 rounded-xl shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-150">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setMoreMenuMsgId(null);
+                                            handleRegenerateMessage(index);
+                                          }}
+                                          className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors flex items-center gap-2"
+                                        >
+                                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                          </svg>
+                                          Regenerate
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setMoreMenuMsgId(null);
+                                            addToast('Thank you for reporting. Our team will review this response.', 'info');
+                                          }}
+                                          className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors flex items-center gap-2"
+                                        >
+                                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                          </svg>
+                                          Report issue
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Subtle horizontal separator line under the action row as in the screenshot */}
+                                <div className="w-full border-b border-neutral-800/80 dark:border-neutral-800/80 mt-3" />
+                              </div>
+                            </div>
+                          );
+                        })()
                       )}
                     </div>
-
-                    {msg.text && (
-                      <div className="flex items-center gap-1 mt-3 text-neutral-500 dark:text-neutral-400 select-none">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleLike(msg.id, 'up')}
-                          className={`p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors ${
-                            likedMessages[msg.id] === 'up' ? 'text-blue-600 dark:text-blue-400' : ''
-                          }`}
-                          title="Good response"
-                          aria-label="Good response"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422-.068.85-.31 1.196l-2.483 3.548c-.412.589-1.082.941-1.796.941H12.75a3 3 0 01-2.006-.764l-2.073-1.866a3 3 0 00-2.006-.764H5.25a.75.75 0 01-.75-.75V11.25c0-.414.336-.75.75-.75h1.383z" />
-                          </svg>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleToggleLike(msg.id, 'down')}
-                          className={`p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors ${
-                            likedMessages[msg.id] === 'down' ? 'text-red-600 dark:text-red-400' : ''
-                          }`}
-                          title="Bad response"
-                          aria-label="Bad response"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.367 13.5c-.806 0-1.533.446-2.031 1.08a9.041 9.041 0 01-2.861 2.4c-.723.384-1.35.956-1.653 1.715a4.498 4.498 0 00-.322 1.672V21a.75.75 0 01-.75.75A2.25 2.25 0 017.5 19.5c0-1.152.26-2.243.723-3.218.266-.558-.107-1.282-.725-1.282H4.372c-1.026 0-1.945-.694-2.054-1.715a2.235 2.235 0 01.31-1.196l2.483-3.548c.412-.589 1.082-.941 1.796-.941h4.343a3 3 0 012.006.764l2.073 1.866c.57.513 1.298.764 2.006.764h1.383c.414 0 .75.336.75.75v5.25c0 .414-.336.75-.75.75h-1.383z" />
-                          </svg>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRegenerateMessage(index)}
-                          className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                          title="Regenerate response"
-                          aria-label="Regenerate response"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M20.985 8.358a9.003 9.003 0 00-15.357-2m15.357 2H16.023m-4.956 9.349H6.075v.001m-4.993-1.01a9.003 9.003 0 0015.357 2m-15.357-2H6.075" />
-                          </svg>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleCopyMessage(msg.text)}
-                          className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                          title="Copy text"
-                          aria-label="Copy text"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25c0-.621.504-1.125 1.125-1.125h6.75c.621 0 1.125.504 1.125 1.125v9.25c0 .621-.504 1.125-1.125 1.125z" />
-                          </svg>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleShareMessage(msg.text)}
-                          className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                          title="Share"
-                          aria-label="Share"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
-                          </svg>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => addToast('More options', 'info')}
-                          className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                          title="More options"
-                          aria-label="More options"
-                        >
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                            <circle cx="5" cy="12" r="2" />
-                            <circle cx="12" cy="12" r="2" />
-                            <circle cx="19" cy="12" r="2" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -1812,7 +1907,7 @@ export const Chat: React.FC<ChatProps> = ({
         onOpenCamera={() => setIsCameraOpen(true)}
         onSend={() => handleSendMessage()}
         onStop={handleStopGenerating}
-        autoFocus={false}
+        autoFocus={true}
       />
 
       {isCameraOpen && (

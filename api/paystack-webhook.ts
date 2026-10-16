@@ -98,9 +98,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const verifiedAmountKobo = Number(data.amount);
     const verifiedAmountNgn = Number.isFinite(verifiedAmountKobo) ? Math.round(verifiedAmountKobo) / 100 : 0;
 
-    if (!uid) {
-      console.error('Paystack webhook charge.success missing user_id in metadata');
+    let resolvedUid = uid;
+    const isDvaPayment = data.channel === 'dedicated_bank' || Boolean(data.dedicated_account?.account_number);
+
+    // If metadata did not supply user_id, resolve user from dedicated account number or customer info
+    if (!resolvedUid && isDvaPayment) {
+      const acctNum = data.dedicated_account?.account_number;
+      if (acctNum) {
+        const { data: dvaMapping } = await supabaseAdmin
+          .from('app_kv')
+          .select('value, value_json')
+          .eq('key', `dva_account/${acctNum}`)
+          .maybeSingle();
+
+        if (dvaMapping) {
+          const raw = dvaMapping.value || dvaMapping.value_json;
+          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          if (parsed?.user_id) {
+            resolvedUid = parsed.user_id;
+          }
+        }
+      }
+
+      if (!resolvedUid && data.customer?.customer_code) {
+        const { data: profileWithCode } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('paystack_customer_code', data.customer.customer_code)
+          .maybeSingle();
+        if (profileWithCode?.id) {
+          resolvedUid = profileWithCode.id;
+        }
+      }
+
+      if (!resolvedUid && data.customer?.email) {
+        const { data: profileWithEmail } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('email', data.customer.email.toLowerCase().trim())
+          .maybeSingle();
+        if (profileWithEmail?.id) {
+          resolvedUid = profileWithEmail.id;
+        }
+      }
+    }
+
+    if (!resolvedUid) {
+      console.error('Paystack webhook charge.success missing user identification (no metadata.user_id and no DVA mapping)');
       return res.status(200).send('OK');
+    }
+
+    // Idempotency: verify this transaction reference hasn't been credited already
+    if (reference) {
+      const { data: alreadyProcessed } = await supabaseAdmin
+        .from('app_kv')
+        .select('key')
+        .eq('key', `processed_paystack_ref/${reference}`)
+        .maybeSingle();
+
+      if (alreadyProcessed) {
+        console.log(`[Paystack Webhook] Reference ${reference} already processed. Skipping duplicate.`);
+        return res.status(200).send('OK');
+      }
     }
 
     try {
@@ -112,10 +171,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           is_paid_subscriber: true,
           subscription_status: effectivePlan,
           updated_at: new Date().toISOString(),
-        }).eq('id', uid);
+        }).eq('id', resolvedUid);
 
         await supabaseAdmin.from('subscriptions').upsert({
-          user_id: uid,
+          user_id: resolvedUid,
           plan_type: effectivePlan,
           status: 'active',
           paystack_reference: reference,
@@ -129,18 +188,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const { data: profile } = await supabaseAdmin
           .from('profiles')
-          .select('ai_credits')
-          .eq('id', uid)
+          .select('ai_credits, ai_credits_balance')
+          .eq('id', resolvedUid)
           .maybeSingle();
 
-        const currentCredits = profile?.ai_credits || 0;
+        const currentCredits = profile?.ai_credits_balance ?? profile?.ai_credits ?? 0;
+        const newBalance = currentCredits + creditsToAdd;
+
         await supabaseAdmin.from('profiles').update({
-          ai_credits: currentCredits + creditsToAdd,
+          ai_credits: newBalance,
+          ai_credits_balance: newBalance,
           updated_at: new Date().toISOString(),
-        }).eq('id', uid);
+        }).eq('id', resolvedUid);
+
+        // Record payment in app_kv
+        if (reference) {
+          await supabaseAdmin.from('app_kv').upsert({
+            key: `processed_paystack_ref/${reference}`,
+            value: {
+              user_id: resolvedUid,
+              reference,
+              amount: verifiedAmountNgn,
+              credits_added: creditsToAdd,
+              channel: data.channel || (isDvaPayment ? 'dedicated_bank' : 'standard'),
+              processed_at: Date.now(),
+            },
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'key' });
+        }
+
+        // Send instant Push Notification to user
+        try {
+          const apiBase = process.env.VITE_APP_URL || 'https://www.avelut.xyz';
+          await fetch(`${apiBase}/api/notifications`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'send',
+              targetUserId: resolvedUid,
+              title: '⚡ Top-up Received!',
+              message: `₦${verifiedAmountNgn.toLocaleString()} received via bank transfer! ${creditsToAdd.toLocaleString()} AI credits added to your wallet.`,
+              data: { route: 'billing' },
+            }),
+          });
+        } catch (notifErr) {
+          console.warn('[Paystack Webhook] Push notification warning:', notifErr);
+        }
       }
 
-      console.log('Successfully processed Paystack webhook for user:', uid, 'ref:', reference);
+      console.log('Successfully processed Paystack webhook for user:', resolvedUid, 'ref:', reference, 'channel:', data.channel);
     } catch (dbErr) {
       console.error('Error updating Supabase from Vercel Webhook:', dbErr);
       return res.status(500).json({ error: 'Database update failed' });
