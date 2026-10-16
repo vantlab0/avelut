@@ -9,21 +9,24 @@ import { createClient } from "@supabase/supabase-js";
  * Upload a binary buffer directly to Supabase Storage using Node's native https module.
  * Bypasses Node undici fetch issues on Windows with large payloads.
  */
-function uploadToSupabaseStorage(supabaseUrl, key, bucket, objectPath, buffer, contentType) {
+function uploadFileToSupabaseStorage(supabaseUrl, key, bucket, objectPath, filePath, contentType) {
   return new Promise((resolve, reject) => {
+    const stat = fs.statSync(filePath);
     const url = new URL(`${supabaseUrl}/storage/v1/object/${bucket}/${objectPath}`);
+    const agent = new https.Agent({ keepAlive: false });
     const req = https.request(
       url,
       {
         method: "POST",
+        agent,
         headers: {
           Authorization: `Bearer ${key}`,
           apikey: key,
           "Content-Type": contentType,
-          "Content-Length": buffer.length,
+          "Content-Length": stat.size,
           "x-upsert": "true",
         },
-        timeout: 300000, // 5 min timeout
+        timeout: 600000, // 10 min timeout
       },
       (res) => {
         let data = "";
@@ -42,14 +45,21 @@ function uploadToSupabaseStorage(supabaseUrl, key, bucket, objectPath, buffer, c
       }
     );
 
-    req.on("error", reject);
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error("Supabase Storage upload timed out after 300s"));
+    req.on("error", (err) => {
+      reject(err);
     });
 
-    req.write(buffer);
-    req.end();
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Supabase Storage upload timed out after 600s"));
+    });
+
+    const readStream = fs.createReadStream(filePath);
+    readStream.on("error", (err) => {
+      req.destroy();
+      reject(err);
+    });
+    readStream.pipe(req);
   });
 }
 
@@ -138,17 +148,17 @@ async function deployOTA() {
     // Upload using native HTTPS module with retries
     let uploadSuccess = false;
     let lastError = null;
-    const maxAttempts = 3;
+    const maxAttempts = 5;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         console.log(`[OTA] Upload attempt ${attempt}/${maxAttempts}...`);
-        await uploadToSupabaseStorage(
+        await uploadFileToSupabaseStorage(
           supabaseUrl,
           supabaseKey,
           "ota-releases",
           objectPath,
-          zipBuffer,
+          "./dist.zip",
           "application/zip"
         );
         uploadSuccess = true;
@@ -157,7 +167,7 @@ async function deployOTA() {
         lastError = err;
         console.warn(`[OTA] Attempt ${attempt} failed: ${err.message}`);
         if (attempt < maxAttempts) {
-          const delay = attempt * 3000;
+          const delay = attempt * 4000;
           console.log(`[OTA] Retrying in ${delay / 1000}s...`);
           await new Promise((r) => setTimeout(r, delay));
         }
