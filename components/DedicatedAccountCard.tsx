@@ -41,7 +41,10 @@ export const DedicatedAccountCard: React.FC<DedicatedAccountCardProps> = ({
     let isMounted = true;
     (async () => {
       try {
-        const res = await fetch(`/api/paystack-dva?userId=${encodeURIComponent(userProfile.uid)}`);
+        const apiBase = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()
+          ? 'https://www.avelut.xyz'
+          : '';
+        const res = await fetch(`${apiBase}/api/paystack-dva?userId=${encodeURIComponent(userProfile.uid)}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.account && isMounted) {
@@ -66,14 +69,16 @@ export const DedicatedAccountCard: React.FC<DedicatedAccountCardProps> = ({
     }
 
     setIsLoading(true);
-    void triggerHaptic(ImpactStyle.Light);
 
     try {
       const nameParts = (userProfile.display_name || 'Student').trim().split(' ');
       const firstName = nameParts[0] || 'Student';
       const lastName = nameParts.slice(1).join(' ') || 'Avelut';
 
-      const res = await fetch('/api/paystack-dva', {
+      const apiBase = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()
+        ? 'https://www.avelut.xyz'
+        : '';
+      const res = await fetch(`${apiBase}/api/paystack-dva`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

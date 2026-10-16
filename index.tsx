@@ -1,10 +1,6 @@
 import './utils/domPolyfill';
 import { Capacitor } from '@capacitor/core';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
-import { initGlobalTouchHaptics } from './utils/capacitorUtils';
-
-// Initialize zero-latency touch tactile feedback immediately
-initGlobalTouchHaptics();
 
 // Immediately notify native layer that JavaScript loaded successfully.
 // This prevents Capgo's automatic rollback timer from reverting OTA updates.
@@ -18,6 +14,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ToastProvider } from './hooks/useToast';
+import { RootErrorBoundary } from './components/RootErrorBoundary';
 
 // Automatically reload the page if a dynamically imported module fails to load.
 // This typically happens when the user has an old version of the app open and
@@ -56,13 +53,15 @@ if (!rootElement) {
 
 const appContent = (
   <React.StrictMode>
-    <HelmetProvider>
-      <ThemeProvider>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </ThemeProvider>
-    </HelmetProvider>
+    <RootErrorBoundary>
+      <HelmetProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </ThemeProvider>
+      </HelmetProvider>
+    </RootErrorBoundary>
   </React.StrictMode>
 );
 

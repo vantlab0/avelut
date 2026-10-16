@@ -231,12 +231,18 @@ export async function sendTestNotification(): Promise<{ success: boolean; messag
       }
     }
 
+    let fcmToken: string | undefined = undefined;
+    if (typeof window !== 'undefined') {
+      fcmToken = window.localStorage.getItem('fcm_token') || window.localStorage.getItem('fcm_device_token') || undefined;
+    }
+
     const res = await fetch(`${apiBase}/api/notifications`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'send',
         targetUserId: uid,
+        fcmToken: fcmToken,
         title: 'Avelut Push Test',
         message: 'Firebase FCM push notifications are configured and working!',
         data: { route: 'chat' },
@@ -256,9 +262,12 @@ export async function sendTestNotification(): Promise<{ success: boolean; messag
       message: 'Test notification sent! Check your device notification tray.',
     };
   } catch (e: any) {
+    const isFetchFail = e?.message?.includes('Failed to fetch') || e?.name === 'TypeError';
     return {
       success: false,
-      message: e?.message || 'Failed to dispatch test notification.',
+      message: isFetchFail
+        ? 'Could not reach notification server. Please check internet connection.'
+        : (e?.message || 'Failed to dispatch test notification.'),
     };
   }
 }

@@ -292,20 +292,37 @@ async function getAllDeviceTokens(): Promise<string[]> {
   return Array.from(tokenSet);
 }
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, x-client-info',
+};
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
+function jsonResponse(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
 export async function GET() {
   const sa = await getServiceAccount();
-  return new Response(
-    JSON.stringify({
-      status: 'ok',
-      provider: 'firebase_fcm_v1',
-      project_id: sa?.project_id || DEFAULT_FIREBASE_PROJECT_ID,
-      service_account_configured: Boolean(sa),
-    }),
-    {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
+  return jsonResponse({
+    status: 'ok',
+    provider: 'firebase_fcm_v1',
+    project_id: sa?.project_id || DEFAULT_FIREBASE_PROJECT_ID,
+    service_account_configured: Boolean(sa),
+  });
 }
 
 export async function POST(req: Request) {
@@ -315,16 +332,10 @@ export async function POST(req: Request) {
 
     const sa = await getServiceAccount();
     if (!sa) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          reason: 'Firebase Service Account is not configured. Please add FIREBASE_SERVICE_ACCOUNT environment variable or set "firebase_service_account" in Supabase app_settings.',
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return jsonResponse({
+        success: false,
+        reason: 'Firebase Service Account is not configured. Please add FIREBASE_SERVICE_ACCOUNT environment variable or set "firebase_service_account" in Supabase app_settings.',
+      }, 200);
     }
 
     // ── action: send ──────────────────────────────────────────────────────────
@@ -332,10 +343,7 @@ export async function POST(req: Request) {
       const { targetUserId, fcmToken, title, message, data: customData } = body;
 
       if ((!targetUserId && !fcmToken) || !message) {
-        return new Response(
-          JSON.stringify({ error: 'Missing required fields: (targetUserId or fcmToken) and message' }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } }
-        );
+        return jsonResponse({ error: 'Missing required fields: (targetUserId or fcmToken) and message' }, 400);
       }
 
       // Convert any custom data values to string as required by FCM
@@ -352,13 +360,10 @@ export async function POST(req: Request) {
       if (targetUserId === 'all' || body.broadcast === true) {
         const tokens = await getAllDeviceTokens();
         if (tokens.length === 0) {
-          return new Response(
-            JSON.stringify({
-              success: false,
-              reason: 'No active device FCM tokens found in database to broadcast to.',
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } }
-          );
+          return jsonResponse({
+            success: false,
+            reason: 'No active device FCM tokens found in database to broadcast to.',
+          }, 200);
         }
 
         const accessToken = await getFCMV1AccessToken(sa);
@@ -410,28 +415,22 @@ export async function POST(req: Request) {
           })
         );
 
-        return new Response(
-          JSON.stringify({
-            success: true,
-            broadcast: true,
-            totalDevices: tokens.length,
-            delivered,
-            failed,
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
+        return jsonResponse({
+          success: true,
+          broadcast: true,
+          totalDevices: tokens.length,
+          delivered,
+          failed,
+        }, 200);
       }
 
       // ── Single recipient ──
       const token = fcmToken || (await getDeviceTokenForUser(targetUserId));
       if (!token) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            reason: `Target user ${targetUserId} does not have an active FCM token registered in Supabase.`,
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
+        return jsonResponse({
+          success: false,
+          reason: `Target user ${targetUserId} does not have an active FCM token registered in Supabase.`,
+        }, 200);
       }
 
       const accessToken = await getFCMV1AccessToken(sa);
@@ -472,51 +471,33 @@ export async function POST(req: Request) {
 
       if (!fcmRes.ok) {
         console.error('[FCM] Send error:', fcmData);
-        return new Response(
-          JSON.stringify({ success: false, error: fcmData }),
-          { status: fcmRes.status, headers: { 'Content-Type': 'application/json' } }
-        );
+        return jsonResponse({ success: false, error: fcmData }, fcmRes.status);
       }
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          messageId: fcmData.name,
-          recipientTokenPreview: token.substring(0, 15) + '...',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({
+        success: true,
+        messageId: fcmData.name,
+        recipientTokenPreview: token.substring(0, 15) + '...',
+      }, 200);
     }
 
     // ── action: schedule ──────────────────────────────────────────────────────
     if (action === 'schedule') {
       const { targetUserId, reminders } = body;
       if (!targetUserId || !Array.isArray(reminders)) {
-        return new Response(
-          JSON.stringify({ error: 'Missing targetUserId or reminders array' }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } }
-        );
+        return jsonResponse({ error: 'Missing targetUserId or reminders array' }, 400);
       }
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          scheduledCount: reminders.length,
-          message: 'Study reminders registered.',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({
+        success: true,
+        scheduledCount: reminders.length,
+        message: 'Study reminders registered.',
+      }, 200);
     }
 
-    return new Response(
-      JSON.stringify({ error: 'Unknown action. Use "send" or "schedule".' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ error: 'Unknown action. Use "send" or "schedule".' }, 400);
   } catch (err: any) {
     console.error('[FCM] Server error:', err);
-    return new Response(
-      JSON.stringify({ error: err.message || 'Internal server error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ error: err.message || 'Internal server error' }, 500);
   }
 }

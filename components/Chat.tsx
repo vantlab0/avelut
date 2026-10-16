@@ -26,6 +26,8 @@ import { ConfirmationModal } from './ConfirmationModal';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingTypingIndicator } from './ThinkingTypingIndicator';
 import { ChatLimitBanner } from './ChatLimitBanner';
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
 import { showKeyboard, hideKeyboard, triggerHaptic } from '../utils/capacitorUtils';
 import { subscribeTable } from '../lib/sqlite/sqliteService';
 import { ExamStreakWidget } from './widgets/ExamStreakWidget';
@@ -1242,9 +1244,10 @@ export const Chat: React.FC<ChatProps> = ({
       };
 
       const baseSystemInstruction = [
-        'You are Avelut, an elite, interactive AI tutor and academic study partner for students.',
-        'Respond directly, engagingly, clearly, and with rich visual and educational tools.',
+        'You are Avelut, an intelligent, helpful, and versatile AI assistant and study companion.',
         'Guidelines:',
+        '- Treat users naturally, warmly, and directly as a helpful general-purpose assistant. When greeted with casual greetings like "hello", "hi", "hey", or "good morning", respond concisely and friendly without assuming any specialized topic, course, or engineering major (e.g., "Hello! How can I help you today?").',
+        '- For substantive questions, study topics, homework, or tasks, provide elite, clear, structured explanations with rich visual tools.',
         '- Be concise, clear, and structured. Do not include excessive background fluff or wordy preambles.',
         '- When formatting math or equations, use standard LaTeX ($...$ for inline, $$...$$ for blocks).',
         '- When explaining concepts:',
@@ -1284,7 +1287,7 @@ export const Chat: React.FC<ChatProps> = ({
         '```',
         '- VISUAL SVG DIAGRAMS: When explaining workflows, structures, architectures, biological/chemical systems, algorithms, geometric layouts, or flowcharts, output a complete, responsive SVG visual diagram inside a ```svg code fence. Use clean viewBox (e.g. viewBox="0 0 600 350"), modern rounded shapes, and clear contrasting colors suited for dark backgrounds (#3b82f6, #10b981, #8b5cf6, #f59e0b, #ffffff, #94a3b8). NEVER just talk about a diagram—render it!',
         '- EDUCATIONAL REFERENCE IMAGES: When explaining real-world entities, science, nature, anatomy, historical events, laboratory equipment, or physical phenomena, embed an educational Unsplash reference image using markdown: `![Caption description](https://images.unsplash.com/photo-...?...&auto=format&fit=crop&w=800&q=80)` to make learning visually engaging.',
-        '- SUGGESTED NEXT STEPS / FOLLOW-UPS: At the very end of your response, always provide 2 to 3 relevant, highly useful follow-up actions or questions that the student can tap. Prefix EACH follow-up on its own line with "↳ ", for example:',
+        '- SUGGESTED NEXT STEPS / FOLLOW-UPS: For substantive or educational answers (but NOT on simple greetings like "hi" or "hello"), provide 2 to 3 relevant follow-up actions or questions that the user can tap. Prefix EACH follow-up on its own line with "↳ ", for example:',
         '↳ Test me on this concept with 5 CBT questions',
         '↳ Generate flashcards for key definitions',
         '↳ Explain this with an interactive visual SVG diagram',
@@ -1537,15 +1540,30 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   const handleShareMessage = async (text: string) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ text });
-      } catch (e) {
-        // Ignored if cancelled
+    if (!text) return;
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await Share.share({
+          title: 'Avelut AI',
+          text: text,
+          dialogTitle: 'Share response',
+        });
+        return;
       }
-    } else {
-      handleCopyMessage(text);
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({
+          title: 'Avelut AI',
+          text: text,
+        });
+        return;
+      }
+    } catch (e: any) {
+      if (e?.name === 'AbortError' || e?.message?.includes('canceled') || e?.message?.includes('cancelled')) {
+        return;
+      }
     }
+    // Fallback to copying if sharing is not supported on this platform
+    handleCopyMessage(text);
   };
 
   const handleRegenerateMessage = (msgIndex: number) => {
@@ -1680,7 +1698,7 @@ export const Chat: React.FC<ChatProps> = ({
                             <div className="min-w-0">
                               <MarkdownContent content={cleanedText || msg.text} />
                               {isLoading && index === messages.length - 1 && (
-                                <span aria-hidden="true" className="inline-block w-2 h-2 ml-1.5 bg-blue-500 dark:bg-blue-400 rounded-full animate-pulse shadow-[0_0_6px_rgba(59,130,246,0.8)] align-middle" />
+                                <span aria-hidden="true" className="inline-block w-2.5 h-2.5 ml-1.5 bg-blue-600 dark:bg-blue-400 rounded-full animate-dot-breathe align-middle" />
                               )}
 
                               {/* Interactive Suggested Follow-Up Prompts (matching user screenshot) */}
@@ -1691,13 +1709,12 @@ export const Chat: React.FC<ChatProps> = ({
                                       key={pIdx}
                                       type="button"
                                       onClick={() => {
-                                        triggerHaptic();
                                         void handleSendMessage(prompt);
                                       }}
-                                      className="group flex items-start sm:items-center gap-2.5 text-left text-[14px] sm:text-[15px] text-neutral-200 dark:text-neutral-200 hover:text-white transition-colors cursor-pointer"
+                                      className="group flex items-start sm:items-center gap-2.5 text-left text-[14px] sm:text-[15px] text-neutral-800 dark:text-neutral-200 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
                                     >
-                                      <span className="text-neutral-400 group-hover:text-white text-base leading-none select-none font-sans">↳</span>
-                                      <span className="underline underline-offset-[5px] decoration-neutral-500/80 group-hover:decoration-white font-normal transition-colors">
+                                      <span className="text-neutral-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white text-base leading-none select-none font-sans">↳</span>
+                                      <span className="underline underline-offset-[5px] decoration-neutral-400 dark:decoration-neutral-600 group-hover:decoration-black dark:group-hover:decoration-white font-medium dark:font-normal transition-colors">
                                         {prompt}
                                       </span>
                                     </button>
@@ -1707,12 +1724,12 @@ export const Chat: React.FC<ChatProps> = ({
 
                               {/* Exact Action Row Matching Screenshot: Copy, Thumbs Up, Thumbs Down, Speaker, Share, More */}
                               <div className="pt-2">
-                                <div className="flex items-center gap-4 text-neutral-400 dark:text-neutral-400 select-none">
+                                <div className="flex items-center gap-4 text-neutral-600 dark:text-neutral-400 select-none">
                                   {/* Copy button */}
                                   <button
                                     type="button"
                                     onClick={() => handleCopyMessage(cleanedText || msg.text)}
-                                    className="p-1 rounded-md hover:text-white transition-colors cursor-pointer"
+                                    className="p-1 rounded-md hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                                     title="Copy text"
                                     aria-label="Copy text"
                                   >
@@ -1727,7 +1744,7 @@ export const Chat: React.FC<ChatProps> = ({
                                     type="button"
                                     onClick={() => handleToggleLike(msg.id, 'up')}
                                     className={`p-1 rounded-md transition-colors cursor-pointer ${
-                                      likedMessages[msg.id] === 'up' ? 'text-blue-500 fill-blue-500/20' : 'hover:text-white'
+                                      likedMessages[msg.id] === 'up' ? 'text-blue-600 fill-blue-500/20' : 'hover:text-neutral-900 dark:hover:text-white'
                                     }`}
                                     title="Good response"
                                     aria-label="Good response"
@@ -1742,7 +1759,7 @@ export const Chat: React.FC<ChatProps> = ({
                                     type="button"
                                     onClick={() => handleToggleLike(msg.id, 'down')}
                                     className={`p-1 rounded-md transition-colors cursor-pointer ${
-                                      likedMessages[msg.id] === 'down' ? 'text-red-500 fill-red-500/20' : 'hover:text-white'
+                                      likedMessages[msg.id] === 'down' ? 'text-red-500 fill-red-500/20' : 'hover:text-neutral-900 dark:hover:text-white'
                                     }`}
                                     title="Bad response"
                                     aria-label="Bad response"
@@ -1757,7 +1774,7 @@ export const Chat: React.FC<ChatProps> = ({
                                     type="button"
                                     onClick={() => handleToggleTTS(msg.id, cleanedText || msg.text)}
                                     className={`p-1 rounded-md transition-colors cursor-pointer ${
-                                      speakingMsgId === msg.id ? 'text-blue-400 animate-pulse' : 'hover:text-white'
+                                      speakingMsgId === msg.id ? 'text-blue-500 animate-pulse' : 'hover:text-neutral-900 dark:hover:text-white'
                                     }`}
                                     title={speakingMsgId === msg.id ? 'Stop reading' : 'Read aloud'}
                                     aria-label={speakingMsgId === msg.id ? 'Stop reading' : 'Read aloud'}
@@ -1773,7 +1790,7 @@ export const Chat: React.FC<ChatProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleShareMessage(cleanedText || msg.text)}
-                                    className="p-1 rounded-md hover:text-white transition-colors cursor-pointer"
+                                    className="p-1 rounded-md hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                                     title="Share response"
                                     aria-label="Share response"
                                   >
@@ -1791,7 +1808,7 @@ export const Chat: React.FC<ChatProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => setMoreMenuMsgId((prev) => (prev === msg.id ? null : msg.id))}
-                                      className="p-1 rounded-md hover:text-white transition-colors cursor-pointer"
+                                      className="p-1 rounded-md hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                                       title="More options"
                                       aria-label="More options"
                                     >
@@ -1803,14 +1820,14 @@ export const Chat: React.FC<ChatProps> = ({
                                     </button>
 
                                     {moreMenuMsgId === msg.id && (
-                                      <div className="absolute left-0 bottom-full mb-2 w-40 bg-neutral-900 border border-neutral-800 rounded-xl shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-150">
+                                      <div className="absolute left-0 bottom-full mb-2 w-40 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-150">
                                         <button
                                           type="button"
                                           onClick={() => {
                                             setMoreMenuMsgId(null);
                                             handleRegenerateMessage(index);
                                           }}
-                                          className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors flex items-center gap-2"
+                                          className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
                                         >
                                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1823,7 +1840,7 @@ export const Chat: React.FC<ChatProps> = ({
                                             setMoreMenuMsgId(null);
                                             addToast('Thank you for reporting. Our team will review this response.', 'info');
                                           }}
-                                          className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors flex items-center gap-2"
+                                          className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
                                         >
                                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1836,7 +1853,7 @@ export const Chat: React.FC<ChatProps> = ({
                                 </div>
 
                                 {/* Subtle horizontal separator line under the action row as in the screenshot */}
-                                <div className="w-full border-b border-neutral-800/80 dark:border-neutral-800/80 mt-3" />
+                                <div className="w-full border-b border-neutral-200 dark:border-neutral-800/80 mt-3" />
                               </div>
                             </div>
                           );

@@ -78,30 +78,11 @@ export const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Light): Pro
 };
 
 /**
- * Initialize automatic subtle touch feedback on interactive elements across the application.
+ * Global touch feedback listener (disabled as per user request - too aggressive).
  */
-let hapticsInitialized = false;
 export const initGlobalTouchHaptics = (): void => {
-  if (hapticsInitialized || typeof window === 'undefined') return;
-  hapticsInitialized = true;
-
-  let lastHapticTime = 0;
-  window.addEventListener(
-    'pointerdown',
-    (e: PointerEvent) => {
-      const target = (e.target as HTMLElement)?.closest?.(
-        'button, [role="button"], a, input[type="submit"], .clickable-card, [data-haptic]'
-      );
-      if (!target || (target as HTMLButtonElement).disabled) return;
-
-      const now = performance.now();
-      if (now - lastHapticTime > 75) {
-        lastHapticTime = now;
-        void triggerHaptic(ImpactStyle.Light);
-      }
-    },
-    { passive: true, capture: true }
-  );
+  // Intentionally disabled to prevent aggressive device vibration on every touch
+  return;
 };
 
 /**

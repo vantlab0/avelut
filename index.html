@@ -90,7 +90,13 @@
         var isAndroid = /Android/i.test(ua);
         var isIOS = /iPhone|iPad|iPod/i.test(ua);
         var isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator && window.navigator.standalone);
-        var isCapacitor = typeof window.Capacitor !== 'undefined' || window.location.protocol === 'capacitor:';
+        var isCapacitor = typeof window.Capacitor !== 'undefined' ||
+          window.location.protocol === 'capacitor:' ||
+          window.location.hostname === 'localhost' ||
+          window.location.origin.includes('localhost') ||
+          /; wv/.test(ua) ||
+          ua.includes('wv') ||
+          ua.includes('Version/4.0');
 
         // Do not execute if already running inside the native app or standalone PWA
         if (isStandalone || isCapacitor) return;
