@@ -2,6 +2,14 @@
   "installCommand": "pnpm install --no-frozen-lockfile",
   "rewrites": [
     {
+      "source": "/api/paystack-initialize",
+      "destination": "/api/paystack?action=initialize"
+    },
+    {
+      "source": "/api/paystack-verify",
+      "destination": "/api/paystack?action=verify"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
