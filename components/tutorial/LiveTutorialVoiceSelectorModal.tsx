@@ -57,6 +57,14 @@ export const TUTORIAL_VOICES: VoiceOption[] = [
     sampleText: "Hello. I'm Mia. Let's take a calm, structured journey through today's topic together.",
   },
   {
+    id: 'Katerina',
+    name: 'Katerina',
+    gender: 'Female',
+    persona: 'A mature, commanding academic voice with distinct rhythm, confidence, and clarity.',
+    sampleText: "Greetings. I'm Katerina. Today we break down the core foundations and mechanisms of our lesson step by step.",
+    tag: 'Popular',
+  },
+  {
     id: 'Vivian',
     name: 'Vivian',
     gender: 'Female',

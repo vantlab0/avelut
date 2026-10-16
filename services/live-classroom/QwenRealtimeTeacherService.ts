@@ -1234,8 +1234,10 @@ export class QwenRealtimeTeacherService {
     // Voice selection
     const savedVoice = typeof window !== 'undefined' ? localStorage.getItem('avelut_live_classroom_voice') : null;
     let selectedVoice = overrideVoice || this.currentVoice || savedVoice || this.appSettings?.alibaba_voice_name || 'Tina';
-    if (selectedVoice === 'Cherry' || selectedVoice === 'Catherine' || !selectedVoice) {
+    if (!selectedVoice || selectedVoice === 'Cherry') {
       selectedVoice = 'Tina';
+    } else if (/^(carterine|catherine|katerina)$/i.test(selectedVoice)) {
+      selectedVoice = 'Katerina';
     }
     this.currentVoice = selectedVoice;
     liveLogger.log('[QwenRealtime] Session voice:', selectedVoice);

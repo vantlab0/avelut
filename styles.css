@@ -21,6 +21,14 @@
   .rotate-y-180 {
     transform: rotateY(180deg);
   }
+  /* Horizontal pill rows: scrollable but without a visible scrollbar */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* =========================================================

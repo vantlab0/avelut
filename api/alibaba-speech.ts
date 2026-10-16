@@ -88,6 +88,8 @@ export async function POST(req: Request) {
       liora: 'Serena',
       raymond: 'Ethan',
       katerina: 'Vivian',
+      catherine: 'Vivian',
+      carterine: 'Vivian',
     };
 
     const rawVoice = (body.voice || 'Cherry').toString().trim();
