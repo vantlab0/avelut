@@ -1,0 +1,34 @@
+{
+  "Cherry": {
+    "supabaseUrl": "https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/cherry.wav",
+    "localUrl": "/assets/voices/cherry.wav"
+  },
+  "Serena": {
+    "supabaseUrl": "https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/serena.wav",
+    "localUrl": "/assets/voices/serena.wav"
+  },
+  "Ethan": {
+    "supabaseUrl": "https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/ethan.wav",
+    "localUrl": "/assets/voices/ethan.wav"
+  },
+  "Chelsie": {
+    "supabaseUrl": "https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/chelsie.wav",
+    "localUrl": "/assets/voices/chelsie.wav"
+  },
+  "Ryan": {
+    "supabaseUrl": "https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/ryan.wav",
+    "localUrl": "/assets/voices/ryan.wav"
+  },
+  "Mia": {
+    "supabaseUrl": "https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/mia.wav",
+    "localUrl": "/assets/voices/mia.wav"
+  },
+  "Katerina": {
+    "supabaseUrl": "https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/katerina.wav",
+    "localUrl": "/assets/voices/katerina.wav"
+  },
+  "Vivian": {
+    "supabaseUrl": "https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/vivian.wav",
+    "localUrl": "/assets/voices/vivian.wav"
+  }
+}

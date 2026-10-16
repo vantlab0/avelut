@@ -73,6 +73,41 @@ export const TUTORIAL_VOICES: VoiceOption[] = [
   },
 ];
 
+export const VOICE_SAMPLE_URLS: Record<string, { supabaseUrl: string; localUrl: string }> = {
+  Cherry: {
+    supabaseUrl: 'https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/cherry.wav',
+    localUrl: '/assets/voices/cherry.wav',
+  },
+  Serena: {
+    supabaseUrl: 'https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/serena.wav',
+    localUrl: '/assets/voices/serena.wav',
+  },
+  Ethan: {
+    supabaseUrl: 'https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/ethan.wav',
+    localUrl: '/assets/voices/ethan.wav',
+  },
+  Chelsie: {
+    supabaseUrl: 'https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/chelsie.wav',
+    localUrl: '/assets/voices/chelsie.wav',
+  },
+  Ryan: {
+    supabaseUrl: 'https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/ryan.wav',
+    localUrl: '/assets/voices/ryan.wav',
+  },
+  Mia: {
+    supabaseUrl: 'https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/mia.wav',
+    localUrl: '/assets/voices/mia.wav',
+  },
+  Katerina: {
+    supabaseUrl: 'https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/katerina.wav',
+    localUrl: '/assets/voices/katerina.wav',
+  },
+  Vivian: {
+    supabaseUrl: 'https://eywpksapztzbnthlgfhd.supabase.co/storage/v1/object/public/materials/voice_samples/vivian.wav',
+    localUrl: '/assets/voices/vivian.wav',
+  },
+};
+
 export interface LiveTutorialVoiceSelectorModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -98,14 +133,28 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
   const [selectedVoice, setSelectedVoice] = useState<string>(initialVoice);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const activePlayerRef = useRef<UnifiedAudioPlayer | null>(null);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopAllAudio = () => {
+    if (audioElementRef.current) {
+      try {
+        audioElementRef.current.pause();
+        audioElementRef.current.currentTime = 0;
+        audioElementRef.current = null;
+      } catch (_) {}
+    }
+    if (activePlayerRef.current) {
+      try {
+        activePlayerRef.current.stop();
+        activePlayerRef.current = null;
+      } catch (_) {}
+    }
+    setPlayingVoiceId(null);
+  };
 
   useEffect(() => {
     return () => {
-      if (activePlayerRef.current) {
-        try {
-          activePlayerRef.current.stop();
-        } catch (_) {}
-      }
+      stopAllAudio();
     };
   }, []);
 
@@ -116,26 +165,57 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
 
     // If already playing this voice, stop it
     if (playingVoiceId === voiceOption.id) {
-      if (activePlayerRef.current) {
-        try {
-          activePlayerRef.current.stop();
-        } catch (_) {}
-        activePlayerRef.current = null;
-      }
-      setPlayingVoiceId(null);
+      stopAllAudio();
       return;
     }
 
-    // Stop current audio if playing
-    if (activePlayerRef.current) {
-      try {
-        activePlayerRef.current.stop();
-      } catch (_) {}
-      activePlayerRef.current = null;
-    }
+    // Stop current audio before playing a new one
+    stopAllAudio();
 
+    const sample = VOICE_SAMPLE_URLS[voiceOption.id];
     setPlayingVoiceId(voiceOption.id);
 
+    // 1. Try playing pregenerated audio from Supabase CDN with local fallback
+    if (sample?.supabaseUrl || sample?.localUrl) {
+      const audioUrl = sample.supabaseUrl || sample.localUrl;
+      const audio = new Audio(audioUrl);
+      audioElementRef.current = audio;
+
+      audio.onended = () => {
+        setPlayingVoiceId(null);
+        audioElementRef.current = null;
+      };
+
+      audio.onerror = () => {
+        // Fallback to local URL if Supabase CDN is unreachable
+        if (sample.localUrl && audio.src !== window.location.origin + sample.localUrl) {
+          const fallbackAudio = new Audio(sample.localUrl);
+          audioElementRef.current = fallbackAudio;
+          fallbackAudio.onended = () => {
+            setPlayingVoiceId(null);
+            audioElementRef.current = null;
+          };
+          fallbackAudio.onerror = () => {
+            playDynamicFallback(voiceOption);
+          };
+          fallbackAudio.play().catch(() => playDynamicFallback(voiceOption));
+          return;
+        }
+        playDynamicFallback(voiceOption);
+      };
+
+      audio.play().catch((playErr) => {
+        console.warn('[VoiceSelector] Pre-generated audio playback failed, falling back to TTS:', playErr);
+        playDynamicFallback(voiceOption);
+      });
+      return;
+    }
+
+    // Dynamic synthesis fallback
+    playDynamicFallback(voiceOption);
+  };
+
+  const playDynamicFallback = (voiceOption: VoiceOption) => {
     try {
       const player = unifiedVoiceRouter.playSpeech(voiceOption.sampleText, {
         appSettings,
@@ -160,11 +240,7 @@ export const LiveTutorialVoiceSelectorModal: React.FC<LiveTutorialVoiceSelectorM
   };
 
   const handleConfirmStart = () => {
-    if (activePlayerRef.current) {
-      try {
-        activePlayerRef.current.stop();
-      } catch (_) {}
-    }
+    stopAllAudio();
     onSelectVoiceAndStart(selectedVoice);
   };
 
