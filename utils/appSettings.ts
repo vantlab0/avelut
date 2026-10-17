@@ -217,13 +217,13 @@ export const DEFAULT_USAGE_SETTINGS = {
     study_guide_extraction: 3,
   },
   feature_models: {
-    visual_solve: 'qwen3.8-omni-flash',
-    chat_interaction: 'qwen3.8-omni-flash',
-    flashcard_generation: 'qwen3.8-omni-flash',
-    ai_quiz_generation: 'qwen3.8-omni-flash',
-    study_guide_lesson: 'qwen3.8-omni-flash',
-    study_guide_extraction: 'qwen3.8-omni-flash',
-    title_generation: 'qwen3.8-omni-flash',
+    visual_solve: 'qwen3.5-omni-flash',
+    chat_interaction: 'qwen3.5-omni-flash',
+    flashcard_generation: 'qwen3.5-omni-flash',
+    ai_quiz_generation: 'qwen3.5-omni-flash',
+    study_guide_lesson: 'qwen3.5-omni-flash',
+    study_guide_extraction: 'qwen3.5-omni-flash',
+    title_generation: 'qwen3.5-omni-flash',
   },
   additional_prices: {
     live_tutorial_pass: CANONICAL_PRICING.packages.live_tutorial_15.priceNgn,
@@ -240,10 +240,10 @@ export const DEFAULT_USAGE_SETTINGS = {
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   primary_ai_provider: 'alibaba_qwen',
   openrouter_api_key: '',
-  openrouter_model: 'qwen/qwen3.7-flash',
+  openrouter_model: 'qwen/qwen3.5-omni-flash',
   alibaba_api_key: 'sk-ws-H.DDLPMIE.fbaD.MEQCIFkao1-I0HQyUMxmrty8-k1S70b0xjgF1BoNksO2pM6WAiACzxp1ojlxhmc6YQFNodecye0oQOBAalaHxCVNdJfQjA',
   alibaba_base_url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-  alibaba_model: 'qwen3.8-omni-flash',
+  alibaba_model: 'qwen3.5-omni-flash',
   active_voice_provider: 'grok',
   studyguide_voice_provider: 'grok',
   notebook_voice_provider: 'grok',
@@ -318,7 +318,7 @@ export const getOpenRouterModel = (appSettings?: AppSettings | Partial<AppSettin
     fromEnv = process.env.OPENROUTER_MODEL || process.env.VITE_OPENROUTER_MODEL || '';
   }
 
-  return (fromEnv || DEFAULT_APP_SETTINGS.openrouter_model || 'qwen/qwen3.7-flash').trim();
+  return (fromEnv || DEFAULT_APP_SETTINGS.openrouter_model || 'qwen/qwen3.5-omni-flash').trim();
 };
 
 /**
@@ -348,7 +348,7 @@ export const getAlibabaApiKey = (appSettings?: AppSettings | Partial<AppSettings
   return fromEnv ? fromEnv.trim() : 'sk-ws-H.DDLPMIE.fbaD.MEQCIFkao1-I0HQyUMxmrty8-k1S70b0xjgF1BoNksO2pM6WAiACzxp1ojlxhmc6YQFNodecye0oQOBAalaHxCVNdJfQjA';
 };
 
-export const cleanQwenModel = (model?: any, fallback: string = 'qwen3.8-omni-flash'): string => {
+export const cleanQwenModel = (model?: any, fallback: string = 'qwen3.5-omni-flash'): string => {
   if (!model || typeof model !== 'string') return fallback;
   const clean = model
     .replace(/^qwen\//i, '')
@@ -363,11 +363,11 @@ export const cleanQwenModel = (model?: any, fallback: string = 'qwen3.8-omni-fla
 export const normalizeAppSettings = (raw: Partial<AppSettings> | null | undefined): AppSettings => ({
   primary_ai_provider: raw?.primary_ai_provider || DEFAULT_APP_SETTINGS.primary_ai_provider,
   openrouter_api_key: (raw?.openrouter_api_key || DEFAULT_APP_SETTINGS.openrouter_api_key || '').toString().trim(),
-  openrouter_model: (raw?.openrouter_model || getOpenRouterModel(raw) || 'qwen/qwen3.7-flash').toString().trim(),
+  openrouter_model: (raw?.openrouter_model || getOpenRouterModel(raw) || 'qwen/qwen3.5-omni-flash').toString().trim(),
   openrouter_base_url: (raw?.openrouter_base_url || DEFAULT_APP_SETTINGS.openrouter_base_url || '').toString().trim(),
   alibaba_api_key: (raw?.alibaba_api_key || DEFAULT_APP_SETTINGS.alibaba_api_key || '').toString().trim(),
   alibaba_base_url: (raw?.alibaba_base_url || DEFAULT_APP_SETTINGS.alibaba_base_url || '').toString().trim(),
-  alibaba_model: cleanQwenModel(raw?.alibaba_model, DEFAULT_APP_SETTINGS.alibaba_model || 'qwen3.8-omni-flash'),
+  alibaba_model: cleanQwenModel(raw?.alibaba_model, DEFAULT_APP_SETTINGS.alibaba_model || 'qwen3.5-omni-flash'),
   active_voice_provider: raw?.active_voice_provider || DEFAULT_APP_SETTINGS.active_voice_provider,
   studyguide_voice_provider: raw?.studyguide_voice_provider || raw?.active_voice_provider || DEFAULT_APP_SETTINGS.studyguide_voice_provider,
   notebook_voice_provider: raw?.notebook_voice_provider || raw?.active_voice_provider || DEFAULT_APP_SETTINGS.notebook_voice_provider,

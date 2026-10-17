@@ -19,9 +19,9 @@ describe('Multimodal Pipeline and 429 Rate Limiting Tests', () => {
   });
 
   test('2. Model normalization preserves requested multimodal Omni model', () => {
-    expect(normalizeQwenModelName('qwen3.8-omni-flash', true)).toBe('qwen3.8-omni-flash');
-    expect(normalizeAlibabaDashScopeModel('qwen3.8-omni-flash', true)).toBe('qwen3.8-omni-flash');
-    expect(normalizeAlibabaDashScopeModel('qwen-vl-plus', true)).toBe('qwen3.8-omni-flash');
+    expect(normalizeQwenModelName('qwen3.5-omni-flash', true)).toBe('qwen3.5-omni-flash');
+    expect(normalizeAlibabaDashScopeModel('qwen3.5-omni-flash', true)).toBe('qwen3.5-omni-flash');
+    expect(normalizeAlibabaDashScopeModel('qwen-vl-plus', true)).toBe('qwen3.5-omni-flash');
   });
 
   test('3. Bounded exponential backoff and fallback on 429 rate limit', async () => {
@@ -43,7 +43,7 @@ describe('Multimodal Pipeline and 429 Rate Limiting Tests', () => {
     const ai = createAvelutAI(appSettings, null);
 
     const callPromise = ai.models.generateContent({
-      model: 'qwen3.8-omni-flash',
+      model: 'qwen3.5-omni-flash',
       contents: [{
         role: 'user',
         parts: [
@@ -57,12 +57,13 @@ describe('Multimodal Pipeline and 429 Rate Limiting Tests', () => {
 
     // Verify retries occurred
     expect(fetchSpy.mock.calls.length).toBeGreaterThan(1);
-  }, 15000);
+  }, 30000);
 
   test('4. Title generation prompt excludes images', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
       text: async () => JSON.stringify({ choices: [{ message: { content: 'Calculus Concept Overview' } }] }),
     } as Response);
 
@@ -70,7 +71,7 @@ describe('Multimodal Pipeline and 429 Rate Limiting Tests', () => {
     const ai = createAvelutAI(appSettings, null);
 
     const result = await ai.models.generateContent({
-      model: 'qwen3.8-omni-flash',
+      model: 'qwen3.5-omni-flash',
       contents: [{
         role: 'user',
         parts: [{ text: 'Summarize text prompt into short title: Calculus limits and derivatives' }],

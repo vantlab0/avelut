@@ -94,12 +94,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2. Generate structure using Gemini / OpenRouter API
-    const geminiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("OPENROUTER_API_KEY");
+    // 2. Generate structure using OpenRouter or Alibaba API
+    const openrouterKey = Deno.env.get("OPENROUTER_API_KEY") || Deno.env.get("VITE_OPENROUTER_API_KEY");
+    const alibabaKey = Deno.env.get("ALIBABA_API_KEY") || Deno.env.get("VITE_ALIBABA_API_KEY");
     let structureJson: any = null;
 
-    if (geminiKey) {
-      const prompt = `You are a world-class university lecturer creating a structured whiteboard lecture plan.
+    const prompt = `You are a world-class university lecturer creating a structured whiteboard lecture plan.
 Topic: "${topicTitle}"
 Course: "${courseName || 'General Academic'}"
 Duration: ${durationMinutes} minutes (${boardCount} whiteboard boards).
@@ -120,25 +120,55 @@ Return STRICTLY valid JSON with no markdown block ticks:
   ]
 }`;
 
+    if (openrouterKey) {
       try {
-        const resp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: "application/json" },
-            }),
-          }
-        );
+        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openrouterKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://avelut.xyz",
+            "X-Title": "Avelut AI",
+          },
+          body: JSON.stringify({
+            model: "qwen/qwen3.5-omni-flash",
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+          }),
+        });
         if (resp.ok) {
           const resData = await resp.json();
-          const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const rawText = resData.choices?.[0]?.message?.content || "";
           structureJson = JSON.parse(rawText.replace(/^```json\s*|\s*```$/g, "").trim());
         }
       } catch (err) {
-        console.warn("[ensure-structure] AI call failed, falling back to default structure:", err);
+        console.warn("[ensure-structure] OpenRouter AI call failed:", err);
+      }
+    }
+
+    if (!structureJson && alibabaKey) {
+      try {
+        const workspaceId = Deno.env.get("ALIBABA_WORKSPACE_ID") || "ws-o3v6mh0i8y9tqdfx";
+        const resp = await fetch("https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${alibabaKey}`,
+            "Content-Type": "application/json",
+            "X-DashScope-WorkSpace": workspaceId,
+          },
+          body: JSON.stringify({
+            model: "qwen3.5-omni-flash",
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+          }),
+        });
+        if (resp.ok) {
+          const resData = await resp.json();
+          const rawText = resData.choices?.[0]?.message?.content || "";
+          structureJson = JSON.parse(rawText.replace(/^```json\s*|\s*```$/g, "").trim());
+        }
+      } catch (err) {
+        console.warn("[ensure-structure] Alibaba AI call failed:", err);
       }
     }
 

@@ -16,108 +16,7 @@ const DASHSCOPE_BASE_URLS = [
   'https://dashscope.aliyuncs.com/compatible-mode/v1',
 ];
 
-export const DEFAULT_MODEL = 'qwen3.8-omni-flash';
-
-const FALLBACK_GEMINI_KEY =
-  process.env.GEMINI_API_KEY ||
-  process.env.VITE_GEMINI_API_KEY ||
-  process.env.GOOGLE_API_KEY ||
-  'AQ.Ab8RN6J46HHzdWXmAxHW5t5xu4Ef3RRzfWchS_a_lGmxK-eK4Q';
-
-async function callGeminiFallback(messages: any[], body: any): Promise<Response | null> {
-  const geminiKey = FALLBACK_GEMINI_KEY;
-  if (!geminiKey) return null;
-
-  try {
-    const systemParts: string[] = [];
-    const contents: any[] = [];
-
-    for (const msg of messages) {
-      if (msg.role === 'system') {
-        const text = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-        systemParts.push(text);
-      } else {
-        const role = msg.role === 'assistant' ? 'model' : 'user';
-        let text = '';
-        if (typeof msg.content === 'string') {
-          text = msg.content;
-        } else if (Array.isArray(msg.content)) {
-          text = msg.content
-            .map((c: any) => (typeof c === 'string' ? c : c?.text || ''))
-            .filter(Boolean)
-            .join('\n');
-        } else {
-          text = JSON.stringify(msg.content);
-        }
-        contents.push({ role, parts: [{ text }] });
-      }
-    }
-
-    if (contents.length === 0) {
-      contents.push({ role: 'user', parts: [{ text: 'Hello' }] });
-    }
-
-    const payload: any = {
-      contents,
-      generationConfig: {
-        temperature: body.temperature ?? 0.2,
-        maxOutputTokens: Math.min(body.max_tokens ?? 4096, 8192),
-      },
-    };
-
-    if (systemParts.length > 0) {
-      payload.systemInstruction = {
-        parts: [{ text: systemParts.join('\n\n') }],
-      };
-    }
-
-    if (body.response_format?.type === 'json_object') {
-      payload.generationConfig.responseMimeType = 'application/json';
-    }
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.warn('[Gemini Fallback] HTTP error:', res.status, errText);
-      return null;
-    }
-
-    const data = await res.json();
-    let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    // If caller expects streaming SSE, format as standard OpenAI SSE chunks
-    if (body.stream) {
-      const ssePayload = `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`;
-      return new Response(ssePayload, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/event-stream; charset=utf-8',
-          'Cache-Control': 'no-cache, no-transform',
-          'Connection': 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
-    }
-
-    // Standard plain text response expected by getResponseText / fetch
-    return new Response(text, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Access-Control-Allow-Origin': '*',
-      },
-    });
-  } catch (err: any) {
-    console.warn('[Gemini Fallback] Exception:', err?.message);
-    return null;
-  }
-}
+export const DEFAULT_MODEL = 'qwen3.5-omni-flash';
 
 export async function POST(req: Request) {
   try {
@@ -173,6 +72,8 @@ export async function POST(req: Request) {
       : Array.from(new Set([
           primaryDashscopeModel,
           DEFAULT_MODEL,
+          'qwen3.8-omni-flash',
+          'qwen3.8-flash',
           'qwen3.7-flash',
         ]));
 
@@ -252,7 +153,7 @@ export async function POST(req: Request) {
               lastUpstreamStatus = response.status;
               console.warn(`[Alibaba Chat Proxy] Upstream ${baseUrl} (${currentModel}) HTTP ${response.status}:`, errText);
 
-              // If auth or access restriction occurs, break directly to Gemini fallback
+              // If auth or access restriction occurs, stop trying this base or try next candidate
               if (response.status === 401 || response.status === 403 || errText.includes('access_denied') || errText.includes('API-Key restrictions')) {
                 break modelLoop;
               }
@@ -268,12 +169,6 @@ export async function POST(req: Request) {
           }
         }
       }
-    }
-
-    // Seamless Fallback: Invoke Google Gemini 2.5 Flash if DashScope was unavailable or restricted
-    const geminiFallbackResponse = await callGeminiFallback(messages, body);
-    if (geminiFallbackResponse) {
-      return geminiFallbackResponse;
     }
 
     return new Response(

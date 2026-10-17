@@ -344,7 +344,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     setMessages([initialPlaceholder]);
 
     const socraticPrompt = buildSocraticSystemPrompt();
-    const chatModel = getFeatureModel('chat_interaction', appSettings) || 'qwen3.8-omni-flash';
+    const chatModel = getFeatureModel('chat_interaction', appSettings) || 'qwen3.5-omni-flash';
 
     const aiParams = {
       model: chatModel,

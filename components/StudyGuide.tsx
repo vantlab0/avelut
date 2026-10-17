@@ -476,7 +476,7 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
         try {
             const ai = createAvelutAI(appSettings, userProfile);
             if (!ai) throw new Error('Avelut AI is not configured in App Controls.');
-            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.8-omni-flash';
+            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
 
             const prompt = `Based on this course code/name: "${manualCourseCode}", generate a short, one-line professional course description. Return a JSON object with 'course_name' (guessed full name if possible, else the code), 'course_code' (standardized uppercase code), and 'description'.`;
 
@@ -584,8 +584,8 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
         setIsExtractingCourses(true);
         try {
             const ai = createAvelutAI(appSettings, userProfile);
-            // Prefer Alibaba Omni model (qwen3.8-omni-flash). Do not force VL-only models.
-            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.8-omni-flash';
+            // Prefer Alibaba Omni model (qwen3.5-omni-flash). Do not force VL-only models.
+            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
 
             const prompt = `Analyze this university course form, registration slip, curriculum document, or timetable carefully.
 Extract EVERY course listed on the document, accurately determining whether each course belongs to the First Semester or Second Semester.
@@ -819,7 +819,7 @@ Return ONLY a JSON object with a "courses" array.`;
                 try {
                     const ai = createAvelutAI(appSettings, userProfile);
                     if (ai) {
-                        const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.8-omni-flash';
+                        const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
                         const prompt = `Based on this course code: "${code}", generate a standard course name and 1-line description. Return JSON with 'course_name' and 'description'.`;
                         const res = await attemptApiCall(() => ai.models.generateContent({
                             model: aiModel,
@@ -933,7 +933,7 @@ Return ONLY a JSON object with a "courses" array.`;
         try {
             const ai = createAvelutAI(appSettings, userProfile);
             if (!ai) throw new Error('AI service is not configured in App Controls.');
-            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.8-omni-flash';
+            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
 
             const fileName = docUploadFile.name.toLowerCase();
             const isPdf = fileName.endsWith('.pdf') || docUploadFile.type === 'application/pdf';
@@ -1199,7 +1199,7 @@ Return a JSON object containing a "topics" array.`;
         try {
             const ai = createAvelutAI(appSettings, userProfile);
             if (!ai) throw new Error('AI service not available.');
-            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.8-omni-flash';
+            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
             const prompt = `Write a concise 2-sentence academic overview/scope for the topic "${manualTopicForm.topic_name}" in the course "${target?.course_name || 'Academic Studies'}". Return only the text.`;
             const res = await attemptApiCall(() => ai.models.generateContent({
                 model: aiModel,

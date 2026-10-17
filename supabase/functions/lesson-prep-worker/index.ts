@@ -16,9 +16,11 @@ const cors = {
 };
 
 const OPENROUTER_FALLBACK_MODELS = [
+  "qwen/qwen3.5-omni-flash",
+  "qwen/qwen3.8-omni-flash",
+  "qwen/qwen3.8-flash",
   "qwen/qwen3.7-flash",
   "qwen/qwen-2.5-72b-instruct",
-  "google/gemini-2.5-flash",
   "deepseek/deepseek-r1:free",
   "meta-llama/llama-3.3-70b-instruct:free",
 ];
@@ -90,7 +92,7 @@ async function chatCompletion(
   const max_tokens = opts?.max_tokens ?? 8192;
   const openrouterKey = env("OPENROUTER_API_KEY", "VITE_OPENROUTER_API_KEY");
   const primaryModel =
-    opts?.model || env("OPENROUTER_MODEL", "VITE_OPENROUTER_MODEL") || "qwen/qwen3.7-flash";
+    opts?.model || env("OPENROUTER_MODEL", "VITE_OPENROUTER_MODEL") || "qwen/qwen3.5-omni-flash";
 
   if (openrouterKey) {
     const models = Array.from(new Set([primaryModel, ...OPENROUTER_FALLBACK_MODELS]));
@@ -148,7 +150,7 @@ async function chatCompletion(
       "X-DashScope-WorkSpace": workspaceId,
     },
     body: JSON.stringify({
-      model: "qwen3.7-flash",
+      model: "qwen3.5-omni-flash",
       messages,
       temperature,
       max_tokens,
