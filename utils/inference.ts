@@ -399,17 +399,17 @@ function paramsToChatMessages(params: any): { systemPrompt: string; messages: Ar
 export const OPENROUTER_MODEL =
   (typeof import.meta !== 'undefined' && ((import.meta as any)?.env?.OPENROUTER_MODEL || (import.meta as any)?.env?.VITE_OPENROUTER_MODEL)) ||
   (typeof process !== 'undefined' && (process?.env?.OPENROUTER_MODEL || process?.env?.VITE_OPENROUTER_MODEL)) ||
-  'qwen/qwen3.7-flash';
+  'qwen/qwen3.5-omni-flash';
 
 /**
  * Normalizes model names to OpenRouter models.
- * For image/multi-modal requests, ensures a vision-capable model is targeted.
+ * For image/multi-modal requests, ensures a vision-capable Qwen model is targeted.
  */
 export function normalizeQwenModelName(model?: string, hasImage: boolean = false): string {
   const trimmed = model?.trim();
   if (hasImage) {
     if (!trimmed || trimmed === 'qwen/qwen3.7-flash' || trimmed === 'qwen-vl-plus' || trimmed === 'qwen-vl-max') {
-      return 'google/gemini-2.5-flash';
+      return 'qwen3.5-omni-flash';
     }
     return trimmed;
   }
@@ -417,18 +417,20 @@ export function normalizeQwenModelName(model?: string, hasImage: boolean = false
 }
 
 const FALLBACK_MODELS = [
+  'qwen/qwen3.5-omni-flash',
+  'qwen/qwen3.8-omni-flash',
+  'qwen/qwen3.8-flash',
   'qwen/qwen3.7-flash',
-  'google/gemini-2.5-flash',
   'qwen/qwen-2.5-72b-instruct',
   'deepseek/deepseek-r1:free',
   'meta-llama/llama-3.3-70b-instruct:free',
-  'qwen/qwen-2.5-7b-instruct:free',
 ];
 
 const VISION_FALLBACK_MODELS = [
-  'google/gemini-2.5-flash',
+  'qwen/qwen3.5-omni-flash',
+  'qwen/qwen3.8-omni-flash',
+  'qwen/qwen3.8-flash',
   'qwen/qwen-2.5-vl-72b-instruct',
-  'qwen/qwen3.7-flash',
 ];
 
 /**
@@ -738,10 +740,10 @@ export function normalizeAlibabaDashScopeModel(model?: string, hasImage: boolean
     .replace(/^meta-llama\//i, '')
     .trim();
   if (!clean || !clean.toLowerCase().startsWith('qwen')) {
-    return 'qwen3.8-omni-flash';
+    return 'qwen3.5-omni-flash';
   }
   if (clean === 'qwen-vl-plus' || clean === 'qwen-vl-max' || clean === 'qwen3.7-flash') {
-    return 'qwen3.8-omni-flash';
+    return 'qwen3.5-omni-flash';
   }
   return clean;
 }
@@ -772,10 +774,10 @@ async function callAlibabaQwen(
 ): Promise<any> {
   const apiKey = getAlibabaApiKey(appSettings);
   const { messages, hasImage, hasDocument } = paramsToChatMessages(params);
-  const primaryModel = normalizeAlibabaDashScopeModel(params?.model || appSettings?.alibaba_model || 'qwen3.8-omni-flash', hasImage, hasDocument);
+  const primaryModel = normalizeAlibabaDashScopeModel(params?.model || appSettings?.alibaba_model || 'qwen3.5-omni-flash', hasImage, hasDocument);
   const candidateModels = hasDocument
     ? Array.from(new Set([primaryModel, 'qwen3.8-flash', 'qwen3.8-max']))
-    : Array.from(new Set([primaryModel, 'qwen3.8-omni-flash', 'qwen3.7-flash']));
+    : Array.from(new Set([primaryModel, 'qwen3.5-omni-flash', 'qwen3.8-omni-flash', 'qwen3.8-flash', 'qwen3.7-flash']));
 
   const isNative = typeof window !== 'undefined' && (
     (window as any).Capacitor?.isNativePlatform?.() ||
@@ -847,7 +849,7 @@ async function callAlibabaQwen(
 
           if (callerSignal?.aborted) return { text: () => '', candidates: [] };
 
-          const ct = (response.headers.get('content-type') || '').toLowerCase();
+          const ct = (response.headers?.get?.('content-type') || '').toLowerCase();
           if (ct.includes('text/html')) {
             throw new Error('NETWORK_OFFLINE: Network connection lost. Please check your internet connection and try again.');
           }
@@ -940,7 +942,7 @@ async function* callAlibabaQwenStream(
 ): AsyncGenerator<any, void, unknown> {
   const apiKey = getAlibabaApiKey(appSettings);
   const { messages, hasImage } = paramsToChatMessages(params);
-  const model = normalizeAlibabaDashScopeModel(params?.model || appSettings?.alibaba_model || 'qwen3.8-omni-flash', hasImage);
+  const model = normalizeAlibabaDashScopeModel(params?.model || appSettings?.alibaba_model || 'qwen3.5-omni-flash', hasImage);
 
   const isNative = typeof window !== 'undefined' && (
     (window as any).Capacitor?.isNativePlatform?.() ||
@@ -1119,7 +1121,7 @@ async function* callAlibabaQwenStream(
 }
 
 /**
- * Centralized client factory that instantiates the Alibaba Qwen 3.7 Flash AI client.
+ * Centralized client factory that instantiates the Alibaba Qwen AI client.
  * Direct Alibaba Cloud DashScope API with fallback support.
  */
 export const createAvelutAI = (

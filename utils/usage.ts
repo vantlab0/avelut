@@ -149,8 +149,8 @@ export const getFeatureModel = (
   feature: 'visual_solve' | 'chat_interaction' | 'flashcard_generation' | 'study_guide_extraction' | 'ai_quiz_generation' | 'study_guide_lesson' | 'title_generation',
   appSettings?: AppSettings | null
 ): string => {
-  const model = appSettings?.usage_settings?.feature_models?.[feature] || appSettings?.alibaba_model || DEFAULT_APP_SETTINGS.alibaba_model || 'qwen3.8-omni-flash';
-  const clean = (model || 'qwen3.8-omni-flash')
+  const model = appSettings?.usage_settings?.feature_models?.[feature] || appSettings?.alibaba_model || DEFAULT_APP_SETTINGS.alibaba_model || 'qwen3.5-omni-flash';
+  const clean = (model || 'qwen3.5-omni-flash')
     .replace(/^qwen\//i, '')
     .replace(/^alibaba\//i, '')
     .replace(/^google\//i, '')
@@ -158,7 +158,7 @@ export const getFeatureModel = (
     .replace(/^anthropic\//i, '')
     .trim();
   if (!clean.toLowerCase().startsWith('qwen')) {
-    return 'qwen3.8-omni-flash';
+    return 'qwen3.5-omni-flash';
   }
   return clean;
 };

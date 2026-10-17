@@ -76,6 +76,44 @@ export const MyNotebooks: React.FC<MyNotebooksProps> = ({
     };
   }, [selectedNotebook, onNestedViewChange]);
 
+  useEffect(() => {
+    if (!selectedNotebook && setCustomHeaderConfig) {
+      setCustomHeaderConfig({
+        hideBottomNav: false,
+        leftActions: (
+          <button
+            type="button"
+            onClick={() => {
+              if (onNavigate) {
+                onNavigate('chat');
+              } else {
+                window.dispatchEvent(new CustomEvent('app-go-back'));
+              }
+            }}
+            className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-[#E3E9F1] dark:border-[#2A2A2A] bg-white dark:bg-[#141414] hover:bg-slate-50 dark:hover:bg-[#1C1C1C] text-[#0F172A] dark:text-white text-sm font-bold active:scale-95 cursor-pointer transition-all shrink-0 shadow-2xs"
+            aria-label="Back"
+            title="Back"
+          >
+            <i className="bi bi-arrow-left text-sm font-bold text-[#2563EB] dark:text-[#3B82F6]"></i>
+          </button>
+        ),
+        title: (
+          <div className="flex items-center gap-2">
+            <i className="bi bi-journal-bookmark-fill text-base text-[#2563EB] dark:text-[#3B82F6]"></i>
+            <span className="text-sm sm:text-base font-extrabold text-[#0F172A] dark:text-white tracking-tight">My Notebooks</span>
+          </div>
+        ),
+        className: 'bg-[#F6F6F3]/95 dark:bg-[#141414]/95 border-b border-[#E3E9F1] dark:border-[#2A2A2A] backdrop-blur-md',
+      });
+    }
+
+    return () => {
+      if (!selectedNotebook && setCustomHeaderConfig) {
+        setCustomHeaderConfig(null);
+      }
+    };
+  }, [selectedNotebook, setCustomHeaderConfig, onNavigate]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -166,7 +204,7 @@ export const MyNotebooks: React.FC<MyNotebooksProps> = ({
   );
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6 animate-fade-in pb-28 bg-transparent dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#FAFAFA]">
+    <div className="max-w-4xl mx-auto px-3.5 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6 animate-fade-in pb-[calc(80px+env(safe-area-inset-bottom))] bg-transparent dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#FAFAFA]">
       <div className="bg-[#FAF9F6] dark:bg-[#141414] border border-neutral-200/90 dark:border-[#2A2A2A] rounded-3xl p-6 sm:p-7 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1.5 max-w-xl">

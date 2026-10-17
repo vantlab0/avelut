@@ -37,7 +37,7 @@ export default defineConfig(({ command, mode }) => {
       base: process.env.VERCEL ? '/' : (command === 'build' ? './' : '/'),
       envPrefix: ['VITE_', 'OPENROUTER_'],
       define: {
-        'process.env.OPENROUTER_MODEL': JSON.stringify(env.OPENROUTER_MODEL || env.VITE_OPENROUTER_MODEL || 'qwen/qwen3.7-flash'),
+        'process.env.OPENROUTER_MODEL': JSON.stringify(env.OPENROUTER_MODEL || env.VITE_OPENROUTER_MODEL || 'qwen/qwen3.5-omni-flash'),
         'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY || env.VITE_OPENROUTER_API_KEY || ''),
       },
       server: {

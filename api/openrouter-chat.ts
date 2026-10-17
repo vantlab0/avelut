@@ -12,9 +12,11 @@ export async function OPTIONS() {
 }
 
 const FALLBACK_MODELS = [
+  'qwen/qwen3.5-omni-flash',
+  'qwen/qwen3.8-omni-flash',
+  'qwen/qwen3.8-flash',
   'qwen/qwen3.7-flash',
   'qwen/qwen-2.5-72b-instruct',
-  'google/gemini-2.5-flash',
   'deepseek/deepseek-r1:free',
   'meta-llama/llama-3.3-70b-instruct:free',
 ];
@@ -51,7 +53,7 @@ export async function POST(req: Request) {
     };
 
     const messages = body.messages || [];
-    const primaryModel = process.env.OPENROUTER_MODEL || process.env.VITE_OPENROUTER_MODEL || body.model || 'qwen/qwen3.7-flash';
+    const primaryModel = process.env.OPENROUTER_MODEL || process.env.VITE_OPENROUTER_MODEL || body.model || 'qwen/qwen3.5-omni-flash';
 
     const candidateModels = Array.from(new Set([primaryModel, ...FALLBACK_MODELS]));
 

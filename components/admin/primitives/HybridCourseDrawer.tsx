@@ -231,11 +231,11 @@ OUTPUT ONLY A VALID JSON OBJECT:
   ]
 }`;
 
-            // Prefer qwen3.8-omni-flash (app standard). Never force qwen-vl-plus.
+            // Prefer qwen3.5-omni-flash (app standard). Never force qwen-vl-plus.
             const modelName =
               appSettings?.usage_settings?.feature_models?.study_guide_extraction ||
               appSettings?.alibaba_model ||
-              'qwen3.8-omni-flash';
+              'qwen3.5-omni-flash';
 
             // Build parts: images go as vision input; PDFs are text-extracted so DashScope
             // does not receive illegal application/pdf inside image_url.
