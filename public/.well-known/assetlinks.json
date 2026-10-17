@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.avelut.app",
+      "sha256_cert_fingerprints": [
+        "E3:D0:C0:76:0B:2C:50:D2:75:5D:3E:FE:77:66:26:95:AB:8B:AB:7D:61:19:FF:58:90:68:10:E9:C9:B7:BE:80"
+      ]
+    }
+  }
+]
