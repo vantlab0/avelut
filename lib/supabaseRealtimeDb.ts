@@ -236,45 +236,6 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     : mediaType === 'file' ? 'Document file'
     : (text || 'Media');
 
-  const dispatchPush = async () => {
-    try {
-      const client = supabaseAdmin || supabase;
-      const { data: recipientMembers } = await client.from('chat_members')
-        .select('unread_count, user_id')
-        .eq('chat_id', chatId)
-        .neq('user_id', senderId);
-
-      if (recipientMembers && recipientMembers.length > 0) {
-        const apiBase = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() 
-          ? 'https://www.avelut.xyz' 
-          : '';
-
-        for (const member of recipientMembers) {
-          if (!member.user_id) continue;
-          fetch(`${apiBase}/api/notifications`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'send',
-              targetUserId: member.user_id,
-              title: "New Message",
-              message: summary,
-              data: {
-                route: 'messenger',
-                chatId: chatId,
-                senderId: senderId,
-              }
-            })
-          }).catch((err) => {
-            console.warn('[FCM] Push notification fetch failed:', err);
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('[FCM] Error dispatching push notification:', err);
-    }
-  };
-
   try {
     const { error: rpcErr } = await supabase.rpc('send_chat_message', {
       p_chat_id: chatId,
@@ -288,7 +249,6 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     });
 
     if (!rpcErr) {
-      void dispatchPush();
       return message;
     }
 
@@ -351,7 +311,6 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     }
   }
 
-  void dispatchPush();
   return message;
 }
 
