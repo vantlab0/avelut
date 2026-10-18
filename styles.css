@@ -410,6 +410,21 @@
 }
 
 /* Messenger Requested Responsive Message Bubble Styles */
+@keyframes msgEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-msg-entrance {
+  animation: msgEntrance 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 .message-bubble-wrapper {
   display: flex;
   width: 100%;
