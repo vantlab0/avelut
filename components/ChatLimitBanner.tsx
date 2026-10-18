@@ -28,14 +28,6 @@ export const ChatLimitBanner: React.FC<ChatLimitBannerProps> = ({
     }
     if (onNavigate) {
       onNavigate('billing');
-      return;
-    }
-    const baseUrl = isNative() ? 'https://avelut.xyz' : window.location.origin;
-    const plansUrl = `${baseUrl}/plans`;
-    if (isNative()) {
-      await Browser.open({ url: plansUrl });
-    } else {
-      window.location.href = plansUrl;
     }
   };
 

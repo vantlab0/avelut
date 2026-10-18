@@ -44,17 +44,15 @@ export const InsufficientCreditsModal: React.FC<InsufficientCreditsModalProps> =
   const handleBuyCreditsAction = () => {
     if (onBuyCredits) {
       onBuyCredits();
-    } else {
-      window.location.href = '/refill-credits';
     }
+    onClose();
   };
 
   const handleUpgradeProAction = () => {
     if (onUpgradePro) {
       onUpgradePro();
-    } else {
-      window.location.href = '/plans';
     }
+    onClose();
   };
 
   return (
