@@ -117,8 +117,7 @@ const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({
 
   const showAddNew = Boolean(
     query.trim() &&
-    !filteredOptions.some(opt => opt.name.toLowerCase() === query.trim().toLowerCase()) &&
-    (onAddNew || !options.length)
+    !filteredOptions.some(opt => opt.name.toLowerCase() === query.trim().toLowerCase())
   );
 
   return (

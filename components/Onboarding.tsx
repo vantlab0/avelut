@@ -51,7 +51,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ user, onOnboardingComple
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-[#0066FF]/10 dark:bg-[#0066FF]/5 rounded-full blur-3xl pointer-events-none -z-10" />
 
       {/* Full-Width Form Surface */}
-      <div className="w-full p-4 sm:p-8 md:p-12">
+      <div className="w-full py-4 sm:py-8 md:py-12 px-0">
         
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-8 mb-8 border-b border-[#E3E9F1] dark:border-white/10">
