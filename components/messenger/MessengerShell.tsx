@@ -1,7 +1,7 @@
 import { MessengerChatList } from "./pages/MessengerChatList";
 import { MessengerFindFriends } from "./pages/MessengerFindFriends";
 import { MessengerNewChat } from "./pages/MessengerNewChat";
-import { auth, db, ensureDirectChat, get, limitToLast, off, onAuthStateChanged, onDisconnect, onValue, push, query, ref as dbRef, remove, serverTimestamp as serverTimestamp, set, storage, type AuthUser, update } from "@/lib/backend";
+import { auth, db, ensureDirectChat, markChatAsRead, get, limitToLast, off, onAuthStateChanged, onDisconnect, onValue, push, query, ref as dbRef, remove, serverTimestamp as serverTimestamp, set, storage, type AuthUser, update } from "@/lib/backend";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { readCachedJson, writeCachedJson } from "../../utils/cache";
 import type { UserProfile } from "../../types";
@@ -18,7 +18,7 @@ import { uploadToR2, isR2Configured } from "../../services/cloudflareR2Service";
 import { useTheme } from "../../contexts/ThemeContext";
 import { TypingIndicator } from "../TypingIndicator";
 import { getMultipleUserProfiles } from "../../services/userProfileService";
-import { REACTION_EMOJIS, DoubleCheckIcon, AttachmentIcon, CameraIcon, SendIcon, TrashIcon, LockIcon, formatLastSeen, formatChatTimestamp, getUnreadCount, getLastMessagePreview, getLastMessageSenderId, createFallbackChatUser, ensureArray, getMessengerCacheKey, resolveDisplayImageUrl, resolveImageDisplayUrl, extractImageCaption, generateMicroThumbnail } from "../messenger/messengerUtils";
+import { REACTION_EMOJIS, DoubleCheckIcon, ClockIcon, MessageStatusIcon, AttachmentIcon, CameraIcon, SendIcon, TrashIcon, LockIcon, formatLastSeen, formatChatTimestamp, getUnreadCount, getLastMessagePreview, getLastMessageSenderId, createFallbackChatUser, ensureArray, getMessengerCacheKey, resolveDisplayImageUrl, resolveImageDisplayUrl, extractImageCaption, generateMicroThumbnail } from "../messenger/messengerUtils";
 import { ProgressiveImageBubble } from "../messenger/ProgressiveImageBubble";
 import { VoiceNotePlayer } from "../messenger/VoiceNotePlayer";
 import { AvelutMessageInput } from "../messenger/AvelutMessageInput";
@@ -693,7 +693,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
 
           setTimeout(() => scrollToBottom(cached.length === 0 ? ('instant' as ScrollBehavior) : 'smooth'), 40);
           if (authUser) {
-            void set(dbRef(db, `user_chats/${authUser.uid}/${activeChat.chatId}/unreadCount`), 0)
+            void markChatAsRead(activeChat.chatId, authUser.uid)
               .catch(console.error);
           }
         });
@@ -1202,7 +1202,10 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
             setReplyingTo(null);
           }
 
-          setMessages(prev => [...prev, { id: optimisticId, ...data, timestamp: clientTimestamp }]);
+          setMessages(prev => [
+            ...prev,
+            { id: optimisticId, ...data, timestamp: clientTimestamp, status: 'sending', isPending: true, isRead: false }
+          ]);
           playBubbleSound();
           await set(msgRef, data);
         } catch (error: any) {
@@ -1936,7 +1939,12 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1 min-w-0">
                           {c.last_message?.senderId === authUser?.uid && (
-                            <DoubleCheckIcon color={c.last_message?.isRead ? "#3B82F6" : "#8696a0"} />
+                            <MessageStatusIcon
+                              status={c.last_message?.status}
+                              isPending={c.last_message?.isPending}
+                              isUploading={c.last_message?.isUploading}
+                              isRead={c.last_message?.isRead}
+                            />
                           )}
 
                           {c.isTyping ? (
@@ -2013,7 +2021,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                     const sortedReactions = Object.entries(reactionCounts).sort((a, b) => b[1] - a[1]);
 
                     return (
-                      <div key={msg.id} className={`message-bubble-wrapper ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div key={msg.id} className={`message-bubble-wrapper animate-msg-entrance ${isMe ? 'justify-end' : 'justify-start'}`}>
                         <div className={`flex items-end space-x-2 max-w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
                           {!isMe && (
                             <Avatar className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[#E6E6E6] dark:border-transparent mb-0.5" photo_url={selectedChatUser.photo_url} display_name={selectedChatUser.display_name || 'User'} />
@@ -2189,9 +2197,20 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                                 {/* Meta Timestamp */}
                                 <div className="message-time">
                                   <span>
-                                    {msg.isUploading ? 'Sending...' : msg.isFailed ? 'Failed · tap to retry' : formatChatTimestamp(msg.timestamp)}
+                                    {msg.isUploading || msg.status === 'sending' || msg.isPending
+                                      ? 'Sending...'
+                                      : msg.isFailed
+                                        ? 'Failed · tap to retry'
+                                        : formatChatTimestamp(msg.timestamp)}
                                   </span>
-                                  {isMe && !msg.isUploading && !msg.isFailed && <DoubleCheckIcon color={msg.isRead ? '#3B82F6' : '#667'} />}
+                                  {isMe && !msg.isFailed && (
+                                    <MessageStatusIcon
+                                      status={msg.status}
+                                      isPending={msg.isPending}
+                                      isUploading={msg.isUploading}
+                                      isRead={msg.isRead}
+                                    />
+                                  )}
                                 </div>
                               </div>
 
@@ -2412,7 +2431,14 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                                   )}
                                   <div className="message-time">
                                     <span>{formatChatTimestamp(messageActionTarget.timestamp)}</span>
-                                    {isMe && <DoubleCheckIcon color={messageActionTarget.isRead ? '#3B82F6' : '#667'} />}
+                                    {isMe && (
+                                      <MessageStatusIcon
+                                        status={messageActionTarget.status}
+                                        isPending={messageActionTarget.isPending}
+                                        isUploading={messageActionTarget.isUploading}
+                                        isRead={messageActionTarget.isRead}
+                                      />
+                                    )}
                                   </div>
                                 </div>
                               </div>

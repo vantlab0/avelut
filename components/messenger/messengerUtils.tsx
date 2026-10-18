@@ -10,6 +10,28 @@ export const DoubleCheckIcon: React.FC<{ color?: string }> = ({ color = "#8696a0
   </svg>
 );
 
+export const ClockIcon: React.FC<{ color?: string; className?: string }> = ({ color = "#8696a0", className = "shrink-0" }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+export const MessageStatusIcon: React.FC<{
+  status?: 'sending' | 'sent' | 'delivered' | 'read';
+  isPending?: boolean;
+  isUploading?: boolean;
+  isRead?: boolean;
+}> = ({ status, isPending, isUploading, isRead }) => {
+  if (status === 'sending' || isPending || isUploading) {
+    return <ClockIcon color="#8696a0" className="shrink-0 inline-block align-middle ml-1" />;
+  }
+  if (status === 'read' || isRead) {
+    return <DoubleCheckIcon color="#3B82F6" />;
+  }
+  return <DoubleCheckIcon color="#8696a0" />;
+};
+
 export const AttachmentIcon: React.FC = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 018.49 8.49l-9.19 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />

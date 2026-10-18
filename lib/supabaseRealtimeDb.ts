@@ -284,7 +284,7 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
       last_message_text: summary,
       last_message_at: createdAt,
       last_message_sender_id: senderId,
-      last_message_is_read: true,
+      last_message_is_read: false,
       unread_count: 0,
     })
     .eq('chat_id', chatId)
@@ -324,6 +324,42 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
   }
 
   return message;
+}
+
+export async function markChatAsRead(chatId: string, currentUserId: string): Promise<void> {
+  if (!chatId || !currentUserId) return;
+  const client = supabaseAdmin || supabase;
+
+  try {
+    // 1. Reset unread count and set read status for recipient (current user)
+    await client
+      .from('chat_members')
+      .update({
+        unread_count: 0,
+        last_message_is_read: true,
+      })
+      .eq('chat_id', chatId)
+      .eq('user_id', currentUserId);
+
+    // 2. Mark sender's member record as read (so sender receives Realtime update for chat list)
+    await client
+      .from('chat_members')
+      .update({
+        last_message_is_read: true,
+      })
+      .eq('chat_id', chatId)
+      .neq('user_id', currentUserId);
+
+    // 3. Mark unread incoming messages as read in messages table
+    await client
+      .from('messages')
+      .update({ is_read: true })
+      .eq('chat_id', chatId)
+      .neq('sender_id', currentUserId)
+      .eq('is_read', false);
+  } catch (err) {
+    console.warn('[supabaseRealtimeDb] markChatAsRead error:', err);
+  }
 }
 
 export async function ensureDirectChat(otherUserId: string): Promise<string> {
@@ -724,6 +760,7 @@ async function loadPath(path: string): Promise<any> {
     const map: Record<string, any> = {};
     (data || []).forEach((row: any) => {
       const repliedTo = row.reply_to ? rowsById.get(row.reply_to) : null;
+      const isRead = row.is_read || false;
       map[row.id] = {
         id: row.id,
         senderId: row.sender_id,
@@ -740,6 +777,8 @@ async function loadPath(path: string): Promise<any> {
             }
           : null,
         isDeleted: row.is_deleted,
+        isRead,
+        status: isRead ? 'read' : 'sent',
         timestamp: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
       };
     });
