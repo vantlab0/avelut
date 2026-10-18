@@ -6,7 +6,7 @@
  * Messages / chats / notifications use tables + postgres_changes WebSockets.
  */
 
-import { supabase, supabaseAdmin, isSupabaseConfigured } from './supabaseClient';
+import { supabase, supabaseAdmin, isSupabaseConfigured, supabaseUrl } from './supabaseClient';
 
 export type DbRef = { path: string };
 
@@ -236,30 +236,7 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     : mediaType === 'file' ? 'Document file'
     : (text || 'Media');
 
-  try {
-    const { error: rpcErr } = await supabase.rpc('send_chat_message', {
-      p_chat_id: chatId,
-      p_message_id: messageId,
-      p_sender_id: senderId,
-      p_text: text,
-      p_media_url: mediaUrl,
-      p_media_type: mediaType,
-      p_reply_to: replyTo,
-      p_created_at: createdAt,
-    });
-
-    if (!rpcErr) {
-      return message;
-    }
-
-    console.warn('[supabaseRealtimeDb] RPC send_chat_message failed, using direct table fallback:', rpcErr.message);
-  } catch (rpcErr) {
-    console.warn('[supabaseRealtimeDb] RPC send_chat_message exception, using direct table fallback:', rpcErr);
-  }
-
-  // Fallback: direct table inserts & updates if RPC function is missing/failing
-  const client = supabaseAdmin || supabase;
-  const { error: msgErr } = await client.from('messages').insert({
+  const messageRecord = {
     id: messageId,
     chat_id: chatId,
     sender_id: senderId,
@@ -268,13 +245,36 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     media_type: mediaType,
     reply_to: replyTo,
     created_at: createdAt,
-  });
+  };
+
+  // 1. Insert directly via REST (bypasses RPC errors)
+  const client = supabaseAdmin || supabase;
+  const { error: msgErr } = await client.from('messages').insert(messageRecord);
 
   if (msgErr) {
     const isDuplicate = msgErr.message?.includes('duplicate key') || (msgErr as any).code === '23505';
     if (!isDuplicate) {
-      console.error('[supabaseRealtimeDb] Fallback message insert error:', msgErr.message);
-      throw new Error(msgErr.message || 'Failed to send message.');
+      console.warn('[supabaseRealtimeDb] Direct message insert failed, trying RPC fallback:', msgErr.message);
+      try {
+        const { error: rpcErr } = await supabase.rpc('send_chat_message', {
+          p_chat_id: chatId,
+          p_message_id: messageId,
+          p_sender_id: senderId,
+          p_text: text,
+          p_media_url: mediaUrl,
+          p_media_type: mediaType,
+          p_reply_to: replyTo,
+          p_created_at: createdAt,
+        });
+
+        if (rpcErr) {
+          console.error('[supabaseRealtimeDb] RPC send_chat_message failed:', rpcErr.message);
+          throw new Error(msgErr.message || rpcErr.message || 'Failed to send message.');
+        }
+      } catch (rpcErr: any) {
+        console.error('[supabaseRealtimeDb] Message insert error:', rpcErr);
+        throw new Error(msgErr.message || rpcErr?.message || 'Failed to send message.');
+      }
     }
   }
 
@@ -309,6 +309,18 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
         .eq('chat_id', chatId)
         .eq('user_id', member.user_id);
     }
+  }
+
+  // 2. Trigger the Edge Function manually via fetch for push notification
+  try {
+    const pushUrl = `${supabaseUrl}/functions/v1/push-on-message`;
+    await fetch(pushUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ record: messageRecord }),
+    });
+  } catch (pushErr) {
+    console.warn('[supabaseRealtimeDb] Push notification failed:', pushErr);
   }
 
   return message;
