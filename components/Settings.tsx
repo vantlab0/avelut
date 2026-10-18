@@ -206,32 +206,92 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
         </button>
       </div>
 
-      {/* Profile & Academic header */}
-      {matchSearch('Profile & Academic Details', `${userProfile.display_name || ''} ${userProfile.department_id || ''} ${userProfile.level || ''}`) && (
-        <div className="bg-white dark:bg-[#111111] mt-0">
-          <button
-            type="button"
-            onClick={() => onNavigate('user_profile')}
-            className="w-full flex items-center gap-4 px-4 py-4 active:bg-neutral-50 dark:active:bg-white/5 transition-colors text-left"
-          >
-            <Avatar
-              display_name={userProfile.display_name}
-              photo_url={userProfile.photo_url}
-              className="w-16 h-16 ring-2 ring-neutral-100 dark:ring-white/10"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-[18px] text-neutral-900 dark:text-white flex items-center gap-1.5 truncate">
-                {userProfile.display_name || 'User'}
-                <VerificationBadge status={userProfile.subscription_status} />
-              </p>
-              <p className="text-[14px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
-                {userProfile.department_id || userProfile.level
-                  ? `${userProfile.department_id ? userProfile.department_id.replace(/_/g, ' ') : ''}${userProfile.department_id && userProfile.level ? ' • ' : ''}${userProfile.level ? userProfile.level + ' Level' : ''}`
-                  : `@${userProfile.display_name?.toLowerCase().replace(/\s+/g, '') || 'avelut'}`}
-              </p>
-            </div>
+      {/* Profile header – exact WhatsApp layout */}
+      <div className="bg-white dark:bg-[#111111] mt-0">
+        <button
+          type="button"
+          onClick={() => onNavigate('user_profile')}
+          className="w-full flex items-center gap-4 px-4 py-4 active:bg-neutral-50 dark:active:bg-white/5 transition-colors"
+        >
+          <Avatar
+            display_name={userProfile.display_name}
+            photo_url={userProfile.photo_url}
+            className="w-16 h-16 ring-2 ring-neutral-100 dark:ring-white/10"
+          />
+          <div className="min-w-0 flex-1 text-left">
+            <p className="font-medium text-[18px] text-neutral-900 dark:text-white flex items-center gap-1.5 truncate">
+              {userProfile.display_name || 'User'}
+              <VerificationBadge status={userProfile.subscription_status} />
+            </p>
+            <p className="text-[14px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+              @{userProfile.display_name?.toLowerCase().replace(/\s+/g, '') || 'avelut'}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-neutral-400">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
             <ChevronRight />
-          </button>
+          </div>
+        </button>
+      </div>
+
+      {/* Credits / billing quick card */}
+      <div
+        onClick={() => onNavigate('billing')}
+        role="button"
+        tabIndex={0}
+        className="bg-white dark:bg-[#111111] mt-2.5 cursor-pointer active:bg-neutral-50 dark:active:bg-white/5 transition-colors"
+      >
+        <div className="px-4 py-3.5 flex items-center justify-between">
+          <div>
+            <p className="text-[12px] font-medium text-neutral-500 uppercase tracking-wide">Credits balance</p>
+            <p className="text-2xl font-bold text-neutral-900 dark:text-white mt-0.5">
+              {userProfile.ai_credits_balance ?? 0}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-white/10 text-neutral-700 dark:text-neutral-200 capitalize">
+              {userProfile.subscription_status || 'Free'}
+            </span>
+            <ChevronRight />
+          </div>
+        </div>
+      </div>
+
+      {/* Profile & Academic Details */}
+      {(matchSearch('Profile Details', 'Display name, avatar, bio & contact') ||
+        matchSearch('Academic Information', 'School, department, academic level') ||
+        matchSearch('Avelut Pro & Verification', 'Get verified badge, unlimited AI tokens & perks')) && (
+        <div className="bg-white dark:bg-[#111111] mt-2.5 divide-y divide-neutral-100 dark:divide-white/5">
+          {matchSearch('Profile Details', 'Display name, avatar, bio & contact') && (
+            <SettingsRow
+              icon={<i className="bi bi-person text-lg" />}
+              title="Profile Details"
+              subtitle="Display name, avatar, bio & contact"
+              onClick={() => onNavigate('user_profile')}
+            />
+          )}
+          {matchSearch('Academic Information', 'School, department, academic level') && (
+            <SettingsRow
+              icon={<i className="bi bi-mortarboard text-lg" />}
+              title="Academic Information"
+              subtitle={
+                userProfile.department_id || userProfile.level
+                  ? `${userProfile.department_id ? userProfile.department_id.replace(/_/g, ' ') : ''}${userProfile.department_id && userProfile.level ? ' • ' : ''}${userProfile.level ? userProfile.level + ' Level' : ''}`
+                  : 'School, department, academic level'
+              }
+              onClick={() => onNavigate('user_profile')}
+            />
+          )}
+          {matchSearch('Avelut Pro & Verification', 'Get verified badge, unlimited AI tokens & perks') && (
+            <SettingsRow
+              icon={<i className="bi bi-patch-check text-lg text-[#009EE2]" />}
+              title="Avelut Pro & Verification"
+              subtitle="Get verified badge, unlimited AI tokens & perks"
+              onClick={() => onNavigate('billing')}
+            />
+          )}
         </div>
       )}
 
@@ -322,11 +382,11 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
                 }}
              />
           )}
-          {matchSearch('Billing & Plans', 'Avelut Pro, verification badge, credits balance, top-up AI credits & plans') && (
+          {matchSearch('Billing & Plans', 'Top-up AI credits, view plans & invoices') && (
             <SettingsRow
-              icon={<i className="bi bi-credit-card text-lg text-[#009EE2]" />}
+              icon={<i className="bi bi-credit-card text-lg" />}
               title="Billing & Plans"
-              subtitle={`Credits: ${userProfile.ai_credits_balance ?? 0} • Avelut Pro, verification & top-up`}
+              subtitle="Top-up AI credits, view plans & invoices"
               onClick={() => onNavigate('billing')}
             />
           )}
