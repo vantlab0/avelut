@@ -27,15 +27,6 @@ export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProf
   const [selectedTopupAmount, setSelectedTopupAmount] = useState<number>(300);
 
   const handleInstantPaystackTopup = async (amount: number) => {
-    // Google Play Store Policy Guard:
-    // If running inside the native Android APK/AAB, 3rd party embedded popups for digital goods are restricted by Google.
-    // We open the external browser (Chrome Custom Tabs) to keep the app 100% compliant with Google Play.
-    if (isNative()) {
-      const billingUrl = `https://avelut.xyz/refill-credits?uid=${userProfile.uid}&amount=${amount}`;
-      await Browser.open({ url: billingUrl });
-      return;
-    }
-
     if (!appSettings?.paystack_public_key) {
       handleManageBilling();
       return;
@@ -101,14 +92,7 @@ export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProf
   }, [userProfile.email]);
 
   const handleManageBilling = async () => {
-    const baseUrl = isNative() ? 'https://avelut.xyz' : window.location.origin;
-    const billingUrl = `${baseUrl}/refill-credits?uid=${userProfile.uid}`;
-
-    if (isNative()) {
-      await Browser.open({ url: billingUrl });
-    } else {
-      window.open(billingUrl, '_blank');
-    }
+    // In-app billing handled directly within BillingSettings screen
   };
 
   return (
@@ -132,20 +116,9 @@ export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProf
           </div>
           <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 w-full md:w-auto">
             <button
-              onClick={async () => {
-                const baseUrl = isNative() ? 'https://avelut.xyz' : window.location.origin;
-                const url = `${baseUrl}/plans?uid=${userProfile.uid}`;
-                if (isNative()) await Browser.open({ url });
-                else window.open(url, '_blank');
-              }}
-              className="px-6 py-3 bg-[#0066FF] hover:bg-[#002D62] text-white rounded-2xl text-xs font-bold transition-all w-full md:w-auto shadow-2xs cursor-pointer active:scale-95 text-center"
-            >
-              View Subscription Plans
-            </button>
-            <button
               onClick={() => handleInstantPaystackTopup(300)}
               disabled={isProcessingPaystack}
-              className="px-6 py-3 bg-[#F1F5F9] dark:bg-slate-800 hover:bg-[#E3E9F1] text-[#0F172A] dark:text-white rounded-2xl text-xs font-bold transition-all w-full md:w-auto border border-[#E3E9F1] dark:border-slate-700 cursor-pointer active:scale-95 text-center disabled:opacity-50"
+              className="px-6 py-3 bg-[#0066FF] hover:bg-[#002D62] text-white rounded-2xl text-xs font-bold transition-all w-full md:w-auto shadow-2xs cursor-pointer active:scale-95 text-center disabled:opacity-50"
             >
               {isProcessingPaystack ? 'Opening Paystack...' : 'Instant Refill (₦300 Pass)'}
             </button>

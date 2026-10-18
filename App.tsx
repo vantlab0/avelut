@@ -982,12 +982,12 @@ const App: React.FC = () => {
             const isCustomScheme = protocol === 'avelut' || protocol === 'com.avelut.app';
 
             if (url.protocol.startsWith('http')) {
-                if (url.pathname.startsWith('/refill-credits') || url.pathname.startsWith('/plans') || url.pathname.startsWith('/delete-account')) {
+                if (url.pathname.startsWith('/delete-account')) {
                     setCurrentPath(url.pathname + url.search);
                     return;
                 }
                 const route = url.pathname.replace(/^\//, '').split('/')[0];
-                if (['chat', 'study_guide', 'study_partners', 'messenger', 'notifications', 'leaderboard', 'timetable'].includes(route)) {
+                if (['chat', 'study_guide', 'study_partners', 'messenger', 'notifications', 'leaderboard', 'timetable', 'billing'].includes(route)) {
                     setActiveItem(route);
                     return;
                 }
@@ -1041,8 +1041,12 @@ const App: React.FC = () => {
                 }
             } else if (isCustomScheme) {
                 const target = (url.host || url.pathname.replace(/^\//, '')).split('/')[0];
-                if (target === 'plans' || target === 'refill-credits' || target === 'delete-account') {
+                if (target === 'delete-account') {
                     setCurrentPath(`/${target}${url.search}`);
+                    return;
+                }
+                if (target === 'plans' || target === 'refill-credits' || target === 'billing') {
+                    setActiveItem('billing');
                     return;
                 }
                 if (['chat', 'study_guide', 'study_partners', 'messenger', 'notifications', 'leaderboard', 'timetable'].includes(target)) {

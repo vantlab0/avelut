@@ -309,13 +309,7 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   onClick={() => {
                     setIsMenuOpen(false);
-                    const baseUrl = isNative() ? 'https://avelut.xyz' : window.location.origin;
-                    const plansUrl = `${baseUrl}/plans?uid=${userProfile?.uid || ''}&plan=premium`;
-                    if (isNative()) {
-                      window.open(plansUrl, '_system');
-                    } else {
-                      window.open(plansUrl, '_blank');
-                    }
+                    onNavigate?.('billing');
                   }}
                   className="w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm sm:text-[15px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition cursor-pointer text-left"
                 >
