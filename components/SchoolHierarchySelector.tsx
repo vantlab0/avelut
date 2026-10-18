@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabaseDataService } from '../services/supabaseDataService';
-
-import type { School, College, Department } from '../types';
+import { HARDCODED_UNIVERSITY_OPTIONS } from '../constants/universities';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { createAvelutAI, getResponseText } from '../utils/inference';
 
@@ -23,56 +22,32 @@ interface CustomSearchableSelectProps {
   placeholder: string;
   disabled?: boolean;
   onAddNew?: (name: string) => Promise<void>;
-  searchFn?: (query: string) => Promise<Option[]>;
+  emptyText?: string;
 }
 
 const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({ 
-  label, stepNumber, options, value, onChange, placeholder, disabled, onAddNew, searchFn 
+  label, stepNumber, options, value, onChange, placeholder, disabled, onAddNew, emptyText = "No matching options found."
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [asyncOptions, setAsyncOptions] = useState<Option[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [query, setQuery] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let active = true;
-    if (searchFn && searchQuery.trim().length >= 2) {
-      setIsSearching(true);
-      searchFn(searchQuery.trim()).then(res => {
-        if (active) {
-          setAsyncOptions(res);
-          setIsSearching(false);
-        }
-      }).catch(() => {
-        if (active) setIsSearching(false);
-      });
-    } else {
-      setAsyncOptions([]);
-    }
-    return () => { active = false; };
-  }, [searchQuery, searchFn]);
-
-  const filteredOptions = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    const localMatches = options.filter(opt => 
-      opt.name.toLowerCase().includes(q) || 
-      (opt.short_name && opt.short_name.toLowerCase().includes(q))
-    );
-    if (searchFn) {
-      const seen = new Set(localMatches.map(l => l.name.toLowerCase()));
-      const additional = asyncOptions.filter(opt => !seen.has(opt.name.toLowerCase()));
-      return [...localMatches, ...additional];
-    }
-    return localMatches;
-  }, [options, searchQuery, asyncOptions, searchFn]);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const selectedOption = useMemo(() => {
-    return options.find(opt => opt.id === value) || 
-           asyncOptions.find(opt => opt.id === value) || 
-           { id: value, name: value.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') };
-  }, [options, value, asyncOptions]);
+    return options.find(opt => opt.id === value) || (value ? { id: value, name: value.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') } : null);
+  }, [options, value]);
+
+  // Synchronize input text with value/selection when dropdown is closed
+  useEffect(() => {
+    if (!isOpen) {
+      if (selectedOption) {
+        setQuery(selectedOption.name);
+      } else {
+        setQuery('');
+      }
+    }
+  }, [value, selectedOption, isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -84,27 +59,67 @@ const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const filteredOptions = useMemo(() => {
+    if (!query.trim() || (selectedOption && query.trim() === selectedOption.name.trim())) {
+      return options;
+    }
+    const q = query.toLowerCase().trim();
+    return options.filter(opt =>
+      opt.name.toLowerCase().includes(q) ||
+      (opt.short_name && opt.short_name.toLowerCase().includes(q))
+    );
+  }, [options, query, selectedOption]);
+
   const handleSelect = (opt: Option) => {
     onChange(opt);
+    setQuery(opt.name);
     setIsOpen(false);
-    setSearchQuery('');
   };
 
-  const handleAddNew = async () => {
-    if (onAddNew && searchQuery.trim()) {
-      setIsAddingNew(true);
-      try {
-        await onAddNew(searchQuery.trim());
-        setIsOpen(false);
-        setSearchQuery('');
-      } finally {
-        setIsAddingNew(false);
-      }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newQuery = e.target.value;
+    setQuery(newQuery);
+    if (!isOpen) setIsOpen(true);
+  };
+
+  const handleInputFocus = () => {
+    if (!disabled) {
+      setIsOpen(true);
     }
   };
 
-  const showAddNew = onAddNew && searchQuery.trim().length > 0 && 
-                     !filteredOptions.some(opt => opt.name.toLowerCase() === searchQuery.trim().toLowerCase());
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange({ id: '', name: '' });
+    setQuery('');
+    setIsOpen(true);
+    if (inputRef.current) inputRef.current.focus();
+  };
+
+  const handleAddNew = async () => {
+    if (onAddNew && query.trim()) {
+      setIsAddingNew(true);
+      try {
+        await onAddNew(query.trim());
+        setIsOpen(false);
+      } finally {
+        setIsAddingNew(false);
+      }
+    } else if (query.trim()) {
+      // Free-text fallback if no onAddNew handler supplied
+      const freeTextOpt: Option = {
+        id: sanitizeId(query.trim()),
+        name: query.trim()
+      };
+      handleSelect(freeTextOpt);
+    }
+  };
+
+  const showAddNew = Boolean(
+    query.trim() &&
+    !filteredOptions.some(opt => opt.name.toLowerCase() === query.trim().toLowerCase()) &&
+    (onAddNew || !options.length)
+  );
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -115,49 +130,45 @@ const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({
         {label}
       </label>
 
+      {/* Inline Search Trigger */}
       <div 
-        className={`w-full bg-[#F1F5F9]/80 dark:bg-white/5 border border-[#E3E9F1] dark:border-white/10 rounded-2xl py-3.5 px-4 flex items-center justify-between text-[#0F172A] dark:text-white transition-all duration-200 focus-within:ring-2 focus-within:ring-[#0066FF] hover:border-[#0066FF]/50 cursor-pointer ${disabled ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-white/5' : ''}`}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={`w-full bg-[#F1F5F9]/80 dark:bg-white/5 border border-[#E3E9F1] dark:border-white/10 rounded-2xl py-3 px-4 flex items-center justify-between text-[#0F172A] dark:text-white transition-all duration-200 focus-within:ring-2 focus-within:ring-[#0066FF] hover:border-[#0066FF]/50 ${disabled ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-white/5' : ''}`}
       >
-        <span className={value ? 'text-[#0F172A] dark:text-white font-semibold line-clamp-1' : 'text-[#64748B] dark:text-gray-400 line-clamp-1'}>
-          {value ? selectedOption.name : placeholder}
-        </span>
-        <i className={`bi bi-chevron-${isOpen ? 'up' : 'down'} text-[#64748B] shrink-0 transition-transform`}></i>
+        <input
+          ref={inputRef}
+          type="text"
+          disabled={disabled}
+          className="w-full bg-transparent border-none focus:outline-none text-sm text-[#0F172A] dark:text-white placeholder-[#64748B] font-medium pr-2"
+          placeholder={placeholder}
+          value={query}
+          onChange={handleInputChange}
+          onFocus={handleInputFocus}
+        />
+
+        <div className="flex items-center gap-1 shrink-0 text-[#64748B]">
+          {query && !disabled && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="p-1 hover:text-[#0F172A] dark:hover:text-white transition-colors"
+              title="Clear selection"
+            >
+              <i className="bi bi-x-circle-fill text-sm"></i>
+            </button>
+          )}
+          <i
+            className={`bi bi-chevron-${isOpen ? 'up' : 'down'} text-xs cursor-pointer transition-transform`}
+            onClick={() => !disabled && setIsOpen(!isOpen)}
+          ></i>
+        </div>
       </div>
 
-      {isOpen && (
+      {isOpen && !disabled && (
         <div className="absolute z-30 w-full mt-2 bg-white dark:bg-[#0A0A0A] border border-[#E3E9F1] dark:border-white/10 rounded-2xl shadow-2xl max-h-72 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-          <div className="p-3 border-b border-[#E3E9F1] dark:border-white/10 flex items-center bg-[#F8FAFC] dark:bg-white/5">
-            <i className="bi bi-search text-[#64748B] ml-1 mr-2 shrink-0"></i>
-            <input
-              type="text"
-              className="w-full bg-transparent border-none focus:outline-none text-sm text-[#0F172A] dark:text-white placeholder-[#64748B]"
-              placeholder={searchFn ? "Type name or acronym (e.g. UNILAG, FUPRE)..." : "Search options..."}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              autoFocus
-            />
-            {searchQuery && (
-              <button 
-                type="button" 
-                onClick={() => setSearchQuery('')}
-                className="text-[#64748B] hover:text-[#0F172A] dark:hover:text-white text-xs px-1"
-              >
-                <i className="bi bi-x-circle-fill"></i>
-              </button>
-            )}
-          </div>
-
           <div className="overflow-y-auto p-1.5 flex-1 space-y-1">
-            {isSearching ? (
-              <div className="p-4 text-sm text-[#64748B] dark:text-gray-400 text-center flex items-center justify-center gap-2">
-                <i className="bi bi-arrow-repeat animate-spin text-[#0066FF]"></i>
-                <span>Smart AI search & deduplication...</span>
-              </div>
-            ) : filteredOptions.length === 0 && !showAddNew ? (
+            {filteredOptions.length === 0 && !showAddNew ? (
               <div className="p-4 text-sm text-[#64748B] dark:text-gray-400 text-center">
-                {onAddNew ? "No options recorded yet. Type above to add a new one." : "No matching options found."}
+                {emptyText}
               </div>
             ) : (
               filteredOptions.map((opt) => {
@@ -196,12 +207,12 @@ const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({
                 {isAddingNew ? (
                   <>
                     <i className="bi bi-arrow-repeat animate-spin"></i>
-                    <span>Verifying & standardizing with AI...</span>
+                    <span>Adding "{query}"...</span>
                   </>
                 ) : (
                   <>
                     <i className="bi bi-plus-circle-fill"></i>
-                    <span className="line-clamp-1">Add & Standardize "{searchQuery}"</span>
+                    <span className="line-clamp-1">Use/Add "{query}"</span>
                   </>
                 )}
               </div>
@@ -226,21 +237,37 @@ interface SchoolHierarchySelectorProps {
 export const SchoolHierarchySelector: React.FC<SchoolHierarchySelectorProps> = ({
   schoolId, setSchoolId, collegeId, setCollegeId, departmentId, setDepartmentId, disabled
 }) => {
-  const [schools, setSchools] = useState<Array<{ id: string; name: string; short_name?: string }>>([]);
+  const [dbSchools, setDbSchools] = useState<Array<{ id: string; name: string; short_name?: string }>>([]);
   const [colleges, setColleges] = useState<Array<{ id: string; name: string; school_id?: string }>>([]);
   const [departments, setDepartments] = useState<Array<{ id: string; name: string; college_id?: string }>>([]);
   const { settings: appSettings } = useAppSettings();
 
-  // 1. Fetch live schools from Supabase
+  // 1. Fetch live custom/stored schools from Supabase
   useEffect(() => {
     let isMounted = true;
     void supabaseDataService.fetchSchools().then(res => {
       if (isMounted && res.length > 0) {
-        setSchools(res);
+        setDbSchools(res);
       }
     });
     return () => { isMounted = false; };
   }, []);
+
+  // Combined schools list: Hardcoded NUC List + Supabase DB entries
+  const schoolOptions = useMemo(() => {
+    const map = new Map<string, Option>();
+    // Pre-populate with hardcoded list
+    HARDCODED_UNIVERSITY_OPTIONS.forEach(opt => {
+      map.set(opt.id, opt);
+    });
+    // Add any DB schools that might not be in hardcoded list
+    dbSchools.forEach(s => {
+      if (!map.has(s.id)) {
+        map.set(s.id, { id: s.id, name: s.name, short_name: s.short_name });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [dbSchools]);
 
   // 2. Fetch live colleges when schoolId changes
   useEffect(() => {
@@ -268,60 +295,7 @@ export const SchoolHierarchySelector: React.FC<SchoolHierarchySelectorProps> = (
     return () => { isMounted = false; };
   }, [schoolId, collegeId]);
 
-  // ── Smart AI Deduplication & Global University Search ───────────────────
-  const searchGlobalUniversities = async (query: string): Promise<Option[]> => {
-    const q = query.toLowerCase().trim();
-    const localMatches = schools
-      .filter(s => s.name.toLowerCase().includes(q) || (s.short_name && s.short_name.toLowerCase().includes(q)))
-      .map(s => ({ id: s.id, name: s.name, short_name: s.short_name }));
-
-    try {
-      const ai = createAvelutAI(appSettings, null);
-      if (!ai) return localMatches;
-
-      const existingNames = schools.map(s => s.name).join(', ');
-      const prompt = `You are an academic database assistant for universities.
-Existing schools in database: [${existingNames}].
-User typed: "${query}".
-Task:
-1. If the input matches an existing university (including abbreviations like UNILAG, UNIBEN, FUPRE), identify the canonical standard name.
-2. If it is a new Nigerian university, return its official full name.
-Return ONLY a valid JSON array of up to 4 university names (e.g. ["University of Lagos", "Federal University of Petroleum Resources Effurun"]). No markdown blocks or commentary.`;
-
-      const response = await ai.models.generateContent({
-        model: 'qwen/qwen3.7-flash',
-        contents: prompt,
-        config: { maxOutputTokens: 200 }
-      });
-
-      const text = getResponseText(response).trim();
-      let parsed: string[] = [];
-      try {
-        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        parsed = JSON.parse(cleanText);
-      } catch (err) {
-        console.warn("[SchoolSelector] Parse error from AI school search:", text);
-      }
-
-      const globalMatches: Option[] = [];
-      const seen = new Set(localMatches.map(l => l.name.toLowerCase()));
-      
-      if (Array.isArray(parsed)) {
-        for (const name of parsed) {
-          if (typeof name === 'string' && !seen.has(name.toLowerCase())) {
-            seen.add(name.toLowerCase());
-            globalMatches.push({ id: sanitizeId(name), name });
-          }
-        }
-      }
-      return [...localMatches, ...globalMatches];
-    } catch (e) {
-      console.warn('[SchoolSelector] AI search failed:', e);
-      return localMatches;
-    }
-  };
-
-  // ── Smart AI Duplicate Prevention for Faculties & Departments ──────────
+  // Smart AI Duplicate Prevention for Faculties & Departments
   const deduplicateAndStandardize = async (
     inputName: string, 
     type: 'College/Faculty' | 'Department', 
@@ -332,7 +306,6 @@ Return ONLY a valid JSON array of up to 4 university names (e.g. ["University of
       .replace(/^(faculty of|college of|school of|department of)\s+/i, '')
       .trim();
     
-    // 1. Direct or fuzzy local match check
     for (const item of existingList) {
       const itemName = item.name.toLowerCase().replace(/\s+/g, ' ');
       const strippedItemName = itemName
@@ -349,7 +322,7 @@ Return ONLY a valid JSON array of up to 4 university names (e.g. ["University of
       }
     }
 
-    const school = schools.find(s => s.id === schoolId);
+    const school = schoolOptions.find(s => s.id === schoolId);
     const schoolName = school?.name || 'the university';
 
     try {
@@ -419,8 +392,6 @@ Return ONLY valid JSON.`;
     }
     setDepartmentId(res.id);
   };
-
-  const schoolOptions = useMemo(() => schools.map(s => ({ id: s.id, name: s.name, short_name: s.short_name })), [schools]);
   
   const collegesOptions = useMemo(() => {
     return colleges.map(c => ({ id: c.id, name: c.name }));
@@ -436,10 +407,10 @@ Return ONLY valid JSON.`;
 
     if (level === 'school') {
       setSchoolId(id);
-      const isLocal = schools.some(s => s.id === id);
+      const isLocal = dbSchools.some(s => s.id === id);
       if (!isLocal) {
         await supabaseDataService.upsertSchool({ id, name, short_name: opt.short_name });
-        setSchools(prev => [...prev, { id, name, short_name: opt.short_name }]);
+        setDbSchools(prev => [...prev, { id, name, short_name: opt.short_name }]);
       }
     } else if (level === 'college') {
       setCollegeId(id);
@@ -472,7 +443,7 @@ Return ONLY valid JSON.`;
         onChange={(opt) => handleOptionSelected('school', opt)}
         placeholder="Select or search university..."
         disabled={disabled}
-        searchFn={searchGlobalUniversities}
+        emptyText="No university found"
       />
 
       <CustomSearchableSelect 
