@@ -3,14 +3,12 @@ import { webSearchTool } from '../tools/web-search';
 
 describe('webSearchTool', () => {
   it('should have web_search schema and description', () => {
-    expect(webSearchTool.description).toContain('Search the web');
+    expect(webSearchTool.description).toContain('current events');
   });
 
-  it('should execute fallback when no api key is configured', async () => {
+  it('should return unconfigured error when no api key is configured', async () => {
     const result = await (webSearchTool as any).execute({ query: 'quantum computing' });
-    expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(0);
-    expect(result[0]).toHaveProperty('title');
-    expect(result[0]).toHaveProperty('url');
+    expect(result).toHaveProperty('error');
+    expect(result.error).toContain('Web search is not configured');
   });
 });
