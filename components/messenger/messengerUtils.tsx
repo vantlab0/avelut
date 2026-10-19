@@ -75,13 +75,37 @@ export const LockIcon: React.FC<{ locked: boolean }> = ({ locked }) => (
   </svg>
 );
 
-export const formatLastSeen = (value?: number): string => {
+export const formatLastSeen = (value?: number | string | null): string => {
   if (!value) return 'Offline';
-  const diff = Date.now() - value;
-  if (diff < 60000) return 'Online';
+  const timestamp = typeof value === 'string' ? new Date(value).getTime() : value;
+  if (!timestamp || Number.isNaN(timestamp)) return 'Offline';
+  const diff = Date.now() - timestamp;
+  if (diff < 60000) return 'Last seen just now';
   if (diff < 3600000) return `Last seen ${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `Last seen ${Math.floor(diff / 3600000)}h ago`;
-  return `Last seen ${new Date(value).toLocaleDateString()}`;
+  return `Last seen ${new Date(timestamp).toLocaleDateString()}`;
+};
+
+export const isUserOnline = (user?: Partial<UserProfile> | null, onlineUserIds?: Record<string, boolean> | Set<string>): boolean => {
+  if (!user || !user.uid) return false;
+  if (onlineUserIds) {
+    if (onlineUserIds instanceof Set) {
+      return onlineUserIds.has(user.uid);
+    }
+    return Boolean(onlineUserIds[user.uid]);
+  }
+  if (user.is_online || (user as any).isOnline) {
+    const rawLs = user.last_seen || (user as any).lastSeen;
+    if (rawLs) {
+      const timestamp = typeof rawLs === 'string' ? new Date(rawLs).getTime() : rawLs;
+      if (timestamp && Date.now() - timestamp < 45000) {
+        return true;
+      }
+    } else {
+      return true;
+    }
+  }
+  return false;
 };
 
 export const formatChatTimestamp = (ts?: number): string => {

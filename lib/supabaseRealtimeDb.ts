@@ -247,71 +247,73 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     created_at: createdAt,
   };
 
-  // 1. Insert directly via REST (bypasses RPC errors)
-  const client = supabaseAdmin || supabase;
-  const { error: msgErr } = await client.from('messages').insert(messageRecord);
+  let sentViaRpc = false;
+  try {
+    const { error: rpcErr } = await supabase.rpc('send_chat_message', {
+      p_chat_id: chatId,
+      p_message_id: messageId,
+      p_sender_id: senderId,
+      p_text: text,
+      p_media_url: mediaUrl,
+      p_media_type: mediaType,
+      p_reply_to: replyTo,
+      p_created_at: createdAt,
+    });
+    if (!rpcErr) {
+      sentViaRpc = true;
+    } else {
+      console.warn('[supabaseRealtimeDb] RPC send_chat_message failed, trying REST fallback:', rpcErr.message);
+    }
+  } catch (rpcErr) {
+    console.warn('[supabaseRealtimeDb] RPC send_chat_message exception:', rpcErr);
+  }
 
-  if (msgErr) {
-    const isDuplicate = msgErr.message?.includes('duplicate key') || (msgErr as any).code === '23505';
-    if (!isDuplicate) {
-      console.warn('[supabaseRealtimeDb] Direct message insert failed, trying RPC fallback:', msgErr.message);
-      try {
-        const { error: rpcErr } = await supabase.rpc('send_chat_message', {
-          p_chat_id: chatId,
-          p_message_id: messageId,
-          p_sender_id: senderId,
-          p_text: text,
-          p_media_url: mediaUrl,
-          p_media_type: mediaType,
-          p_reply_to: replyTo,
-          p_created_at: createdAt,
-        });
+  if (!sentViaRpc) {
+    const client = supabaseAdmin || supabase;
+    const { error: msgErr } = await client.from('messages').insert(messageRecord);
 
-        if (rpcErr) {
-          console.error('[supabaseRealtimeDb] RPC send_chat_message failed:', rpcErr.message);
-          throw new Error(msgErr.message || rpcErr.message || 'Failed to send message.');
-        }
-      } catch (rpcErr: any) {
-        console.error('[supabaseRealtimeDb] Message insert error:', rpcErr);
-        throw new Error(msgErr.message || rpcErr?.message || 'Failed to send message.');
+    if (msgErr) {
+      const isDuplicate = msgErr.message?.includes('duplicate key') || (msgErr as any).code === '23505';
+      if (!isDuplicate) {
+        throw new Error(msgErr.message || 'Failed to send message.');
+      }
+    }
+
+    // Fallback: Update sender's member record
+    await client.from('chat_members')
+      .update({
+        last_message_text: summary,
+        last_message_at: createdAt,
+        last_message_sender_id: senderId,
+        last_message_is_read: false,
+        unread_count: 0,
+      })
+      .eq('chat_id', chatId)
+      .eq('user_id', senderId);
+
+    // Update recipient(s) member records
+    const { data: recipientMembers } = await client.from('chat_members')
+      .select('unread_count, user_id')
+      .eq('chat_id', chatId)
+      .neq('user_id', senderId);
+
+    if (recipientMembers && recipientMembers.length > 0) {
+      for (const member of recipientMembers) {
+        await client.from('chat_members')
+          .update({
+            last_message_text: summary,
+            last_message_at: createdAt,
+            last_message_sender_id: senderId,
+            last_message_is_read: false,
+            unread_count: (member.unread_count || 0) + 1,
+          })
+          .eq('chat_id', chatId)
+          .eq('user_id', member.user_id);
       }
     }
   }
 
-  // Update sender's member record
-  await client.from('chat_members')
-    .update({
-      last_message_text: summary,
-      last_message_at: createdAt,
-      last_message_sender_id: senderId,
-      last_message_is_read: false,
-      unread_count: 0,
-    })
-    .eq('chat_id', chatId)
-    .eq('user_id', senderId);
-
-  // Update recipient(s) member records
-  const { data: recipientMembers } = await client.from('chat_members')
-    .select('unread_count, user_id')
-    .eq('chat_id', chatId)
-    .neq('user_id', senderId);
-
-  if (recipientMembers && recipientMembers.length > 0) {
-    for (const member of recipientMembers) {
-      await client.from('chat_members')
-        .update({
-          last_message_text: summary,
-          last_message_at: createdAt,
-          last_message_sender_id: senderId,
-          last_message_is_read: false,
-          unread_count: (member.unread_count || 0) + 1,
-        })
-        .eq('chat_id', chatId)
-        .eq('user_id', member.user_id);
-    }
-  }
-
-  // 2. Trigger the Edge Function manually via fetch for push notification
+  // Trigger the Edge Function manually via fetch for push notification
   try {
     const pushUrl = `${supabaseUrl}/functions/v1/push-on-message`;
     await fetch(pushUrl, {
@@ -328,6 +330,18 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
 
 export async function markChatAsRead(chatId: string, currentUserId: string): Promise<void> {
   if (!chatId || !currentUserId) return;
+
+  try {
+    const { error: rpcErr } = await supabase.rpc('mark_chat_as_read', {
+      p_chat_id: chatId,
+      p_user_id: currentUserId,
+    });
+    if (!rpcErr) return;
+    console.warn('[supabaseRealtimeDb] RPC mark_chat_as_read failed, using REST fallback:', rpcErr.message);
+  } catch (rpcErr) {
+    console.warn('[supabaseRealtimeDb] RPC mark_chat_as_read exception:', rpcErr);
+  }
+
   const client = supabaseAdmin || supabase;
 
   try {
@@ -1226,17 +1240,28 @@ export function onValue(
   }
 
   if (parts[0] === 'user_chats' && parts.length >= 2) {
-    const userId = parts[1];
-    const chName = `user_chats:${userId}`;
+    const targetUserId = parts[1];
+    const chName = `user_chats:${targetUserId}`;
     let ch = channelByPath.get(chName);
     if (!ch) {
       ch = supabase
         .channel(chName)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'chat_members', filter: `user_id=eq.${userId}` },
+          { event: '*', schema: 'public', table: 'chat_members', filter: `user_id=eq.${targetUserId}` },
           async () => {
-            const listPath = `user_chats/${userId}`;
+            const listPath = `user_chats/${targetUserId}`;
+            notify(listPath, await loadPath(listPath));
+            if (parts.length === 3) {
+              notify(path, await loadPath(path));
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'messages' },
+          async () => {
+            const listPath = `user_chats/${targetUserId}`;
             notify(listPath, await loadPath(listPath));
             if (parts.length === 3) {
               notify(path, await loadPath(path));

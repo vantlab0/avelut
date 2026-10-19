@@ -1,7 +1,7 @@
 import { MessengerChatList } from "./pages/MessengerChatList";
 import { MessengerFindFriends } from "./pages/MessengerFindFriends";
 import { MessengerNewChat } from "./pages/MessengerNewChat";
-import { auth, db, ensureDirectChat, markChatAsRead, get, limitToLast, off, onAuthStateChanged, onDisconnect, onValue, push, query, ref as dbRef, remove, serverTimestamp as serverTimestamp, set, storage, type AuthUser, update } from "@/lib/backend";
+import { auth, db, supabase, ensureDirectChat, markChatAsRead, get, limitToLast, off, onAuthStateChanged, onDisconnect, onValue, push, query, ref as dbRef, remove, serverTimestamp as serverTimestamp, set, storage, type AuthUser, update } from "@/lib/backend";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { readCachedJson, writeCachedJson } from "../../utils/cache";
 import type { UserProfile } from "../../types";
@@ -18,7 +18,7 @@ import { uploadToR2, isR2Configured } from "../../services/cloudflareR2Service";
 import { useTheme } from "../../contexts/ThemeContext";
 import { TypingIndicator } from "../TypingIndicator";
 import { getMultipleUserProfiles } from "../../services/userProfileService";
-import { REACTION_EMOJIS, DoubleCheckIcon, ClockIcon, MessageStatusIcon, AttachmentIcon, CameraIcon, SendIcon, TrashIcon, LockIcon, formatLastSeen, formatChatTimestamp, getUnreadCount, getLastMessagePreview, getLastMessageSenderId, createFallbackChatUser, ensureArray, getMessengerCacheKey, resolveDisplayImageUrl, resolveImageDisplayUrl, extractImageCaption, generateMicroThumbnail } from "../messenger/messengerUtils";
+import { REACTION_EMOJIS, DoubleCheckIcon, ClockIcon, MessageStatusIcon, AttachmentIcon, CameraIcon, SendIcon, TrashIcon, LockIcon, formatLastSeen, formatChatTimestamp, getUnreadCount, getLastMessagePreview, getLastMessageSenderId, createFallbackChatUser, ensureArray, getMessengerCacheKey, resolveDisplayImageUrl, resolveImageDisplayUrl, extractImageCaption, generateMicroThumbnail, isUserOnline } from "../messenger/messengerUtils";
 import { ProgressiveImageBubble } from "../messenger/ProgressiveImageBubble";
 import { VoiceNotePlayer } from "../messenger/VoiceNotePlayer";
 import { AvelutMessageInput } from "../messenger/AvelutMessageInput";
@@ -480,43 +480,80 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         };
       }, []);
 
+      const [onlineUserIds, setOnlineUserIds] = useState<Record<string, boolean>>({});
+
+      // Supabase Realtime Presence Subscription
+      useEffect(() => {
+        if (!authUser) return;
+
+        const presenceChannel = supabase.channel('online-users', {
+          config: { presence: { key: authUser.uid } }
+        });
+
+        presenceChannel
+          .on('presence', { event: 'sync' }, () => {
+            const state = presenceChannel.presenceState();
+            const activeMap: Record<string, boolean> = {};
+            Object.keys(state).forEach(uid => {
+              activeMap[uid] = true;
+            });
+            setOnlineUserIds(activeMap);
+          })
+          .on('presence', { event: 'join' }, ({ key }) => {
+            if (key) setOnlineUserIds(prev => ({ ...prev, [key]: true }));
+          })
+          .on('presence', { event: 'leave' }, ({ key }) => {
+            if (key) setOnlineUserIds(prev => {
+              const next = { ...prev };
+              delete next[key];
+              return next;
+            });
+          })
+          .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+              await presenceChannel.track({
+                user_id: authUser.uid,
+                online_at: new Date().toISOString(),
+              });
+            }
+          });
+
+        return () => {
+          void presenceChannel.untrack();
+          void supabase.removeChannel(presenceChannel);
+        };
+      }, [authUser]);
+
+      // Periodic Heartbeat to maintain accurate DB last_seen when offline
       useEffect(() => {
         if (!authUser) return;
 
         const presenceRef = dbRef(db, `users/${authUser.uid}`);
-        const connectedRef = dbRef(db, '.info/connected');
-        let activeConnection = false;
 
-        const syncPresence = async (online: boolean) => {
-          await update(presenceRef, {
-            is_online: online,
-            last_seen: serverTimestamp()
-          });
-        };
-
-        const unsubscribeConnected = onValue(connectedRef, async (snapshot) => {
-          const connected = snapshot.val() === true;
-          activeConnection = connected;
-
-          if (connected && isAppActive) {
-            const presenceDisconnect = onDisconnect(presenceRef);
-            await presenceDisconnect.update({
-              is_online: false,
+        const updateHeartbeat = async (online: boolean) => {
+          try {
+            await update(presenceRef, {
+              is_online: online,
               last_seen: serverTimestamp()
             });
-            await syncPresence(true);
+          } catch (e) {
+            console.warn('[Messenger] Presence heartbeat update error:', e);
           }
-        });
+        };
 
-        if (isAppActive && activeConnection) {
-          syncPresence(true);
-        } else if (!isAppActive) {
-          syncPresence(false);
+        if (isAppActive) {
+          void updateHeartbeat(true);
         }
 
+        const interval = setInterval(() => {
+          if (isAppActive) {
+            void updateHeartbeat(true);
+          }
+        }, 25000);
+
         return () => {
-          off(connectedRef, 'value', unsubscribeConnected);
-          syncPresence(false);
+          clearInterval(interval);
+          void updateHeartbeat(false);
         };
       }, [authUser, isAppActive]);
 
@@ -1520,10 +1557,10 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                   <StreakBadge userProfile={activeChat.otherUser} size="sm" />
                 </div>
                 <span className="text-[11px] sm:text-[12px] text-slate-500 dark:text-[#A3A3A3] font-normal leading-tight truncate mt-0.5 flex items-center">
-                  {activeChat.otherUser.is_online ? (
+                  {isUserOnline(activeChat.otherUser, onlineUserIds) ? (
                     <>
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#A3A3A3] mr-1.5 shrink-0" />
-                      <span className="text-[#A3A3A3] font-medium">Online</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 shrink-0 animate-pulse" />
+                      <span className="text-emerald-500 dark:text-emerald-400 font-medium">Online</span>
                     </>
                   ) : (
                     formatLastSeen(activeChat.otherUser.last_seen)
@@ -1939,7 +1976,12 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                             : 'hover:bg-[#FAFAFA] dark:hover:bg-[#0A0A0A]/60'
                       }`}
                     >
-                    <Avatar className="w-11 h-11 rounded-full shrink-0 object-cover border border-[#E6E6E6] dark:border-[#2A2A2A]" photo_url={c.otherUser?.photo_url} display_name={c.otherUser?.display_name || 'User'} />
+                    <div className="relative shrink-0">
+                      <Avatar className="w-11 h-11 rounded-full shrink-0 object-cover border border-[#E6E6E6] dark:border-[#2A2A2A]" photo_url={c.otherUser?.photo_url} display_name={c.otherUser?.display_name || 'User'} />
+                      {isUserOnline(c.otherUser, onlineUserIds) && (
+                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-black rounded-full shadow-sm"></span>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center mb-0.5">
                         <h3 className={`text-[15px] truncate flex items-center gap-1.5 ${getUnreadCount(c) > 0 ? 'font-bold text-[#0A0A0A] dark:text-white' : 'font-medium text-[#0A0A0A] dark:text-white'}`}>
@@ -1975,8 +2017,12 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] mt-1 text-[#525252] dark:text-[#A3A3A3] font-normal">
-                        {c.otherUser?.is_online ? <span className="text-[#A3A3A3]">online</span> : formatLastSeen(c.otherUser?.last_seen)}
+                      <p className="text-[11px] mt-1 text-[#525252] dark:text-[#A3A3A3] font-normal flex items-center gap-1">
+                        {isUserOnline(c.otherUser, onlineUserIds) ? (
+                          <span className="text-emerald-500 font-medium">Online</span>
+                        ) : (
+                          formatLastSeen(c.otherUser?.last_seen)
+                        )}
                       </p>
                     </div>
                     </div>
