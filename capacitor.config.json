@@ -10,7 +10,7 @@
       "overlaysWebView": false
     },
     "Keyboard": {
-      "resize": "body",
+      "resize": "none",
       "style": "DARK",
       "resizeOnFullScreen": false
     },
