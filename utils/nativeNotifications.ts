@@ -139,16 +139,6 @@ export async function clearDeliveredNotifications(): Promise<void> {
   }
 }
 
-export async function scheduleStudyReminders(reminders: any[]): Promise<boolean> {
-  console.log('[FCM] scheduleStudyReminders called with count:', reminders?.length || 0);
-  return true;
-}
-
-export async function sendTestNotification(): Promise<boolean> {
-  console.log('[FCM] sendTestNotification triggered');
-  return true;
-}
-
 export async function requestLocalNotificationPermission(): Promise<boolean> {
   if (!isNative()) return false;
   try {
@@ -216,15 +206,6 @@ export async function cancelStudyRemindersForSessions(sessionIds: string[]): Pro
 export async function cancelAllStudyReminders(): Promise<void> {
   // Optional reminder cleanup
 }
-
-export const clearDeliveredNotifications = async (): Promise<void> => {
-  if (!isNative()) return;
-  try {
-    await PushNotifications.removeAllDeliveredNotifications();
-  } catch (err) {
-    console.warn('[FCM] Failed to clear delivered notifications:', err);
-  }
-};
 
 export async function sendTestNotification(): Promise<{ success: boolean; message: string }> {
   try {
