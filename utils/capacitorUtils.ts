@@ -98,13 +98,21 @@ export const listenToKeyboard = (
   const showHandler = Keyboard.addListener('keyboardWillShow', (info) => {
     onShow(info.keyboardHeight);
   });
+  const didShowHandler = Keyboard.addListener('keyboardDidShow', (info) => {
+    onShow(info.keyboardHeight);
+  });
   const hideHandler = Keyboard.addListener('keyboardWillHide', () => {
+    onHide();
+  });
+  const didHideHandler = Keyboard.addListener('keyboardDidHide', () => {
     onHide();
   });
 
   return () => {
     showHandler.then(l => l.remove()).catch(() => {});
+    didShowHandler.then(l => l.remove()).catch(() => {});
     hideHandler.then(l => l.remove()).catch(() => {});
+    didHideHandler.then(l => l.remove()).catch(() => {});
   };
 };
 
