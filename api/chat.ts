@@ -27,8 +27,7 @@ export async function POST(req: Request) {
     const alibabaApiKey =
       process.env.ALIBABA_API_KEY ||
       process.env.VITE_ALIBABA_API_KEY ||
-      validClientKey ||
-      'sk-ws-H.DDLPMIE.fbaD.MEQCIFkao1-I0HQyUMxmrty8-k1S70b0xjgF1BoNksO2pM6WAiACzxp1ojlxhmc6YQFNodecye0oQOBAalaHxCVNdJfQjA';
+      validClientKey;
 
     const dashscope = createOpenAI({
       baseURL: process.env.ALIBABA_BASE_URL || 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',

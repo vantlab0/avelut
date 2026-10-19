@@ -1738,7 +1738,8 @@ export const Chat: React.FC<ChatProps> = ({
 
                               {/* Interrupted / Aborted State UI */}
                               {(msg.status === 'interrupted' ||
-                                (msg.parts &&
+                                (msg.status === 'ready' &&
+                                  msg.parts &&
                                   msg.parts.some((p) => p.type === 'text' && p.text?.length === 0))) && (
                                 <div className="flex flex-col gap-3 mt-3 p-3 rounded-lg bg-neutral-100 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700/60">
                                   <span className="text-base font-medium text-neutral-600 dark:text-neutral-400">
