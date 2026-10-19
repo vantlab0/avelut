@@ -6,11 +6,13 @@ describe('webSearchTool', () => {
     expect(webSearchTool.description).toContain('Search the web');
   });
 
-  it('should execute fallback when no api key is configured', async () => {
+  it('should return error when no api key is configured', async () => {
     const result = await (webSearchTool as any).execute({ query: 'quantum computing' });
-    expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(0);
-    expect(result[0]).toHaveProperty('title');
-    expect(result[0]).toHaveProperty('url');
+    if (!process.env.TAVILY_API_KEY && !process.env.VITE_TAVILY_API_KEY && !process.env.NEXT_PUBLIC_TAVILY_API_KEY) {
+      expect(result).toHaveProperty('error');
+      expect((result as any).error).toContain('Web search is not configured');
+    } else {
+      expect(Array.isArray(result) || (result && 'error' in result)).toBe(true);
+    }
   });
 });

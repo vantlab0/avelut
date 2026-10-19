@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { tavily } from '@tavily/core';
 
 export const webSearchTool = tool({
-  description: 'Use this tool for current events, live data, recent facts, or anything that may not be in the model training data. Return the top results with title, URL, and content excerpt.',
+  description: 'Search the web for current events, live data, recent facts, or information not present in model training data.',
   inputSchema: z.object({
     query: z.string().describe('The search query'),
   }),
