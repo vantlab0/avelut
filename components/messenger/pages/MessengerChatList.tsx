@@ -1,6 +1,6 @@
 import React from 'react';
 import type { UserProfile } from '../../../types';
-import { formatLastSeen, getLastMessagePreview, formatChatTimestamp, getUnreadCount } from '../messengerUtils';
+import { formatLastSeen, getLastMessagePreview, formatChatTimestamp, getUnreadCount, MessageStatusIcon, isUserOnline } from '../messengerUtils';
 import { Avatar } from '../../Avatar';
 import { VerificationBadge } from '../../VerificationBadge';
 import { StreakBadge } from '../../StreakBadge';
@@ -26,6 +26,7 @@ export interface MessengerChatListProps {
   toggleMuteChats: () => void;
   setShowDeleteChatConfirmDialog: (show: boolean) => void;
   navigateToSubRoute: (path: string) => void;
+  onlineUserIds?: Record<string, boolean>;
 }
 
 export const MessengerChatList: React.FC<MessengerChatListProps> = ({
@@ -33,7 +34,7 @@ export const MessengerChatList: React.FC<MessengerChatListProps> = ({
   selectedChatIds, setSelectedChatIds, suppressNextChatOpenRef, chatRowLongPressTimerRef,
   setActiveChat, pinnedChatIds, mutedChatIds, unreadCountsRef, showSelectedMenu,
   setShowSelectedMenu, selectedMenuRef, togglePinChats, toggleMuteChats,
-  setShowDeleteChatConfirmDialog, navigateToSubRoute
+  setShowDeleteChatConfirmDialog, navigateToSubRoute, onlineUserIds
 }) => {
   return (
     <div className="flex h-full w-full bg-[#0A0A0A] text-[#FAFAFA] overflow-hidden flex-col md:flex-row relative">
@@ -176,7 +177,7 @@ export const MessengerChatList: React.FC<MessengerChatListProps> = ({
                   )}
                   <div className="relative mr-3 sm:mr-4 shrink-0">
                     <Avatar className="w-12 h-12 sm:w-[52px] sm:h-[52px] rounded-full object-cover border border-[#2A2A2A]" photo_url={c.otherUser?.photo_url} display_name={c.otherUser?.display_name || 'User'} />
-                    {c.otherUser?.is_online && (
+                    {isUserOnline(c.otherUser, onlineUserIds) && (
                       <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-[#0A0A0A] rounded-full shadow-sm"></span>
                     )}
                   </div>
@@ -192,6 +193,14 @@ export const MessengerChatList: React.FC<MessengerChatListProps> = ({
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5">
+                      {c.last_message?.senderId === (authUser?.uid || userProfile?.uid) && (
+                        <MessageStatusIcon
+                          status={c.last_message?.status}
+                          isPending={c.last_message?.isPending}
+                          isUploading={c.last_message?.isUploading}
+                          isRead={c.last_message?.isRead}
+                        />
+                      )}
                       <p className={`text-[13px] sm:text-sm truncate flex-1 min-w-0 ${getUnreadCount(userProfile.uid, c) > 0 ? 'text-[#FAFAFA] font-semibold' : 'text-[#737373]'}`}>
                         {c.isTyping ? <span className="text-emerald-500 font-medium tracking-tight flex items-center gap-1"><i className="bi bi-pencil-fill text-[10px]"></i> typing...</span>
                           : c.isRecording ? <span className="text-amber-500 font-medium tracking-tight flex items-center gap-1"><i className="bi bi-mic-fill text-[10px]"></i> recording...</span>
