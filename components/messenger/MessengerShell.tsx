@@ -945,6 +945,9 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           type: fileType,
           timestamp: localTimestamp,
           isUploading: true,
+          status: 'sending',
+          isPending: true,
+          isRead: false,
           localPreviewUrl,
           microThumbnail,
           blob: sourceBlob.blob,
@@ -1114,6 +1117,9 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                   type: 'voice',
                   timestamp: localTimestamp,
                   isUploading: true,
+                  status: 'sending',
+                  isPending: true,
+                  isRead: false,
                   localPreviewUrl: blobLocalUrl,
                   blob,
                   mimeType: 'audio/webm',
@@ -1208,6 +1214,13 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           ]);
           playBubbleSound();
           await set(msgRef, data);
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === optimisticId
+                ? { ...msg, status: 'sent', isPending: false, isRead: false }
+                : msg
+            )
+          );
         } catch (error: any) {
           if (optimisticId) {
             setMessages(prev => prev.filter(message => message.id !== optimisticId));

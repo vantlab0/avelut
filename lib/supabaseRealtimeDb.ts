@@ -1584,7 +1584,7 @@ export async function set(r: DbRef, value: any): Promise<void> {
       last_message_text: lastMessage.text ?? value.last_message_text ?? null,
       last_message_at: normalizeTimestamp(value.timestamp ?? lastMessage.timestamp),
       last_message_sender_id: lastMessage.sender_id ?? lastMessage.senderId ?? value.last_message_sender_id ?? null,
-      last_message_is_read: lastMessage.isRead ?? value.last_message_is_read ?? true,
+      last_message_is_read: lastMessage.isRead ?? value.last_message_is_read ?? false,
       unread_count: value.unreadCount ?? value.unread_count ?? 0,
     });
     if (error) throw error;

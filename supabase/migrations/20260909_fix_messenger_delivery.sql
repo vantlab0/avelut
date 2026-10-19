@@ -125,7 +125,7 @@ begin
     last_message_text = v_summary,
     last_message_at = v_created_at,
     last_message_sender_id = p_sender_id,
-    last_message_is_read = user_id = p_sender_id,
+    last_message_is_read = false,
     unread_count = case
       when user_id = p_sender_id then 0
       else unread_count + 1
