@@ -1,7 +1,6 @@
 /**
  * Pure Native Firebase Cloud Messaging (FCM) push notifications
  * using @capacitor/push-notifications.
- * OneSignal has been completely removed.
  */
 
 import { Capacitor, PluginListenerHandle } from '@capacitor/core';
@@ -12,16 +11,6 @@ import { supabase } from '@/lib/backend';
 type AddToastFn = (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 type SetActiveItemFn = (item: string) => void;
 type SetPendingChatIdFn = (chatId: string | null) => void;
-
-export interface ReminderSession {
-  id: string;
-  day: string;
-  time: string;
-  subject: string;
-  topic?: string;
-  activity?: string;
-  date?: string; // YYYY-MM-DD optional specific date
-}
 
 let listenersAttached = false;
 let registrationHandle: PluginListenerHandle | null = null;
@@ -43,90 +32,40 @@ export function isNative(): boolean {
   }
 }
 
-const DAY_MAP: Record<string, number> = {
-  sunday: 0, sun: 0,
-  monday: 1, mon: 1,
-  tuesday: 2, tue: 2, tues: 2,
-  wednesday: 3, wed: 3,
-  thursday: 4, thu: 4, thur: 4, thurs: 4,
-  friday: 5, fri: 5,
-  saturday: 6, sat: 6,
+const persistFcmTokenLocally = (token: string, platform: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem('fcm_token', token);
+    window.localStorage.setItem('fcm_device_token', token);
+    window.localStorage.setItem('fcm_platform', platform);
+  } catch {
+    // ignore localStorage storage failures
+  }
 };
 
-export function parseSessionStartTime(time: string): { hours: number; minutes: number } | null {
-  if (!time || typeof time !== 'string') return null;
-  const start = time.split('-')[0].trim();
-  const m = start.match(/(\d{1,2})\s*:\s*(\d{2})\s*(AM|PM|am|pm)?/);
-  if (!m) return null;
-  let hours = parseInt(m[1], 10);
-  const minutes = parseInt(m[2], 10);
-  const ampm = m[3]?.toUpperCase();
-  if (ampm === 'PM' && hours < 12) hours += 12;
-  if (ampm === 'AM' && hours === 12) hours = 0;
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
-  return { hours, minutes };
-}
-
-export function nextOccurrence(
-  session: ReminderSession,
-  minMinutesFromNow = 1
-): Date | null {
-  const parsed = parseSessionStartTime(session.time);
-  if (!parsed) return null;
-
-  const now = new Date();
-  const minAt = new Date(now.getTime() + minMinutesFromNow * 60 * 1000);
-
-  if (session.date && /^\d{4}-\d{2}-\d{2}$/.test(session.date)) {
-    const [y, mo, d] = session.date.split('-').map(Number);
-    const at = new Date(y, mo - 1, d, parsed.hours, parsed.minutes, 0, 0);
-    return at > minAt ? at : null;
-  }
-
-  const dayKey = (session.day || '').toLowerCase().trim();
-  const targetDow = DAY_MAP[dayKey];
-  if (targetDow === undefined) return null;
-
-  for (let add = 0; add <= 14; add++) {
-    const candidate = new Date(now);
-    candidate.setDate(now.getDate() + add);
-    candidate.setHours(parsed.hours, parsed.minutes, 0, 0);
-    if (candidate.getDay() === targetDow && candidate > minAt) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-/**
- * Persist device token to Supabase app_kv and profiles table
- */
 export async function saveFcmToken(uid: string, token: string): Promise<void> {
   if (!uid || !token) return;
   try {
     const platform = isNative() ? Capacitor.getPlatform() : 'web';
-
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('fcm_token', token);
-      window.localStorage.setItem('fcm_device_token', token);
-      window.localStorage.setItem('fcm_platform', platform);
-    }
+    persistFcmTokenLocally(token, platform);
 
     const payload = {
       fcm_token: token,
       fcm_platform: platform,
       updated_at: Date.now(),
     };
-    await supabase.from('app_kv').upsert({
-      key: `user_device_tokens/${uid}`,
-      value: payload,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'key' });
 
-    await supabase.from('profiles').update({
-      fcm_token: token,
-      notifications_enabled: true,
-    }).eq('id', uid);
+    await Promise.allSettled([
+      supabase.from('app_kv').upsert({
+        key: `user_device_tokens/${uid}`,
+        value: payload,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' }),
+      supabase.from('profiles').update({
+        fcm_token: token,
+        notifications_enabled: true,
+      }).eq('id', uid),
+    ]);
 
     console.log('[FCM] Device token registered and saved for user:', uid);
   } catch (err) {
@@ -142,137 +81,6 @@ export async function requestLocalNotificationPermission(): Promise<boolean> {
   } catch (e) {
     console.warn('[FCM] Permission request failed:', e);
     return false;
-  }
-}
-
-export async function scheduleStudyReminders(
-  sessions: ReminderSession[],
-  options?: { enabled?: boolean }
-): Promise<void> {
-  if (options?.enabled === false) {
-    await cancelAllStudyReminders();
-    return;
-  }
-
-  const toSchedule = [];
-  for (const session of sessions) {
-    if (!session?.id) continue;
-    const startAt = nextOccurrence(session, 2);
-    if (!startAt) continue;
-
-    const subject = session.subject || 'Class';
-    const topic = session.topic || session.activity || '';
-    const bodyCore = topic ? `${subject} — ${topic}` : subject;
-
-    toSchedule.push({
-      time: startAt.getTime(),
-      title: 'Class starting',
-      body: bodyCore,
-    });
-  }
-
-  if (toSchedule.length === 0) return;
-
-  try {
-    const apiBase = typeof window !== 'undefined' && Capacitor.isNativePlatform()
-      ? 'https://www.avelut.xyz'
-      : '';
-    const uid = window.localStorage?.getItem('avelut_last_uid');
-    if (!uid) return;
-
-    await fetch(`${apiBase}/api/notifications`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'schedule',
-        targetUserId: uid,
-        reminders: toSchedule,
-      }),
-    });
-  } catch (e) {
-    console.warn('[FCM] Failed to schedule study reminders:', e);
-  }
-}
-
-export async function cancelStudyRemindersForSessions(sessionIds: string[]): Promise<void> {
-  // Optional reminder cleanup
-}
-
-export async function cancelAllStudyReminders(): Promise<void> {
-  // Optional reminder cleanup
-}
-
-export const clearDeliveredNotifications = async (): Promise<void> => {
-  if (!isNative()) return;
-  try {
-    await PushNotifications.removeAllDeliveredNotifications();
-  } catch (err) {
-    console.warn('[FCM] Failed to clear delivered notifications:', err);
-  }
-};
-
-export async function sendTestNotification(): Promise<{ success: boolean; message: string }> {
-  try {
-    const apiBase = typeof window !== 'undefined' && Capacitor.isNativePlatform()
-      ? 'https://www.avelut.xyz'
-      : '';
-    const uid = typeof window !== 'undefined'
-      ? (window.localStorage?.getItem('avelut_last_uid') || '')
-      : '';
-
-    if (!uid) {
-      return { success: false, message: 'Please log in before sending a test notification.' };
-    }
-
-    if (isNative()) {
-      try {
-        const granted = await requestLocalNotificationPermission();
-        if (granted) {
-          await PushNotifications.register();
-        }
-      } catch (err) {
-        console.warn('[FCM] Registration check before test notification:', err);
-      }
-    }
-
-    let fcmToken: string | undefined = undefined;
-    if (typeof window !== 'undefined') {
-      fcmToken = window.localStorage.getItem('fcm_token') || window.localStorage.getItem('fcm_device_token') || undefined;
-    }
-
-    const res = await fetch(`${apiBase}/api/notifications`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'send',
-        targetUserId: uid,
-        fcmToken: fcmToken,
-        title: 'Avelut Push Test',
-        message: 'Firebase FCM push notifications are configured and working!',
-        data: { route: 'chat' },
-      }),
-    });
-
-    const data = await res.json();
-    if (!res.ok || data.success === false) {
-      return {
-        success: false,
-        message: data.reason || data.error?.message || data.error || 'Notification delivery failed.',
-      };
-    }
-
-    return {
-      success: true,
-      message: 'Test notification sent! Check your device notification tray.',
-    };
-  } catch (e: any) {
-    const isFetchFail = e?.message?.includes('Failed to fetch') || e?.name === 'TypeError';
-    return {
-      success: false,
-      message: isFetchFail
-        ? 'Could not reach notification server. Please check internet connection.'
-        : (e?.message || 'Failed to dispatch test notification.'),
-    };
   }
 }
 
@@ -310,10 +118,11 @@ export const initNativeNotifications = async (
       listenersAttached = true;
 
       registrationHandle = await PushNotifications.addListener('registration', async (token) => {
-        console.log('[FCM] Received device token:', token.value?.substring(0, 20) + '...');
-        if (token?.value && user?.uid) {
-          await saveFcmToken(user.uid, token.value);
-        }
+        const value = token?.value;
+        if (!value || !user?.uid) return;
+        console.log('[FCM] Received device token:', value.substring(0, 20) + '...');
+        persistFcmTokenLocally(value, Capacitor.getPlatform());
+        await saveFcmToken(user.uid, value);
       });
 
       registrationErrorHandle = await PushNotifications.addListener('registrationError', (error) => {
@@ -327,6 +136,11 @@ export const initNativeNotifications = async (
           const display = body ? `${title}: ${body}` : title;
           if (navigationHandlers.addToast) {
             navigationHandlers.addToast(`🔔 ${display}`, 'info');
+          }
+
+          const currentPayload = notification.data || {};
+          if (typeof window !== 'undefined' && currentPayload?.chatId) {
+            window.localStorage.setItem('last_fcm_chat_route', String(currentPayload.chatId));
           }
         } catch (err) {
           console.warn('[FCM] Foreground notification display error:', err);
@@ -352,7 +166,7 @@ export const initNativeNotifications = async (
     }
 
     await PushNotifications.register();
-    await clearDeliveredNotifications();
+    await PushNotifications.removeAllDeliveredNotifications().catch(() => {});
 
     console.log('[FCM] Native push notification listeners attached successfully.');
   } catch (err) {

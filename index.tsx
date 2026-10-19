@@ -5,15 +5,21 @@ import { CapacitorUpdater } from '@capgo/capacitor-updater';
 const OTA_RELOAD_DELAY_MS = 1500;
 let reloadScheduled = false;
 
+const normalizeChunkErrorText = (value?: string | null) => {
+  if (!value) return '';
+  return String(value).replace(/\s+/g, ' ').trim().toLowerCase();
+};
+
 const isOtaChunkFailure = (value?: string | null, stack?: string | null) => {
-  const candidate = `${value || ''} ${stack || ''}`.toLowerCase();
+  const candidate = `${normalizeChunkErrorText(value)} ${normalizeChunkErrorText(stack)}`;
   return (
     candidate.includes('chunkloaderror') ||
     candidate.includes('failed to fetch dynamically imported module') ||
     candidate.includes('loading chunk') ||
     candidate.includes('minified react error') ||
     candidate.includes('unexpected application error') ||
-    candidate.includes('update applied')
+    candidate.includes('update applied') ||
+    candidate.includes('error: loading chunk')
   );
 };
 
@@ -26,12 +32,12 @@ const triggerToast = (message: string, type: 'info' | 'warning' | 'error' = 'inf
   );
 };
 
-const scheduleReload = (reason: string) => {
+const reloadAppAfterChunkIssue = (reason: string) => {
   if (typeof window === 'undefined' || reloadScheduled) return;
   reloadScheduled = true;
 
   triggerToast('Update applied. Restarting…', 'info', 1800);
-  console.warn(`[app-shell] Reloading after ${reason}...`);
+  console.warn(`[app-shell] OTA/chunk reload triggered: ${reason}`);
 
   setTimeout(() => {
     try {
@@ -46,21 +52,23 @@ const scheduleReload = (reason: string) => {
   }, OTA_RELOAD_DELAY_MS);
 };
 
-const handleFatalRuntimeIssue = (label: string, reason?: unknown) => {
-  const errorText = typeof reason === 'string' ? reason : reason && typeof (reason as any).message === 'string' ? (reason as any).message : '';
+const handleNonFatalError = (label: string, reason?: unknown) => {
+  const errorText = typeof reason === 'string'
+    ? reason
+    : reason && typeof (reason as any).message === 'string'
+      ? (reason as any).message
+      : '';
   const stackText = reason && typeof (reason as any).stack === 'string' ? (reason as any).stack : '';
 
   if (isOtaChunkFailure(errorText, stackText)) {
-    scheduleReload(label);
+    reloadAppAfterChunkIssue(label);
     return;
   }
 
-  // Keep the existing UI alive for non-fatal runtime problems. Only surface a brief toast.
   triggerToast('A temporary issue was detected. Your session is still active.', 'warning', 2500);
 };
 
 // Immediately notify native layer that JavaScript loaded successfully.
-// This prevents Capgo's automatic rollback timer from reverting OTA updates.
 if (Capacitor.isNativePlatform()) {
   CapacitorUpdater.notifyAppReady().catch((e) => {
     console.warn('[OTA] Early notifyAppReady error:', e);
@@ -73,9 +81,8 @@ import App from './App';
 import { ToastProvider } from './hooks/useToast';
 import { RootErrorBoundary } from './components/RootErrorBoundary';
 
-// Automatically reload the page if a dynamically imported module fails to load.
 window.addEventListener('vite:preloadError', () => {
-  scheduleReload('vite preload error');
+  reloadAppAfterChunkIssue('vite preload error');
 });
 
 window.addEventListener('unhandledrejection', (event) => {
@@ -86,11 +93,11 @@ window.addEventListener('unhandledrejection', (event) => {
   if (isOtaChunkFailure(message, stack)) {
     event.preventDefault();
     event.stopPropagation();
-    scheduleReload('chunk / module load failure');
+    reloadAppAfterChunkIssue('chunk / module load failure');
     return;
   }
 
-  handleFatalRuntimeIssue('unhandled rejection', reason);
+  handleNonFatalError('unhandled rejection', reason);
 });
 
 window.addEventListener('error', (event) => {
@@ -98,10 +105,10 @@ window.addEventListener('error', (event) => {
   const stack = event.error && typeof event.error === 'object' && 'stack' in event.error ? String((event.error as any).stack) : '';
 
   if (
-    message &&
+    event.message &&
     (
-      message.includes('reportAllChanges') ||
-      (message.includes('startTime') && (event.filename?.includes('VM') || !event.filename))
+      event.message.includes('reportAllChanges') ||
+      (event.message.includes('startTime') && (event.filename?.includes('VM') || !event.filename))
     )
   ) {
     event.preventDefault();
@@ -109,14 +116,14 @@ window.addEventListener('error', (event) => {
     return;
   }
 
-  if (isOtaChunkFailure(message, stack)) {
+  if (isOtaChunkFailure(message, stack) || (event.error && (event.error as any).name === 'ChunkLoadError')) {
     event.preventDefault();
     event.stopPropagation();
-    scheduleReload('chunk / script error');
+    reloadAppAfterChunkIssue('chunk / script error');
     return;
   }
 
-  handleFatalRuntimeIssue('global runtime error', event.error || message);
+  handleNonFatalError('global runtime error', event.error || message);
 }, true);
 
 import { HelmetProvider } from 'react-helmet-async';
