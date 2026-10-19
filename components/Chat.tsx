@@ -433,7 +433,8 @@ export const GrokChatComposer: React.FC<{
 
   return (
     <div
-      className="w-full max-w-3xl mx-auto px-3 sm:px-4 pb-[calc(max(0.75rem,env(safe-area-inset-bottom)))] pt-2 relative z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md shrink-0"
+      className="w-full max-w-3xl mx-auto px-3 sm:px-4 pt-2 relative z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md shrink-0 transition-[padding-bottom] duration-150 ease-out"
+      style={{ paddingBottom: 'calc(max(0.75rem, env(safe-area-inset-bottom, 0px)) + var(--keyboard-offset, 0px))' }}
       onPaste={handlePaste}
     >
       <div className="relative flex flex-col bg-[#f4f4f5] dark:bg-[#212124] rounded-[28px] border border-neutral-200/70 dark:border-white/5 transition-all focus-within:ring-1 focus-within:ring-black/10 dark:focus-within:ring-white/10 shadow-sm">
@@ -469,7 +470,10 @@ export const GrokChatComposer: React.FC<{
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            onFocus={() => {
+            onFocus={(e) => {
+              try {
+                (e.target as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' });
+              } catch {}
               window.scrollTo(0, 0);
               if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
               if (document.body.scrollTop !== 0) document.body.scrollTop = 0;

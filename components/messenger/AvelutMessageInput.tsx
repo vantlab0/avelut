@@ -155,9 +155,10 @@ export const AvelutMessageInput: React.FC<AvelutInputProps> = ({
 
   return (
     <div
-      className={`w-full relative select-none z-40 bg-transparent pb-2 pt-2 md:w-full md:mx-auto ${
+      className={`w-full relative select-none z-40 bg-transparent pt-2 md:w-full md:mx-auto transition-[padding-bottom] duration-150 ease-out ${
         disabled ? 'opacity-50 pointer-events-none' : ''
       }`}
+      style={{ paddingBottom: 'calc(0.5rem + var(--keyboard-offset, 0px))' }}
     >
       <input type="file" ref={fileInputRef} onChange={onFileSelect} className="hidden" multiple accept="*/*" />
       <input
@@ -246,6 +247,14 @@ export const AvelutMessageInput: React.FC<AvelutInputProps> = ({
                   onChange={(e) => {
                     setMessage(e.target.value);
                     onTyping?.();
+                  }}
+                  onFocus={(e) => {
+                    try {
+                      (e.target as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                    } catch {}
+                    window.scrollTo(0, 0);
+                    if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
+                    if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
                   }}
                   onKeyDown={(e) => e.key === 'Enter' && executeTextSend()}
                   placeholder="Message"

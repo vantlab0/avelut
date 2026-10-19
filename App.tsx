@@ -805,12 +805,16 @@ const App: React.FC = () => {
         };
 
         window.addEventListener('scroll', resetWindowScroll, { passive: false });
-        return () => window.removeEventListener('scroll', resetWindowScroll);
+        window.addEventListener('focusin', resetWindowScroll, { passive: true });
+        document.addEventListener('focusin', resetWindowScroll, { passive: true });
+        return () => {
+            window.removeEventListener('scroll', resetWindowScroll);
+            window.removeEventListener('focusin', resetWindowScroll);
+            document.removeEventListener('focusin', resetWindowScroll);
+        };
     }, [mainRef]);
 
     useEffect(() => {
-        if (!Capacitor.isNativePlatform()) return;
-
         const viewport = (window as any).visualViewport;
         const applyKeyboardViewportOffset = (keyboardHeight?: number) => {
             const calculatedHeight = typeof keyboardHeight === 'number' && keyboardHeight > 0
