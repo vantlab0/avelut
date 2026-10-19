@@ -2,6 +2,63 @@ import './utils/domPolyfill';
 import { Capacitor } from '@capacitor/core';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 
+const OTA_RELOAD_DELAY_MS = 1500;
+let reloadScheduled = false;
+
+const isOtaChunkFailure = (value?: string | null, stack?: string | null) => {
+  const candidate = `${value || ''} ${stack || ''}`.toLowerCase();
+  return (
+    candidate.includes('chunkloaderror') ||
+    candidate.includes('failed to fetch dynamically imported module') ||
+    candidate.includes('loading chunk') ||
+    candidate.includes('minified react error') ||
+    candidate.includes('unexpected application error') ||
+    candidate.includes('update applied')
+  );
+};
+
+const triggerToast = (message: string, type: 'info' | 'warning' | 'error' = 'info', duration = 3000) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('avelut_toast', {
+      detail: { message, type, duration },
+    })
+  );
+};
+
+const scheduleReload = (reason: string) => {
+  if (typeof window === 'undefined' || reloadScheduled) return;
+  reloadScheduled = true;
+
+  triggerToast('Update applied. Restarting…', 'info', 1800);
+  console.warn(`[app-shell] Reloading after ${reason}...`);
+
+  setTimeout(() => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        CapacitorUpdater.reload().catch(() => window.location.reload());
+      } else {
+        window.location.reload();
+      }
+    } catch {
+      window.location.reload();
+    }
+  }, OTA_RELOAD_DELAY_MS);
+};
+
+const handleFatalRuntimeIssue = (label: string, reason?: unknown) => {
+  const errorText = typeof reason === 'string' ? reason : reason && typeof (reason as any).message === 'string' ? (reason as any).message : '';
+  const stackText = reason && typeof (reason as any).stack === 'string' ? (reason as any).stack : '';
+
+  if (isOtaChunkFailure(errorText, stackText)) {
+    scheduleReload(label);
+    return;
+  }
+
+  // Keep the existing UI alive for non-fatal runtime problems. Only surface a brief toast.
+  triggerToast('A temporary issue was detected. Your session is still active.', 'warning', 2500);
+};
+
 // Immediately notify native layer that JavaScript loaded successfully.
 // This prevents Capgo's automatic rollback timer from reverting OTA updates.
 if (Capacitor.isNativePlatform()) {
@@ -17,38 +74,57 @@ import { ToastProvider } from './hooks/useToast';
 import { RootErrorBoundary } from './components/RootErrorBoundary';
 
 // Automatically reload the page if a dynamically imported module fails to load.
-// This typically happens when the user has an old version of the app open and
-// we push an OTA update, causing the old chunk hashes to become invalid.
 window.addEventListener('vite:preloadError', () => {
-  window.location.reload();
+  scheduleReload('vite preload error');
 });
 
-// We also add a generic unhandledrejection listener just in case a regular dynamic import() fails
 window.addEventListener('unhandledrejection', (event) => {
-  if (event.reason && event.reason.message && event.reason.message.includes('Failed to fetch dynamically imported module')) {
-    window.location.reload();
+  const reason = event.reason;
+  const message = reason && typeof reason === 'object' && 'message' in reason ? String((reason as any).message) : String(reason || '');
+  const stack = reason && typeof reason === 'object' && 'stack' in reason ? String((reason as any).stack) : '';
+
+  if (isOtaChunkFailure(message, stack)) {
+    event.preventDefault();
+    event.stopPropagation();
+    scheduleReload('chunk / module load failure');
+    return;
   }
+
+  handleFatalRuntimeIssue('unhandled rejection', reason);
 });
 
-// Suppress third-party Chrome extension script crashes (e.g. reportAllChanges / startTime on undefined entries)
 window.addEventListener('error', (event) => {
+  const message = event.message || '';
+  const stack = event.error && typeof event.error === 'object' && 'stack' in event.error ? String((event.error as any).stack) : '';
+
   if (
-    event.message &&
-    (event.message.includes('reportAllChanges') ||
-      (event.message.includes('startTime') && (event.filename?.includes('VM') || !event.filename)))
+    message &&
+    (
+      message.includes('reportAllChanges') ||
+      (message.includes('startTime') && (event.filename?.includes('VM') || !event.filename))
+    )
   ) {
     event.preventDefault();
     event.stopPropagation();
+    return;
   }
-}, true);
 
+  if (isOtaChunkFailure(message, stack)) {
+    event.preventDefault();
+    event.stopPropagation();
+    scheduleReload('chunk / script error');
+    return;
+  }
+
+  handleFatalRuntimeIssue('global runtime error', event.error || message);
+}, true);
 
 import { HelmetProvider } from 'react-helmet-async';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
+  throw new Error('Could not find root element to mount to');
 }
 
 const appContent = (
@@ -69,8 +145,6 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(appContent);
 
 if (Capacitor.isNativePlatform()) {
-  // If running natively in Capacitor, unregister any service workers and clear caches
-  // so Capgo OTA bundle updates are never shadowed by stale browser cache
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then((registrations) => {
       for (const reg of registrations) {
@@ -86,13 +160,10 @@ if (Capacitor.isNativePlatform()) {
     }).catch(() => {});
   }
 } else if ('serviceWorker' in navigator && typeof window !== 'undefined') {
-  // Web / PWA only: Register service worker immediately to speed up PWA installation readiness and check for updates
   navigator.serviceWorker.register('/service-worker.js')
     .then((reg) => {
       console.log('Service Worker registered successfully:', reg.scope);
-      // Eagerly check for updated service worker script on app launch
       void reg.update().catch(() => {});
     })
     .catch((err) => console.warn('Service Worker registration failed:', err));
 }
-

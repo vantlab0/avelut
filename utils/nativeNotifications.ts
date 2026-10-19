@@ -105,8 +105,13 @@ export async function saveFcmToken(uid: string, token: string): Promise<void> {
   if (!uid || !token) return;
   try {
     const platform = isNative() ? Capacitor.getPlatform() : 'web';
-    
-    // 1. Save to app_kv table under user_device_tokens/<uid>
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('fcm_token', token);
+      window.localStorage.setItem('fcm_device_token', token);
+      window.localStorage.setItem('fcm_platform', platform);
+    }
+
     const payload = {
       fcm_token: token,
       fcm_platform: platform,
@@ -118,7 +123,6 @@ export async function saveFcmToken(uid: string, token: string): Promise<void> {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'key' });
 
-    // 2. Mirror into profiles table
     await supabase.from('profiles').update({
       fcm_token: token,
       notifications_enabled: true,
@@ -163,7 +167,7 @@ export async function scheduleStudyReminders(
     toSchedule.push({
       time: startAt.getTime(),
       title: 'Class starting',
-      body: bodyCore
+      body: bodyCore,
     });
   }
 
@@ -182,8 +186,8 @@ export async function scheduleStudyReminders(
       body: JSON.stringify({
         action: 'schedule',
         targetUserId: uid,
-        reminders: toSchedule
-      })
+        reminders: toSchedule,
+      }),
     });
   } catch (e) {
     console.warn('[FCM] Failed to schedule study reminders:', e);
@@ -283,7 +287,6 @@ export const initNativeNotifications = async (
   if (!user || !isNative()) return;
 
   try {
-    // 1. Create Android Notification Channel
     try {
       await PushNotifications.createChannel({
         id: 'default',
@@ -297,7 +300,6 @@ export const initNativeNotifications = async (
       console.warn('[FCM] createChannel warning:', channelErr);
     }
 
-    // 2. Request permission
     const granted = await requestLocalNotificationPermission();
     if (!granted) {
       console.log('[FCM] Push notifications permission not granted.');
@@ -307,7 +309,6 @@ export const initNativeNotifications = async (
     if (!listenersAttached) {
       listenersAttached = true;
 
-      // Token received
       registrationHandle = await PushNotifications.addListener('registration', async (token) => {
         console.log('[FCM] Received device token:', token.value?.substring(0, 20) + '...');
         if (token?.value && user?.uid) {
@@ -315,12 +316,10 @@ export const initNativeNotifications = async (
         }
       });
 
-      // Registration error
       registrationErrorHandle = await PushNotifications.addListener('registrationError', (error) => {
         console.warn('[FCM] Push notification registration error:', error);
       });
 
-      // Foreground push notification received: display toast
       pushReceivedHandle = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
         try {
           const title = notification.title || 'Avelut';
@@ -334,7 +333,6 @@ export const initNativeNotifications = async (
         }
       });
 
-      // Notification tapped / clicked
       actionHandle = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
         try {
           const data = action.notification?.data || {};
@@ -353,10 +351,7 @@ export const initNativeNotifications = async (
       });
     }
 
-    // Register with FCM on native device
     await PushNotifications.register();
-
-    // 8. Clean up any delivered notifications
     await clearDeliveredNotifications();
 
     console.log('[FCM] Native push notification listeners attached successfully.');
