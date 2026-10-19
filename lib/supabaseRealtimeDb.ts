@@ -345,32 +345,40 @@ export async function markChatAsRead(chatId: string, currentUserId: string): Pro
   const client = supabaseAdmin || supabase;
 
   try {
-    // 1. Reset unread count and set read status for recipient (current user)
+    // 1. Always clear current user's unread
     await client
       .from('chat_members')
-      .update({
-        unread_count: 0,
-        last_message_is_read: true,
-      })
+      .update({ unread_count: 0 })
       .eq('chat_id', chatId)
       .eq('user_id', currentUserId);
 
-    // 2. Mark sender's member record as read (so sender receives Realtime update for chat list)
-    await client
+    // 2. Who sent the last message on this user's member row?
+    const { data: myRow } = await client
       .from('chat_members')
-      .update({
-        last_message_is_read: true,
-      })
+      .select('last_message_sender_id')
       .eq('chat_id', chatId)
-      .neq('user_id', currentUserId);
+      .eq('user_id', currentUserId)
+      .maybeSingle();
 
-    // 3. Mark unread incoming messages as read in messages table
-    await client
-      .from('messages')
-      .update({ is_read: true })
-      .eq('chat_id', chatId)
-      .neq('sender_id', currentUserId)
-      .eq('is_read', false);
+    const lastSenderId = myRow?.last_message_sender_id;
+
+    // 3. Only if I am the recipient of the last message:
+    //    - tell the sender their last message was read
+    //    - mark those messages as read
+    if (lastSenderId && lastSenderId !== currentUserId) {
+      await client
+        .from('chat_members')
+        .update({ last_message_is_read: true })
+        .eq('chat_id', chatId)
+        .eq('user_id', lastSenderId);
+
+      await client
+        .from('messages')
+        .update({ is_read: true })
+        .eq('chat_id', chatId)
+        .neq('sender_id', currentUserId)
+        .eq('is_read', false);
+    }
   } catch (err) {
     console.warn('[supabaseRealtimeDb] markChatAsRead error:', err);
   }

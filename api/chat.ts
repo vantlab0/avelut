@@ -39,6 +39,10 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model: dashscope(modelName),
+      system: `You are Avelut AI, a helpful study tutor.
+Use the web_search tool when the user needs current events, recent facts, live data, or information that may not be in your training data.
+After tool results, answer clearly and cite sources with titles/URLs when relevant.
+Do not invent search results.`,
       messages: convertToCoreMessages(messages || []),
       tools: {
         web_search: webSearchTool,
