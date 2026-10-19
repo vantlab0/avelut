@@ -197,24 +197,10 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     }
 
     componentDidCatch(error: any, info: any) {
-        console.error('ErrorBoundary caught error:', error, info);
-        this.setState({ error, info });
+        console.error('[StudyGuide] ErrorBoundary caught error:', error, info);
     }
 
-    reset = () => this.setState({ hasError: false, error: null, info: null });
-
     render() {
-        if (this.state.hasError) {
-            return (
-                <div className="p-8 text-center max-w-xl mx-auto my-12 bg-white dark:bg-[#141414] border border-slate-200 dark:border-[#2A2A2A] rounded-3xl shadow-xl">
-                    <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">Something went wrong</h3>
-                    <p className="text-sm text-slate-500 dark:text-[#A3A3A3] mb-6">Could not load Study Guide. Please retry.</p>
-                    <button onClick={this.reset} className="px-6 py-2.5 bg-[#2563EB] text-white font-bold rounded-xl shadow-md hover:bg-[#1D4ED8] transition-colors">
-                        Retry
-                    </button>
-                </div>
-            );
-        }
         return this.props.children;
     }
 }
