@@ -33,11 +33,16 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Setup JDK 21
         uses: actions/setup-java@v3
@@ -48,7 +53,7 @@ jobs:
       - name: Bump Versions (package.json & build.gradle)
         run: |
           # Bump the patch version in package.json
-          npm version patch --no-git-tag-version
+          pnpm version patch --no-git-tag-version
           NEW_VERSION=$(node -p "require('./package.json').version")
           echo "Bumping to Version: $NEW_VERSION"
 
@@ -63,10 +68,10 @@ jobs:
           sed -i -E "s/(versionName\s+)\".*\"/\1\"$NEW_VERSION\"/" $BUILD_GRADLE
 
       - name: Install Dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build Web Assets
-        run: npm run build
+        run: pnpm run build
 
       - name: Sync Capacitor
         run: npx cap sync android
