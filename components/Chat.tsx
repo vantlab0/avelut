@@ -26,6 +26,8 @@ import { ConfirmationModal } from './ConfirmationModal';
 import { MarkdownContent } from './MarkdownContent';
 import { ThinkingTypingIndicator } from './ThinkingTypingIndicator';
 import { ChatLimitBanner } from './ChatLimitBanner';
+import { ToolStatus } from './chat/ToolStatus';
+import { RefreshCcw, ThumbsUp, ThumbsDown, Share2 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { showKeyboard, hideKeyboard, triggerHaptic } from '../utils/capacitorUtils';
@@ -679,6 +681,16 @@ export const Chat: React.FC<ChatProps> = ({
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    setMessages((prev) => {
+      if (prev.length === 0) return prev;
+      const lastMsg = prev[prev.length - 1];
+      if (lastMsg && lastMsg.sender === 'bot') {
+        return prev.map((m, idx) =>
+          idx === prev.length - 1 ? { ...m, status: 'interrupted' as const } : m
+        );
+      }
+      return prev;
+    });
     setIsLoading(false);
   }, []);
 
@@ -1697,7 +1709,77 @@ export const Chat: React.FC<ChatProps> = ({
                           const { cleanedText, followUps } = parseFollowUpsAndContent(msg.text);
                           return (
                             <div className="min-w-0">
-                              <MarkdownContent content={cleanedText || msg.text} />
+                              {/* Message Parts with Tool Status Rendering */}
+                              {msg.parts && msg.parts.length > 0 ? (
+                                msg.parts.map((part, pIdx) => {
+                                  if (
+                                    part.type === 'tool-invocation' &&
+                                    part.toolInvocation &&
+                                    part.toolInvocation.toolName === 'web_search'
+                                  ) {
+                                    return (
+                                      <ToolStatus
+                                        key={pIdx}
+                                        toolName={part.toolInvocation.toolName}
+                                        state={part.toolInvocation.state}
+                                        args={part.toolInvocation.args}
+                                        result={part.toolInvocation.result}
+                                      />
+                                    );
+                                  }
+                                  if (part.type === 'text' && part.text) {
+                                    return <MarkdownContent key={pIdx} content={part.text} />;
+                                  }
+                                  return null;
+                                })
+                              ) : (
+                                <MarkdownContent content={cleanedText || msg.text} />
+                              )}
+
+                              {/* Interrupted / Aborted State UI */}
+                              {(msg.status === 'interrupted' ||
+                                (msg.parts &&
+                                  msg.parts.some((p) => p.type === 'text' && p.text?.length === 0))) && (
+                                <div className="flex flex-col gap-3 mt-3 p-3 rounded-lg bg-neutral-100 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700/60">
+                                  <span className="text-base font-medium text-neutral-600 dark:text-neutral-400">
+                                    Response interrupted
+                                  </span>
+                                  <div className="flex gap-4 text-neutral-500 dark:text-neutral-400">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleShareMessage(cleanedText || msg.text || '')}
+                                      className="hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                                      title="Share"
+                                    >
+                                      <Share2 className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleLike(msg.id, 'up')}
+                                      className="hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                                      title="Thumbs up"
+                                    >
+                                      <ThumbsUp className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleLike(msg.id, 'down')}
+                                      className="hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                                      title="Thumbs down"
+                                    >
+                                      <ThumbsDown className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRegenerateMessage(index)}
+                                      className="hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                                      title="Regenerate"
+                                    >
+                                      <RefreshCcw className="w-5 h-5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                               {isLoading && index === messages.length - 1 && (
                                 <span aria-hidden="true" className="inline-block w-2.5 h-2.5 ml-1.5 bg-blue-600 dark:bg-blue-400 rounded-full animate-dot-breathe align-middle" />
                               )}

@@ -89,6 +89,17 @@ export interface MessageAttachment {
   mimeType?: string;
 }
 
+export interface MessagePart {
+  type: 'text' | 'tool-invocation';
+  text?: string;
+  toolInvocation?: {
+    toolName: string;
+    state: 'input-streaming' | 'input-available' | 'output-available' | 'output-error';
+    args?: any;
+    result?: any;
+  };
+}
+
 export interface Message {
   id: string;
   text?: string;
@@ -101,6 +112,8 @@ export interface Message {
   // FIX: Add optional conversation_id for AI Chat messages.
   conversation_id?: string;
   reasoningText?: string;
+  parts?: MessagePart[];
+  status?: 'streaming' | 'ready' | 'interrupted';
 }
 
 // Types for the new Exam System
