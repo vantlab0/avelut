@@ -2313,7 +2313,13 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                 </div>
 
                 {/* 3. Bottom Control Anchor Panel Bar */}
-                <div className="p-3 bg-[#FAFAFA] dark:bg-[#0A0A0A] dark:bg-[#000000] z-10 shrink-0">
+                <div
+                  className="p-3 bg-[#FAFAFA] dark:bg-[#0A0A0A] dark:bg-[#000000] z-10 shrink-0"
+                  style={{
+                    paddingBottom: 'calc(0.75rem + var(--keyboard-height, 0px))',
+                    transition: 'padding-bottom 0.15s ease',
+                  }}
+                >
                   {replyingTo && (
                     <div className="flex items-center justify-between mb-2 p-2 bg-neutral-100 dark:bg-[#111111] rounded-lg border-l-4 border-[#3B82F6]">
                       <div className="min-w-0">

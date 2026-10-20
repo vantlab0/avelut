@@ -809,8 +809,6 @@ const App: React.FC = () => {
     }, [mainRef]);
 
     useEffect(() => {
-        if (!Capacitor.isNativePlatform()) return;
-
         const viewport = (window as any).visualViewport;
         const applyKeyboardViewportOffset = (keyboardHeight?: number) => {
             const calculatedHeight = typeof keyboardHeight === 'number' && keyboardHeight > 0
@@ -828,9 +826,11 @@ const App: React.FC = () => {
 
         applyKeyboardViewportOffset();
 
+        const handleViewportChange = () => applyKeyboardViewportOffset();
+
         if (viewport) {
-            viewport.addEventListener('resize', () => applyKeyboardViewportOffset());
-            viewport.addEventListener('scroll', () => applyKeyboardViewportOffset());
+            viewport.addEventListener('resize', handleViewportChange);
+            viewport.addEventListener('scroll', handleViewportChange);
         }
 
         const cleanup = listenToKeyboard(
@@ -852,8 +852,8 @@ const App: React.FC = () => {
             document.documentElement.style.setProperty('--keyboard-offset', '0px');
             document.documentElement.style.setProperty('--keyboard-height', '0px');
             if (viewport) {
-                viewport.removeEventListener('resize', () => applyKeyboardViewportOffset());
-                viewport.removeEventListener('scroll', () => applyKeyboardViewportOffset());
+                viewport.removeEventListener('resize', handleViewportChange);
+                viewport.removeEventListener('scroll', handleViewportChange);
             }
         };
     }, [mainRef]);

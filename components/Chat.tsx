@@ -433,7 +433,11 @@ export const GrokChatComposer: React.FC<{
 
   return (
     <div
-      className="w-full max-w-3xl mx-auto px-3 sm:px-4 pb-[calc(max(0.75rem,env(safe-area-inset-bottom)))] pt-2 relative z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md shrink-0"
+      className="w-full max-w-3xl mx-auto px-3 sm:px-4 pt-2 relative z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md shrink-0"
+      style={{
+        paddingBottom: 'calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--keyboard-height, 0px))',
+        transition: 'padding-bottom 0.15s ease',
+      }}
       onPaste={handlePaste}
     >
       <div className="relative flex flex-col bg-[#f4f4f5] dark:bg-[#212124] rounded-[28px] border border-neutral-200/70 dark:border-white/5 transition-all focus-within:ring-1 focus-within:ring-black/10 dark:focus-within:ring-white/10 shadow-sm">
