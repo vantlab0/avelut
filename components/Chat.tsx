@@ -27,7 +27,27 @@ import { MarkdownContent } from './MarkdownContent';
 import { ThinkingTypingIndicator } from './ThinkingTypingIndicator';
 import { ChatLimitBanner } from './ChatLimitBanner';
 import { ToolStatus } from './chat/ToolStatus';
-import { RefreshCcw, ThumbsUp, ThumbsDown, Share2 } from 'lucide-react';
+import {
+  RefreshCcw,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
+  Camera,
+  Image as ImageIcon,
+  FileText,
+  Globe,
+  SquareStack,
+  HelpCircle,
+  Palette,
+  Plus,
+  Volume2,
+  Mic,
+  Send,
+  Square,
+  Copy,
+  MoreVertical,
+  X,
+} from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { showKeyboard, hideKeyboard, triggerHaptic } from '../utils/capacitorUtils';
@@ -542,19 +562,17 @@ export const GrokChatComposer: React.FC<{
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
                   showAttachMenu
                     ? 'bg-neutral-200 dark:bg-white/20 text-neutral-900 dark:text-white'
-                    : 'text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-200/50 dark:hover:bg-white/10'
+                    : 'text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10'
                 }`}
                 title="Attach file"
                 aria-label="Attach file"
               >
-                <svg className={`w-5 h-5 transition-transform ${showAttachMenu ? 'rotate-45' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
+                <Plus className={`w-5 h-5 transition-transform duration-200 stroke-[1.8] ${showAttachMenu ? 'rotate-45' : ''}`} />
               </button>
 
               {/* Floating Menu Card */}
               {showAttachMenu && (
-                <div className="absolute bottom-full left-0 mb-3 w-64 sm:w-72 bg-white dark:bg-[#1c1c1e] rounded-[22px] shadow-2xl border border-neutral-200/90 dark:border-white/10 p-2.5 z-50 animate-in fade-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out select-none">
+                <div className="absolute bottom-full left-0 mb-3 w-64 sm:w-72 bg-white dark:bg-[#1c1c1e] rounded-[20px] shadow-xl border border-neutral-200 dark:border-white/10 p-2 z-50 animate-in fade-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out select-none">
                   {/* TOP SECTION: Attachment Actions */}
                   <div className="space-y-0.5">
                     {/* 1. Camera */}
@@ -564,13 +582,10 @@ export const GrokChatComposer: React.FC<{
                         setShowAttachMenu(false);
                         onOpenCamera();
                       }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer text-left group"
+                      className="w-full min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/70 transition-colors cursor-pointer text-left group"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
-                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
-                        </svg>
+                      <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
+                        <Camera className="w-[18px] h-[18px] stroke-[1.8]" />
                       </div>
                       <span className="font-medium text-sm text-neutral-900 dark:text-white">Camera</span>
                     </button>
@@ -582,14 +597,10 @@ export const GrokChatComposer: React.FC<{
                         setShowAttachMenu(false);
                         onOpenGallery();
                       }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer text-left group"
+                      className="w-full min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/70 transition-colors cursor-pointer text-left group"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
-                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                          <circle cx="8.5" cy="8.5" r="1.5" />
-                          <polyline points="21 15 16 10 5 21" />
-                        </svg>
+                      <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
+                        <ImageIcon className="w-[18px] h-[18px] stroke-[1.8]" />
                       </div>
                       <span className="font-medium text-sm text-neutral-900 dark:text-white">Gallery</span>
                     </button>
@@ -601,31 +612,25 @@ export const GrokChatComposer: React.FC<{
                         setShowAttachMenu(false);
                         onOpenFile();
                       }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer text-left group"
+                      className="w-full min-h-[44px] flex items-center gap-3 px-3 py-2 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/70 transition-colors cursor-pointer text-left group"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
-                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                        </svg>
+                      <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
+                        <FileText className="w-[18px] h-[18px] stroke-[1.8]" />
                       </div>
                       <span className="font-medium text-sm text-neutral-900 dark:text-white">Files</span>
                     </button>
                   </div>
 
                   {/* Thin horizontal divider */}
-                  <div className="h-[1px] bg-neutral-200/80 dark:bg-white/10 my-2 mx-1" />
+                  <div className="h-px bg-neutral-200/80 dark:bg-white/10 my-1.5 mx-2" />
 
                   {/* BOTTOM SECTION: AI Capability Toggles */}
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {/* 4. Browse */}
-                    <div className="flex items-center justify-between px-3 py-2 rounded-xl">
+                    <div className="min-h-[44px] flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
-                          <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <circle cx="12" cy="12" r="10" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2 12h20" />
-                          </svg>
+                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
+                          <Globe className="w-[18px] h-[18px] stroke-[1.8]" />
                         </div>
                         <span className="font-medium text-sm text-neutral-900 dark:text-white">Browse</span>
                       </div>
@@ -635,26 +640,26 @@ export const GrokChatComposer: React.FC<{
                         aria-checked={capabilities.browse}
                         aria-label={`Browse ${capabilities.browse ? 'enabled' : 'disabled'}`}
                         onClick={() => onToggleCapability('browse')}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          capabilities.browse ? 'bg-green-500' : 'bg-neutral-300 dark:bg-neutral-700'
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          capabilities.browse ? 'bg-black dark:bg-white' : 'bg-neutral-300 dark:bg-neutral-700'
                         }`}
                       >
                         <span
                           aria-hidden="true"
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                            capabilities.browse ? 'translate-x-5' : 'translate-x-0'
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm ring-0 transition duration-200 ease-in-out ${
+                            capabilities.browse
+                              ? 'translate-x-4 bg-white dark:bg-black'
+                              : 'translate-x-0 bg-white dark:bg-neutral-300'
                           }`}
                         />
                       </button>
                     </div>
 
                     {/* 5. Flashcards */}
-                    <div className="flex items-center justify-between px-3 py-2 rounded-xl">
+                    <div className="min-h-[44px] flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
-                          <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 6.878V6a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2h-.878M4 9h10a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V11a2 2 0 012-2z" />
-                          </svg>
+                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
+                          <SquareStack className="w-[18px] h-[18px] stroke-[1.8]" />
                         </div>
                         <span className="font-medium text-sm text-neutral-900 dark:text-white">Flashcards</span>
                       </div>
@@ -664,26 +669,26 @@ export const GrokChatComposer: React.FC<{
                         aria-checked={capabilities.flashcards}
                         aria-label={`Flashcards ${capabilities.flashcards ? 'enabled' : 'disabled'}`}
                         onClick={() => onToggleCapability('flashcards')}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          capabilities.flashcards ? 'bg-green-500' : 'bg-neutral-300 dark:bg-neutral-700'
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          capabilities.flashcards ? 'bg-black dark:bg-white' : 'bg-neutral-300 dark:bg-neutral-700'
                         }`}
                       >
                         <span
                           aria-hidden="true"
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                            capabilities.flashcards ? 'translate-x-5' : 'translate-x-0'
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm ring-0 transition duration-200 ease-in-out ${
+                            capabilities.flashcards
+                              ? 'translate-x-4 bg-white dark:bg-black'
+                              : 'translate-x-0 bg-white dark:bg-neutral-300'
                           }`}
                         />
                       </button>
                     </div>
 
                     {/* 6. Quiz */}
-                    <div className="flex items-center justify-between px-3 py-2 rounded-xl">
+                    <div className="min-h-[44px] flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
-                          <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
+                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
+                          <HelpCircle className="w-[18px] h-[18px] stroke-[1.8]" />
                         </div>
                         <span className="font-medium text-sm text-neutral-900 dark:text-white">Quiz</span>
                       </div>
@@ -693,26 +698,26 @@ export const GrokChatComposer: React.FC<{
                         aria-checked={capabilities.quiz}
                         aria-label={`Quiz ${capabilities.quiz ? 'enabled' : 'disabled'}`}
                         onClick={() => onToggleCapability('quiz')}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          capabilities.quiz ? 'bg-green-500' : 'bg-neutral-300 dark:bg-neutral-700'
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          capabilities.quiz ? 'bg-black dark:bg-white' : 'bg-neutral-300 dark:bg-neutral-700'
                         }`}
                       >
                         <span
                           aria-hidden="true"
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                            capabilities.quiz ? 'translate-x-5' : 'translate-x-0'
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm ring-0 transition duration-200 ease-in-out ${
+                            capabilities.quiz
+                              ? 'translate-x-4 bg-white dark:bg-black'
+                              : 'translate-x-0 bg-white dark:bg-neutral-300'
                           }`}
                         />
                       </button>
                     </div>
 
                     {/* 7. Illustrations */}
-                    <div className="flex items-center justify-between px-3 py-2 rounded-xl">
+                    <div className="min-h-[44px] flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
-                          <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                          </svg>
+                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800/80 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
+                          <Palette className="w-[18px] h-[18px] stroke-[1.8]" />
                         </div>
                         <span className="font-medium text-sm text-neutral-900 dark:text-white">Illustrations</span>
                       </div>
@@ -722,14 +727,16 @@ export const GrokChatComposer: React.FC<{
                         aria-checked={capabilities.illustrations}
                         aria-label={`Illustrations ${capabilities.illustrations ? 'enabled' : 'disabled'}`}
                         onClick={() => onToggleCapability('illustrations')}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          capabilities.illustrations ? 'bg-green-500' : 'bg-neutral-300 dark:bg-neutral-700'
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          capabilities.illustrations ? 'bg-black dark:bg-white' : 'bg-neutral-300 dark:bg-neutral-700'
                         }`}
                       >
                         <span
                           aria-hidden="true"
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                            capabilities.illustrations ? 'translate-x-5' : 'translate-x-0'
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm ring-0 transition duration-200 ease-in-out ${
+                            capabilities.illustrations
+                              ? 'translate-x-4 bg-white dark:bg-black'
+                              : 'translate-x-0 bg-white dark:bg-neutral-300'
                           }`}
                         />
                       </button>
@@ -773,9 +780,7 @@ export const GrokChatComposer: React.FC<{
             >
               {isLoading ? (
                 <>
-                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="5" y="5" width="14" height="14" rx="2.5" />
-                  </svg>
+                  <Square className="w-3.5 h-3.5 shrink-0 fill-current" />
                   <span>Stop</span>
                 </>
               ) : voiceStatus === 'listening' ? (
@@ -790,15 +795,11 @@ export const GrokChatComposer: React.FC<{
               ) : hasText ? (
                 <>
                   <span>Send</span>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5M5 12l7-7 7 7" />
-                  </svg>
+                  <Send className="w-4 h-4 stroke-[2]" />
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.757 3.63 8.25 4.51 8.25H6.75z" />
-                  </svg>
+                  <Volume2 className="w-4 h-4 stroke-[1.8]" />
                   <span>Voice</span>
                 </>
               )}
@@ -2015,10 +2016,7 @@ export const Chat: React.FC<ChatProps> = ({
                                     title="Copy text"
                                     aria-label="Copy text"
                                   >
-                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                                    </svg>
+                                    <Copy className="w-[18px] h-[18px] stroke-[1.8]" />
                                   </button>
 
                                   {/* Thumbs up button */}
@@ -2031,9 +2029,7 @@ export const Chat: React.FC<ChatProps> = ({
                                     title="Good response"
                                     aria-label="Good response"
                                   >
-                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-                                    </svg>
+                                    <ThumbsUp className="w-[18px] h-[18px] stroke-[1.8]" />
                                   </button>
 
                                   {/* Thumbs down button */}
@@ -2046,9 +2042,7 @@ export const Chat: React.FC<ChatProps> = ({
                                     title="Bad response"
                                     aria-label="Bad response"
                                   >
-                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
-                                    </svg>
+                                    <ThumbsDown className="w-[18px] h-[18px] stroke-[1.8]" />
                                   </button>
 
                                   {/* Speaker (Read aloud TTS) button */}
@@ -2061,11 +2055,7 @@ export const Chat: React.FC<ChatProps> = ({
                                     title={speakingMsgId === msg.id ? 'Stop reading' : 'Read aloud'}
                                     aria-label={speakingMsgId === msg.id ? 'Stop reading' : 'Read aloud'}
                                   >
-                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                                    </svg>
+                                    <Volume2 className="w-[18px] h-[18px] stroke-[1.8]" />
                                   </button>
 
                                   {/* Share button */}
@@ -2076,13 +2066,7 @@ export const Chat: React.FC<ChatProps> = ({
                                     title="Share response"
                                     aria-label="Share response"
                                   >
-                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                                      <circle cx="18" cy="5" r="3" />
-                                      <circle cx="6" cy="12" r="3" />
-                                      <circle cx="18" cy="19" r="3" />
-                                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                                    </svg>
+                                    <Share2 className="w-[18px] h-[18px] stroke-[1.8]" />
                                   </button>
 
                                   {/* More button (vertical 3-dots) with popover dropdown */}
@@ -2094,11 +2078,7 @@ export const Chat: React.FC<ChatProps> = ({
                                       title="More options"
                                       aria-label="More options"
                                     >
-                                      <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="currentColor">
-                                        <circle cx="12" cy="5" r="1.75" />
-                                        <circle cx="12" cy="12" r="1.75" />
-                                        <circle cx="12" cy="19" r="1.75" />
-                                      </svg>
+                                      <MoreVertical className="w-[18px] h-[18px] stroke-[1.8]" />
                                     </button>
 
                                     {moreMenuMsgId === msg.id && (
