@@ -130,25 +130,6 @@ export async function saveFcmToken(uid: string, token: string): Promise<void> {
   }
 }
 
-export async function clearDeliveredNotifications(): Promise<void> {
-  if (!isNative()) return;
-  try {
-    await PushNotifications.removeAllDeliveredNotifications();
-  } catch (err) {
-    console.warn('[FCM] Error clearing delivered notifications:', err);
-  }
-}
-
-export async function scheduleStudyReminders(reminders: any[]): Promise<boolean> {
-  console.log('[FCM] scheduleStudyReminders called with count:', reminders?.length || 0);
-  return true;
-}
-
-export async function sendTestNotification(): Promise<boolean> {
-  console.log('[FCM] sendTestNotification triggered');
-  return true;
-}
-
 export async function requestLocalNotificationPermission(): Promise<boolean> {
   if (!isNative()) return false;
   try {
