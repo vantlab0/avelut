@@ -42,6 +42,38 @@ export interface ChatModeOption {
   description: string;
 }
 
+export interface AiCapabilities {
+  browse: boolean;
+  flashcards: boolean;
+  quiz: boolean;
+  illustrations: boolean;
+}
+
+const DEFAULT_CAPABILITIES: AiCapabilities = {
+  browse: true,
+  flashcards: false,
+  quiz: false,
+  illustrations: false,
+};
+
+export const getStoredCapabilities = (): AiCapabilities => {
+  if (typeof window === 'undefined') return DEFAULT_CAPABILITIES;
+  try {
+    const raw = localStorage.getItem('avelut_ai_capabilities');
+    if (!raw) return DEFAULT_CAPABILITIES;
+    return { ...DEFAULT_CAPABILITIES, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_CAPABILITIES;
+  }
+};
+
+export const saveStoredCapabilities = (caps: AiCapabilities) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('avelut_ai_capabilities', JSON.stringify(caps));
+  } catch {}
+};
+
 const CHAT_MODES: ChatModeOption[] = [
   { id: 'context', label: 'Context Aware', description: 'Uses courses & progress context' },
   { id: 'fast', label: 'Fast', description: 'Short & concise answers' },
@@ -310,6 +342,9 @@ export const GrokChatComposer: React.FC<{
   onAttachImage?: (base64Img: string) => void;
   onOpenGallery: () => void;
   onOpenCamera: () => void;
+  onOpenFile: () => void;
+  capabilities: AiCapabilities;
+  onToggleCapability: (key: keyof AiCapabilities) => void;
   onSend: () => void;
   onStop?: () => void;
   autoFocus?: boolean;
@@ -324,6 +359,9 @@ export const GrokChatComposer: React.FC<{
   onAttachImage,
   onOpenGallery,
   onOpenCamera,
+  onOpenFile,
+  capabilities,
+  onToggleCapability,
   onSend,
   onStop,
   autoFocus,
@@ -332,17 +370,26 @@ export const GrokChatComposer: React.FC<{
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const attachMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close attach menu when clicking outside
+  // Close attach menu when clicking outside or pressing Escape
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
         setShowAttachMenu(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowAttachMenu(false);
+      }
+    };
     if (showAttachMenu) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [showAttachMenu]);
 
   // Helper to activate focus and trigger keyboard when explicitly requested
@@ -440,7 +487,7 @@ export const GrokChatComposer: React.FC<{
       }}
       onPaste={handlePaste}
     >
-      <div className="relative flex flex-col bg-[#f4f4f5] dark:bg-[#212124] rounded-[28px] border border-neutral-200/70 dark:border-white/5 transition-all focus-within:ring-1 focus-within:ring-black/10 dark:focus-within:ring-white/10 shadow-sm">
+      <div className="relative flex flex-col bg-white dark:bg-[#212124] rounded-[28px] border border-neutral-200 dark:border-white/10 transition-all focus-within:ring-1 focus-within:ring-black/10 dark:focus-within:ring-white/10 shadow-md">
         
         {/* Attached Images Preview Row */}
         {attachedImages.length > 0 && (
@@ -505,51 +552,189 @@ export const GrokChatComposer: React.FC<{
                 </svg>
               </button>
 
-              {/* Popup Menu — Gallery / Camera (Clean, neutral monochrome design) */}
+              {/* Floating Menu Card */}
               {showAttachMenu && (
-                <div className="absolute bottom-full left-0 mb-2.5 w-48 sm:w-52 bg-white dark:bg-[#18181b] rounded-2xl shadow-xl border border-neutral-200 dark:border-neutral-800 p-1.5 z-50 animate-in slide-in-from-bottom-2 fade-in duration-150">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAttachMenu(false);
-                      onOpenGallery();
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer text-left no-underline select-none group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                        <circle cx="8.5" cy="8.5" r="1.5" />
-                        <polyline points="21 15 16 10 5 21" />
-                      </svg>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block font-semibold text-xs sm:text-sm text-neutral-900 dark:text-white no-underline">Gallery</span>
-                      <span className="block text-[11px] text-neutral-500 dark:text-neutral-400 font-normal no-underline">Upload photos</span>
-                    </div>
-                  </button>
+                <div className="absolute bottom-full left-0 mb-3 w-64 sm:w-72 bg-white dark:bg-[#1c1c1e] rounded-[22px] shadow-2xl border border-neutral-200/90 dark:border-white/10 p-2.5 z-50 animate-in fade-in zoom-in-95 slide-in-from-bottom-3 duration-200 ease-out select-none">
+                  {/* TOP SECTION: Attachment Actions */}
+                  <div className="space-y-0.5">
+                    {/* 1. Camera */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachMenu(false);
+                        onOpenCamera();
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer text-left group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
+                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                        </svg>
+                      </div>
+                      <span className="font-medium text-sm text-neutral-900 dark:text-white">Camera</span>
+                    </button>
 
-                  <div className="h-[1px] bg-neutral-100 dark:bg-neutral-800/60 my-1 mx-2" />
+                    {/* 2. Gallery */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachMenu(false);
+                        onOpenGallery();
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer text-left group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
+                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                      </div>
+                      <span className="font-medium text-sm text-neutral-900 dark:text-white">Gallery</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAttachMenu(false);
-                      onOpenCamera();
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer text-left no-underline select-none group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2-2h6l2 2h4a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
-                        <circle cx="12" cy="13" r="4" />
-                      </svg>
+                    {/* 3. Files */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachMenu(false);
+                        onOpenFile();
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer text-left group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors">
+                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        </svg>
+                      </div>
+                      <span className="font-medium text-sm text-neutral-900 dark:text-white">Files</span>
+                    </button>
+                  </div>
+
+                  {/* Thin horizontal divider */}
+                  <div className="h-[1px] bg-neutral-200/80 dark:bg-white/10 my-2 mx-1" />
+
+                  {/* BOTTOM SECTION: AI Capability Toggles */}
+                  <div className="space-y-1">
+                    {/* 4. Browse */}
+                    <div className="flex items-center justify-between px-3 py-2 rounded-xl">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
+                          <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <circle cx="12" cy="12" r="10" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2 12h20" />
+                          </svg>
+                        </div>
+                        <span className="font-medium text-sm text-neutral-900 dark:text-white">Browse</span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={capabilities.browse}
+                        aria-label={`Browse ${capabilities.browse ? 'enabled' : 'disabled'}`}
+                        onClick={() => onToggleCapability('browse')}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          capabilities.browse ? 'bg-green-500' : 'bg-neutral-300 dark:bg-neutral-700'
+                        }`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            capabilities.browse ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
                     </div>
-                    <div className="min-w-0">
-                      <span className="block font-semibold text-xs sm:text-sm text-neutral-900 dark:text-white no-underline">Camera</span>
-                      <span className="block text-[11px] text-neutral-500 dark:text-neutral-400 font-normal no-underline">Snap a photo</span>
+
+                    {/* 5. Flashcards */}
+                    <div className="flex items-center justify-between px-3 py-2 rounded-xl">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
+                          <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 6.878V6a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2h-.878M4 9h10a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V11a2 2 0 012-2z" />
+                          </svg>
+                        </div>
+                        <span className="font-medium text-sm text-neutral-900 dark:text-white">Flashcards</span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={capabilities.flashcards}
+                        aria-label={`Flashcards ${capabilities.flashcards ? 'enabled' : 'disabled'}`}
+                        onClick={() => onToggleCapability('flashcards')}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          capabilities.flashcards ? 'bg-green-500' : 'bg-neutral-300 dark:bg-neutral-700'
+                        }`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            capabilities.flashcards ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
                     </div>
-                  </button>
+
+                    {/* 6. Quiz */}
+                    <div className="flex items-center justify-between px-3 py-2 rounded-xl">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
+                          <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <span className="font-medium text-sm text-neutral-900 dark:text-white">Quiz</span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={capabilities.quiz}
+                        aria-label={`Quiz ${capabilities.quiz ? 'enabled' : 'disabled'}`}
+                        onClick={() => onToggleCapability('quiz')}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          capabilities.quiz ? 'bg-green-500' : 'bg-neutral-300 dark:bg-neutral-700'
+                        }`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            capabilities.quiz ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* 7. Illustrations */}
+                    <div className="flex items-center justify-between px-3 py-2 rounded-xl">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-neutral-700 dark:text-neutral-300">
+                          <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                          </svg>
+                        </div>
+                        <span className="font-medium text-sm text-neutral-900 dark:text-white">Illustrations</span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={capabilities.illustrations}
+                        aria-label={`Illustrations ${capabilities.illustrations ? 'enabled' : 'disabled'}`}
+                        onClick={() => onToggleCapability('illustrations')}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          capabilities.illustrations ? 'bg-green-500' : 'bg-neutral-300 dark:bg-neutral-700'
+                        }`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            capabilities.illustrations ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -669,9 +854,20 @@ export const Chat: React.FC<ChatProps> = ({
   const [isSwitchingChat, setIsSwitchingChat] = useState(false);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [moreMenuMsgId, setMoreMenuMsgId] = useState<string | null>(null);
+  const [aiCapabilities, setAiCapabilities] = useState<AiCapabilities>(() => getStoredCapabilities());
+
+  const handleToggleCapability = useCallback((key: keyof AiCapabilities) => {
+    setAiCapabilities((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      saveStoredCapabilities(next);
+      return next;
+    });
+  }, []);
+
   const switchingConvoIdRef = useRef<string | null>(null);
   const newlyCreatedConvoIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const docFileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeRequestIdRef = useRef<string | null>(null);
@@ -1283,10 +1479,34 @@ export const Chat: React.FC<ChatProps> = ({
 
       const baseSystemInstruction = [
         'You are Avelut, an intelligent, helpful, and versatile AI assistant and study companion.',
+        '',
+        'CURRENT USER CAPABILITY TOGGLES:',
+        `- Browse: ${aiCapabilities.browse ? 'ON' : 'OFF'}`,
+        `- Flashcards: ${aiCapabilities.flashcards ? 'ON' : 'OFF'}`,
+        `- Quiz: ${aiCapabilities.quiz ? 'ON' : 'OFF'}`,
+        `- Illustrations: ${aiCapabilities.illustrations ? 'ON' : 'OFF'}`,
+        '',
+        'STRICT RULES:',
+        aiCapabilities.browse
+          ? '- Browse is ON: You may search the web or cite live web results when useful.'
+          : '- Browse is OFF: NEVER browse the web, never search, and never cite live web results. Answer only from knowledge + conversation.',
+        aiCapabilities.flashcards
+          ? '- Flashcards is ON: You may generate flashcards when the user asks or when it clearly helps learning.'
+          : '- Flashcards is OFF: NEVER generate flashcards, never output flashcard-style Q/A cards (action:flashcards), and never suggest "here are some flashcards". Stay focused on normal conversational teaching.',
+        aiCapabilities.quiz
+          ? '- Quiz is ON: You may generate quizzes / practice questions when helpful or requested.'
+          : '- Quiz is OFF: NEVER generate quizzes, multiple-choice questions as a quiz, or "quiz me" style content (action:cbt) unless the user explicitly forces it in plain language AND the toggle is on. Prefer normal explanation.',
+        aiCapabilities.illustrations
+          ? '- Illustrations is ON: You may produce or request illustrations / board drawings (```svg or pollinations images) when they aid understanding.'
+          : '- Illustrations is OFF: NEVER generate or request board illustrations, diagrams, ```svg code fences, or visual drawing links/images.',
+        '- If a capability is OFF, never produce that content in any form; just answer the user\'s message normally.',
+        '',
         'Guidelines:',
-        '- You have web search capabilities enabled via web_search. Whenever asked for current events, real-time facts, news, latest statistics, live data, or web search, NEVER state "I cannot search the internet" or "I do not have internet access". ALWAYS use web search or answer using live tools.',
-        '- Treat users naturally, warmly, and directly as a helpful general-purpose assistant. When greeted with casual greetings like "hello", "hi", "hey", or "good morning", respond concisely and friendly without assuming any specialized topic, course, or engineering major (e.g., "Hello! How can I help you today?").',
-        '- For substantive questions, study topics, homework, or tasks, provide elite, clear, structured explanations with rich visual tools.',
+        aiCapabilities.browse
+          ? '- You have web search capabilities enabled via web_search. Whenever asked for current events, real-time facts, news, latest statistics, live data, or web search, ALWAYS use web search or answer using live tools.'
+          : '- Web browsing is disabled by the user toggle.',
+        '- Treat users naturally, warmly, and directly as a helpful general-purpose assistant. When greeted with casual greetings like "hello", "hi", "hey", or "good morning", respond concisely and friendly without assuming any specialized topic, course, or engineering major.',
+        '- For substantive questions, study topics, homework, or tasks, provide elite, clear, structured explanations.',
         '- Be concise, clear, and structured. Do not include excessive background fluff or wordy preambles.',
         '- When formatting math or equations, use standard LaTeX ($...$ for inline, $$...$$ for blocks).',
         '- When explaining concepts:',
@@ -1294,43 +1514,17 @@ export const Chat: React.FC<ChatProps> = ({
         '  * Use **bold** for key terms and *italics* for emphasis',
         '  * Use bullet lists and numbered steps for readability',
         '  * Use code fences with syntax highlighting for code/examples',
-        '- INTERACTIVE TESTING & CBT EXAMS: When a student asks you to test them, quiz them, practice exam questions, or create a mock exam on any topic, output an interactive CBT action card block:',
-        '```action:cbt',
-        '{',
-        '  "title": "Topic Quiz Title",',
-        '  "topic": "Subject/Topic",',
-        '  "durationMinutes": 10,',
-        '  "questions": [',
-        '    {',
-        '      "id": "q1",',
-        '      "question": "Clear multiple choice question?",',
-        '      "options": ["Option A", "Option B", "Option C", "Option D"],',
-        '      "correctAnswer": 0,',
-        '      "explanation": "Brief explanation of why this answer is correct."',
-        '    }',
-        '  ]',
-        '}',
-        '```',
-        '- FLASHCARDS CREATION: When a student asks to generate flashcards or summarize concepts for revision, output an interactive flashcard action card block:',
-        '```action:flashcards',
-        '{',
-        '  "title": "Topic Flashcards Deck",',
-        '  "topic": "Subject/Topic",',
-        '  "cards": [',
-        '    {',
-        '      "front": "Front concept, term, or question",',
-        '      "back": "Clear concise definition or explanation"',
-        '    }',
-        '  ]',
-        '}',
-        '```',
-        '- VISUAL SVG DIAGRAMS: When explaining workflows, structures, architectures, biological/chemical systems, algorithms, geometric layouts, or flowcharts, output a complete, responsive SVG visual diagram inside a ```svg code fence. Always include xmlns="http://www.w3.org/2000/svg", a viewBox (e.g. viewBox="0 0 600 350"), clean labels, and contrasting modern colors (#3b82f6, #10b981, #8b5cf6, #f59e0b, #ffffff, #94a3b8). NEVER just talk about a diagram—render it!',
-        '- VISUAL IMAGES & ILLUSTRATIONS: When explaining physical objects, science, nature, anatomy, history, or real-world concepts, embed an educational visual using markdown: `![Caption description](https://image.pollinations.ai/prompt/detailed%20educational%20illustration%20of%20SUBJECT?width=800&height=500&nologo=true)` where SUBJECT is the specific topic. This guarantees real, high-resolution visuals.',
-        '- SUGGESTED NEXT STEPS / FOLLOW-UPS: For substantive or educational answers (but NOT on simple greetings like "hi" or "hello"), provide 2 to 3 relevant follow-up actions or questions that the user can tap. Prefix EACH follow-up on its own line with "↳ ", for example:',
-        '↳ Test me on this concept with 5 CBT questions',
-        '↳ Generate flashcards for key definitions',
-        '↳ Explain this with an interactive visual SVG diagram',
-      ].join('\n');
+        aiCapabilities.quiz
+          ? '- INTERACTIVE TESTING & CBT EXAMS: When a student asks you to test them, quiz them, practice exam questions, or create a mock exam on any topic, output an interactive CBT action card block:\n```action:cbt\n{\n  "title": "Topic Quiz Title",\n  "topic": "Subject/Topic",\n  "durationMinutes": 10,\n  "questions": [\n    {\n      "id": "q1",\n      "question": "Clear multiple choice question?",\n      "options": ["Option A", "Option B", "Option C", "Option D"],\n      "correctAnswer": 0,\n      "explanation": "Brief explanation of why this answer is correct."\n    }\n  ]\n}\n```'
+          : '',
+        aiCapabilities.flashcards
+          ? '- FLASHCARDS CREATION: When a student asks to generate flashcards or summarize concepts for revision, output an interactive flashcard action card block:\n```action:flashcards\n{\n  "title": "Topic Flashcards Deck",\n  "topic": "Subject/Topic",\n  "cards": [\n    {\n      "front": "Front concept, term, or question",\n      "back": "Clear concise definition or explanation"\n    }\n  ]\n}\n```'
+          : '',
+        aiCapabilities.illustrations
+          ? '- VISUAL SVG DIAGRAMS: When explaining workflows, structures, architectures, biological/chemical systems, algorithms, geometric layouts, or flowcharts, output a complete, responsive SVG visual diagram inside a ```svg code fence.\n- VISUAL IMAGES & ILLUSTRATIONS: When explaining physical objects, science, nature, anatomy, history, or real-world concepts, embed an educational visual using markdown: `![Caption description](https://image.pollinations.ai/prompt/detailed%20educational%20illustration%20of%20SUBJECT?width=800&height=500&nologo=true)` where SUBJECT is the specific topic.'
+          : '',
+        '- SUGGESTED NEXT STEPS / FOLLOW-UPS: For substantive or educational answers (but NOT on simple greetings like "hi" or "hello"), provide 2 to 3 relevant follow-up actions or questions that the user can tap. Prefix EACH follow-up on its own line with "↳ ". ONLY suggest actions that correspond to currently ON capabilities.',
+      ].filter(Boolean).join('\n');
 
       let modeInstruction = '';
       if (selectedMode === 'fast') {
@@ -1997,6 +2191,39 @@ export const Chat: React.FC<ChatProps> = ({
           if (fileInputRef.current) fileInputRef.current.value = '';
         }}
       />
+      <input
+        ref={docFileInputRef}
+        type="file"
+        accept="image/*,.pdf,.doc,.docx,.txt"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = e.target.files;
+          if (files && files.length > 0) {
+            const selected = Array.from(files);
+            selected.forEach((file) => {
+              if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  const res = ev.target?.result as string;
+                  if (res) void addOptimizedImage(res);
+                };
+                reader.readAsDataURL(file);
+              } else {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  const res = ev.target?.result as string;
+                  if (res) {
+                    setInput((prev) => (prev ? `${prev}\n\n[Attached File: ${file.name}]\n${res.slice(0, 4000)}` : `[Attached File: ${file.name}]\n${res.slice(0, 4000)}`));
+                  }
+                };
+                reader.readAsText(file);
+              }
+            });
+          }
+          if (docFileInputRef.current) docFileInputRef.current.value = '';
+        }}
+      />
       <GrokChatComposer
         input={input}
         setInput={setInput}
@@ -2010,6 +2237,9 @@ export const Chat: React.FC<ChatProps> = ({
         onAttachImage={(img) => void addOptimizedImage(img)}
         onOpenGallery={() => fileInputRef.current?.click()}
         onOpenCamera={() => setIsCameraOpen(true)}
+        onOpenFile={() => docFileInputRef.current?.click()}
+        capabilities={aiCapabilities}
+        onToggleCapability={handleToggleCapability}
         onSend={() => handleSendMessage()}
         onStop={handleStopGenerating}
         autoFocus={true}

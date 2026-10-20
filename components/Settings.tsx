@@ -82,7 +82,7 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
   onDeleteAccount,
   onNavigate,
 }) => {
-  const { mode, setMode } = useTheme();
+  const { mode, themeSetting, setThemeSetting } = useTheme();
   const [isNotificationSwitchOn, setIsNotificationSwitchOn] = useState(userProfile.notifications_enabled);
   const [isNotificationSaving, setIsNotificationSaving] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -345,9 +345,49 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
             <SettingsRow
               icon={<i className="bi bi-moon-stars text-lg" />}
               title="Appearance"
-              subtitle={mode === 'dark' ? 'Dark theme active' : 'Light theme active'}
+              subtitle={
+                themeSetting === 'system'
+                  ? `System default (${mode} mode)`
+                  : themeSetting === 'dark'
+                  ? 'Dark theme active'
+                  : 'Light theme active'
+              }
               rightElement={
-                <Switch checked={mode === 'dark'} onChange={(c) => setMode(c ? 'dark' : 'light')} />
+                <div className="inline-flex rounded-xl bg-neutral-100 dark:bg-neutral-800 p-1 text-xs font-semibold select-none border border-neutral-200 dark:border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setThemeSetting('system')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                      themeSetting === 'system'
+                        ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-xs font-bold'
+                        : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+                    }`}
+                  >
+                    System
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setThemeSetting('light')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                      themeSetting === 'light'
+                        ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-xs font-bold'
+                        : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+                    }`}
+                  >
+                    Light
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setThemeSetting('dark')}
+                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                      themeSetting === 'dark'
+                        ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-xs font-bold'
+                        : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+                    }`}
+                  >
+                    Dark
+                  </button>
+                </div>
               }
             />
           )}

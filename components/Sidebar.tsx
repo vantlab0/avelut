@@ -369,13 +369,13 @@ const ConversationRow: React.FC<{
       <div className="flex-1 min-w-0 pr-1">
         <div className="flex items-center gap-1.5">
           {isPinned && (
-            <Pin className="w-3.5 h-3.5 text-[#0066FF] dark:text-[#38BDF8] shrink-0" />
+            <Pin className="w-4 h-4 text-[#0066FF] dark:text-[#38BDF8] shrink-0" />
           )}
-          <span className="block text-[13.5px] truncate leading-snug font-medium">
+          <span className="block text-[15px] sm:text-base truncate leading-snug font-semibold">
             {convo.title || 'New Chat'}
           </span>
         </div>
-        <span className="block text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
+        <span className="block text-xs sm:text-[13px] text-neutral-500 dark:text-neutral-400 mt-0.5">
           {timeAgo(convo.last_updated_at)}
         </span>
       </div>

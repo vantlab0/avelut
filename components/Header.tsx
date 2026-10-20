@@ -112,20 +112,20 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onMenuClick}
-            className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white dark:bg-[#212124] shadow-md hover:shadow-lg border border-black/5 dark:border-white/10 flex items-center justify-center text-neutral-800 dark:text-white transition-all active:scale-95 cursor-pointer relative shrink-0 pointer-events-auto"
+            className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white dark:bg-[#212124] shadow-md hover:shadow-lg border border-black/5 dark:border-white/10 flex items-center justify-center text-neutral-800 dark:text-white transition-all active:scale-95 cursor-pointer relative shrink-0 pointer-events-auto"
             aria-label="Toggle menu"
             title="Menu"
           >
             {/* 3 horizontal black lines of equal length & thickness with uniform vertical spacing */}
-            <svg className="w-5 h-5 text-neutral-800 dark:text-neutral-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
+            <svg className="w-6 h-6 sm:w-7 sm:h-7 text-neutral-800 dark:text-neutral-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
               <line x1="4" y1="7" x2="20" y2="7" />
               <line x1="4" y1="12" x2="20" y2="12" />
               <line x1="4" y1="17" x2="20" y2="17" />
             </svg>
             {(unreadCount > 0 || unreadMessagesCount > 0) && (
-              <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
+              <span className="absolute top-1 right-1 flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
               </span>
             )}
           </button>
@@ -160,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({
         ) : hideDefaultRightActions ? null : (
           <div className="relative pointer-events-auto overflow-visible" ref={dropdownRef}>
             {/* Combined Pill Container */}
-            <div className="h-10 sm:h-11 rounded-full bg-white dark:bg-[#212124] shadow-md hover:shadow-lg border border-black/5 dark:border-white/10 px-1.5 flex items-center gap-1 shrink-0">
+            <div className="h-12 sm:h-14 rounded-full bg-white dark:bg-[#212124] shadow-md hover:shadow-lg border border-black/5 dark:border-white/10 px-2 flex items-center gap-1 shrink-0">
               {/* Neutral Black & White Calendar Icon Button */}
               <button
                 type="button"
@@ -168,11 +168,11 @@ export const Header: React.FC<HeaderProps> = ({
                   setIsMenuOpen(false);
                   onNavigate?.('timetable');
                 }}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/10 transition active:scale-95 cursor-pointer"
+                className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/10 transition active:scale-95 cursor-pointer"
                 aria-label="Study Timetable"
                 title="Study Timetable"
               >
-                <svg className="w-4 h-4 text-neutral-800 dark:text-neutral-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-5.5 h-5.5 text-neutral-800 dark:text-neutral-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="4" width="18" height="18" rx="3.5" />
                   <line x1="16" y1="2" x2="16" y2="6" />
                   <line x1="8" y1="2" x2="8" y2="6" />
@@ -190,12 +190,12 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={onNewChat}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/10 transition active:scale-95 cursor-pointer"
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/10 transition active:scale-95 cursor-pointer"
                   aria-label="New chat"
                   title="New chat"
                 >
                   {/* Outlined square with diagonal pencil glyph (black stroke) */}
-                  <svg className="w-4 h-4 text-neutral-900 dark:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <svg className="w-5.5 h-5.5 text-neutral-900 dark:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
@@ -209,21 +209,21 @@ export const Header: React.FC<HeaderProps> = ({
                       setIsNotificationOpen((prev) => !prev);
                       onNotificationsClick?.();
                     }}
-                    className={`relative w-8 h-8 rounded-full flex items-center justify-center text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/10 transition active:scale-95 cursor-pointer ${
+                    className={`relative w-10 h-10 rounded-full flex items-center justify-center text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/10 transition active:scale-95 cursor-pointer ${
                       isNotificationOpen ? 'bg-neutral-100 dark:bg-white/10' : ''
                     }`}
                     aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
                     title="Notifications"
                   >
                     {/* Notification Bell Icon */}
-                    <svg className="w-4 h-4 text-neutral-900 dark:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <svg className="w-5.5 h-5.5 text-neutral-900 dark:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                     </svg>
                     {unreadCount > 0 && (
-                      <span className="absolute top-1 right-1 flex h-2 w-2">
+                      <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0066FF] opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#0066FF]" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#0066FF]" />
                       </span>
                     )}
                   </button>
@@ -248,20 +248,20 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {/* Vertical Hairline Divider */}
-              <div className="w-px h-5 bg-neutral-200 dark:bg-white/10 mx-0.5" />
+              <div className="w-px h-7 bg-neutral-200 dark:bg-white/10 mx-0.5" />
 
               {/* Three Dot Kebab Menu Button */}
               <button
                 type="button"
                 onClick={() => setIsMenuOpen((prev) => !prev)}
-                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/10 transition active:scale-95 cursor-pointer ${
+                className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-white/10 transition active:scale-95 cursor-pointer ${
                   isMenuOpen ? 'bg-neutral-100 dark:bg-white/10' : ''
                 }`}
                 aria-label="More options"
                 title="More options"
                 aria-expanded={isMenuOpen}
               >
-                <svg className="w-5 h-5 fill-current text-neutral-900 dark:text-white" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 fill-current text-neutral-900 dark:text-white" viewBox="0 0 24 24">
                   <circle cx="12" cy="5" r="2" />
                   <circle cx="12" cy="12" r="2" />
                   <circle cx="12" cy="19" r="2" />
