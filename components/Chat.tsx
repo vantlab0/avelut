@@ -1,6 +1,7 @@
 import { db, get, off, onValue, push, ref as dbRef, remove, serverTimestamp, set, update } from '@/lib/backend';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createAvelutAI, getResponseText, getResponseReasoningText, accumulateUsageMetadata, type AiUsageMetadata } from '../utils/inference';
+import { isNearBottom, scrollContainerToBottom } from '../utils/scrollUtils';
 import { compressBase64Image } from '../utils/mediaUpload';
 import type { UserProfile, Message, ChatConversation } from '../types';
 import { useToast } from '../hooks/useToast';
@@ -482,7 +483,7 @@ export const GrokChatComposer: React.FC<{
     <div
       className="w-full max-w-3xl mx-auto px-3 sm:px-4 pt-2 relative z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md shrink-0"
       style={{
-        paddingBottom: 'calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--keyboard-height, 0px))',
+        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom), var(--keyboard-height, 0px))',
         transition: 'padding-bottom 0.15s ease',
       }}
       onPaste={handlePaste}
@@ -870,6 +871,25 @@ export const Chat: React.FC<ChatProps> = ({
   const docFileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = isNearBottom(el);
+  }, []);
+
+  // Keep the view pinned when media finishes loading and grows the bubble.
+  useEffect(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const handleMediaLoad = () => {
+      if (stickToBottomRef.current) scrollContainerToBottom(el, 'auto');
+    };
+    el.addEventListener('load', handleMediaLoad, true);
+    return () => el.removeEventListener('load', handleMediaLoad, true);
+  }, []);
   const activeRequestIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const { addToast } = useToast();
@@ -1191,19 +1211,45 @@ export const Chat: React.FC<ChatProps> = ({
     };
   }, [activeConversationId]);
 
-  // Only scroll down when a conversation loads or a new message is sent.
-  // DO NOT auto-scroll on every streaming chunk of text so user can read from line 1 while streaming.
+  // Only scroll down when a conversation loads or a new message arrives while
+  // the user is already near the bottom. DO NOT auto-scroll on every streaming
+  // chunk, and never drag a user away from older messages they are reading.
   const prevMsgCountRef = useRef(messages.length);
   const activeConvoRef = useRef(activeConversationId);
   useEffect(() => {
     const isConvoSwitched = activeConvoRef.current !== activeConversationId;
     activeConvoRef.current = activeConversationId;
 
-    if (isConvoSwitched || messages.length > prevMsgCountRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isConvoSwitched) {
+      stickToBottomRef.current = true;
+    }
+
+    const hasNewMessage = messages.length > prevMsgCountRef.current;
+    if (isConvoSwitched || (hasNewMessage && stickToBottomRef.current)) {
+      const behavior: ScrollBehavior = isConvoSwitched ? 'auto' : 'smooth';
+      requestAnimationFrame(() => scrollContainerToBottom(messagesScrollRef.current, behavior));
     }
     prevMsgCountRef.current = messages.length;
   }, [messages.length, activeConversationId]);
+
+  // Streaming updates change the text length without changing the message
+  // count. Keep following the answer only while the user is still at the
+  // bottom; scrolling up to read history disables this via
+  // `handleMessagesScroll`.
+  const lastMessageContentLength = (() => {
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return 0;
+    return (lastMessage.text?.length ?? 0) + (lastMessage.reasoningText?.length ?? 0);
+  })();
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      if (stickToBottomRef.current) {
+        scrollContainerToBottom(messagesScrollRef.current, 'auto');
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [lastMessageContentLength]);
 
   const recognitionRef = useRef<any>(null);
 
@@ -1396,6 +1442,7 @@ export const Chat: React.FC<ChatProps> = ({
     };
 
     setMessages((prev) => [...prev.filter((m) => m.id !== aiMsgId && m.id !== userMsgId), optimisticUserMsg, optimisticAiMsg]);
+    stickToBottomRef.current = true;
     const currentAbort = new AbortController();
     abortControllerRef.current = currentAbort;
 
@@ -1403,9 +1450,8 @@ export const Chat: React.FC<ChatProps> = ({
     setAttachedImages([]);
     setIsLoading(true);
 
-    requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    });
+    // Immediate re-pin after the optimistic message paints.
+    requestAnimationFrame(() => scrollContainerToBottom(messagesScrollRef.current, 'auto'));
 
     try {
       let currentConvoId = activeConversationId;
@@ -1488,7 +1534,7 @@ export const Chat: React.FC<ChatProps> = ({
         '',
         'STRICT RULES:',
         aiCapabilities.browse
-          ? '- Browse is ON: You may search the web or cite live web results when useful.'
+          ? '- Browse is ON: A real web_search tool is available and executed server-side. Use it for current events, live data, news, prices, and recent facts. Cite the original URLs returned by the tool and end with a "Sources" section. Never claim to have searched the web unless the tool actually ran.'
           : '- Browse is OFF: NEVER browse the web, never search, and never cite live web results. Answer only from knowledge + conversation.',
         aiCapabilities.flashcards
           ? '- Flashcards is ON: You may generate flashcards when the user asks or when it clearly helps learning.'
@@ -1503,7 +1549,7 @@ export const Chat: React.FC<ChatProps> = ({
         '',
         'Guidelines:',
         aiCapabilities.browse
-          ? '- You have web search capabilities enabled via web_search. Whenever asked for current events, real-time facts, news, latest statistics, live data, or web search, ALWAYS use web search or answer using live tools.'
+          ? '- Web search is enabled through the real web_search tool. Use it whenever the answer depends on current or live information, then cite the returned source URLs.'
           : '- Web browsing is disabled by the user toggle.',
         '- Treat users naturally, warmly, and directly as a helpful general-purpose assistant. When greeted with casual greetings like "hello", "hi", "hey", or "good morning", respond concisely and friendly without assuming any specialized topic, course, or engineering major.',
         '- For substantive questions, study topics, homework, or tasks, provide elite, clear, structured explanations.',
@@ -1594,6 +1640,9 @@ export const Chat: React.FC<ChatProps> = ({
           systemInstruction: fullSystemInstruction,
           temperature: selectedMode === 'fast' ? 0.3 : 0.5,
           signal: currentAbort.signal,
+          // Server-side switches: when true the proxy defines and executes the
+          // web_search tool. A prompt alone never performs a search.
+          webSearch: aiCapabilities.browse,
           // Lower temperature = faster, more deterministic responses
         },
       };
@@ -1849,7 +1898,11 @@ export const Chat: React.FC<ChatProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-white dark:bg-black overflow-hidden text-neutral-900 dark:text-white">
       {/* MESSAGES / EMPTY STATE AREA */}
-      <div className="flex-1 overflow-y-auto px-4 pt-3 sm:pt-4 pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div
+        ref={messagesScrollRef}
+        onScroll={handleMessagesScroll}
+        className="flex-1 overflow-y-auto px-4 pt-3 sm:pt-4 pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden overscroll-contain"
+      >
         {isSwitchingChat ? (
           <div className="w-full max-w-3xl mx-auto py-10 space-y-6 animate-in fade-in duration-300">
             {/* Soft, beautiful chat skeleton loader */}

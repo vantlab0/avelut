@@ -25,20 +25,20 @@ describe('Canonical Launch Pricing Model', () => {
     expect(CANONICAL_PRICING.pro.aiChatAccess).toBe('generous');
 
     // PAY-AS-YOU-GO PACKAGES
-    expect(CANONICAL_PRICING.packages.live_tutorial_15.priceNgn).toBe(299);
+    expect(CANONICAL_PRICING.packages.live_tutorial_15.priceNgn).toBe(70);
     expect(CANONICAL_PRICING.packages.live_tutorial_15.durationMinutes).toBe(15);
 
-    expect(CANONICAL_PRICING.packages.live_tutorial_30.priceNgn).toBe(599);
+    expect(CANONICAL_PRICING.packages.live_tutorial_30.priceNgn).toBe(130);
     expect(CANONICAL_PRICING.packages.live_tutorial_30.durationMinutes).toBe(30);
 
-    expect(CANONICAL_PRICING.packages.live_tutorial_60.priceNgn).toBe(1099);
+    expect(CANONICAL_PRICING.packages.live_tutorial_60.priceNgn).toBe(270);
     expect(CANONICAL_PRICING.packages.live_tutorial_60.durationMinutes).toBe(60);
   });
 
   it('should resolve package and plan prices correctly', () => {
-    expect(resolvePackagePriceNgn('live_tutorial_15')).toBe(299);
-    expect(resolvePackagePriceNgn('live_tutorial_30')).toBe(599);
-    expect(resolvePackagePriceNgn('live_tutorial_60')).toBe(1099);
+    expect(resolvePackagePriceNgn('live_tutorial_15')).toBe(70);
+    expect(resolvePackagePriceNgn('live_tutorial_30')).toBe(130);
+    expect(resolvePackagePriceNgn('live_tutorial_60')).toBe(270);
     expect(resolvePackagePriceNgn('invalid_pkg')).toBeNull();
 
     expect(resolvePlanPriceNgn('free')).toBe(0);
@@ -76,9 +76,9 @@ describe('Canonical Launch Pricing Model', () => {
   });
 
   it('should get correct duration credit costs', () => {
-    expect(getLiveDurationCreditCost(15)).toBe(299);
-    expect(getLiveDurationCreditCost(30)).toBe(599);
-    expect(getLiveDurationCreditCost(60)).toBe(1099);
+    expect(getLiveDurationCreditCost(15)).toBe(70);
+    expect(getLiveDurationCreditCost(30)).toBe(130);
+    expect(getLiveDurationCreditCost(60)).toBe(270);
   });
 
   it('should evaluate start decisions for free and pro users correctly', () => {

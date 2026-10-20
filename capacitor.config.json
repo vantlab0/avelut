@@ -11,8 +11,7 @@
     },
     "Keyboard": {
       "resize": "none",
-      "style": "DARK",
-      "resizeOnFullScreen": false
+      "style": "DARK"
     },
     "CapacitorUpdater": {
       "autoUpdate": false,

@@ -111,16 +111,16 @@ export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProf
               </span>
             </div>
             <p className="text-xs sm:text-sm text-[#64748B] dark:text-slate-400 mt-2 max-w-md font-medium">
-              Use credits for Live Voice Tutorials (₦300/topic), flashcards (₦50/card), or subscribe to Weekly/Monthly plans for unlimited access.
+              Use credits for Live Voice Tutorials (15m: 70 credits, 30m: 130 credits, 60m: 270 credits), flashcards (₦50/card), or subscribe to Weekly/Monthly plans for unlimited access.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 w-full md:w-auto">
             <button
-              onClick={() => handleInstantPaystackTopup(300)}
+              onClick={() => handleInstantPaystackTopup(70)}
               disabled={isProcessingPaystack}
               className="px-6 py-3 bg-[#0066FF] hover:bg-[#002D62] text-white rounded-2xl text-xs font-bold transition-all w-full md:w-auto shadow-2xs cursor-pointer active:scale-95 text-center disabled:opacity-50"
             >
-              {isProcessingPaystack ? 'Opening Paystack...' : 'Instant Refill (₦300 Pass)'}
+              {isProcessingPaystack ? 'Opening Paystack...' : 'Instant Refill (₦70 Pass)'}
             </button>
           </div>
         </div>
@@ -160,7 +160,9 @@ export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProf
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { amount: 300, label: 'Single Topic Pass', badge: '₦300' },
+              { amount: 70, label: '15 Min Tutorial', badge: '₦70' },
+              { amount: 130, label: '30 Min Tutorial', badge: '₦130' },
+              { amount: 270, label: '60 Min Tutorial', badge: '₦270' },
               { amount: 500, label: 'Standard Refill', badge: '₦500' },
               { amount: 1000, label: 'Plus Pack', badge: '₦1,000' },
               { amount: 2500, label: 'Power Pack', badge: '₦2,500' },

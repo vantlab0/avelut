@@ -1,61 +1,42 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import { tavily } from '@tavily/core';
+import {
+  MAX_QUERY_LENGTH,
+  MAX_RESULTS,
+  clampMaxResults,
+  searchWeb,
+} from '../server/web-search';
 
+/**
+ * AI SDK tool wrapper around the shared server-side Tavily integration.
+ *
+ * Used by `api/chat.ts`. The DashScope and OpenRouter proxies use the same
+ * `searchWeb` implementation through their own tool-call loop, so there is a
+ * single source of truth for credentials, validation, and error handling.
+ */
 export const webSearchTool = tool({
-  description: 'Search the web for current events, live data, recent facts, or information not present in model training data.',
+  description:
+    'Search the public web for current events, live data, recent facts, news, or information not covered by your training data. Returns titles, URLs, and snippets.',
   inputSchema: z.object({
-    query: z.string().describe('The search query'),
+    query: z
+      .string()
+      .min(2)
+      .max(MAX_QUERY_LENGTH)
+      .describe('A concise, self-contained search query.'),
+    max_results: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_RESULTS)
+      .optional()
+      .describe('Number of results to return.'),
   }),
-  execute: async ({ query }: { query: string }) => {
-    const apiKey = process.env.TAVILY_API_KEY || process.env.VITE_TAVILY_API_KEY || process.env.NEXT_PUBLIC_TAVILY_API_KEY;
-    if (!apiKey) {
-      console.error('[web_search] TAVILY_API_KEY is not set');
-      return {
-        error: 'Web search is not configured. Add TAVILY_API_KEY to the environment to enable live search.',
-      };
-    }
-
-    try {
-      const tvly = tavily({ apiKey });
-      const response = await tvly.search(query, { maxResults: 5 });
-      return (response.results || []).map((r: any) => ({
-        title: r.title,
-        url: r.url,
-        content: r.content,
-      }));
-    } catch (err: any) {
-      console.warn('[web_search] Tavily client search failed, trying fallback fetch:', err);
-      try {
-        const results = await fetch('https://api.tavily.com/search', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            api_key: apiKey,
-            query,
-            max_results: 5,
-          }),
-        });
-
-        if (results.ok) {
-          const data = await results.json();
-          return (data.results || []).map((r: any) => ({
-            title: r.title,
-            url: r.url,
-            content: r.content,
-          }));
-        }
-
-        const errText = await results.text();
-        console.error('[web_search] HTTP fallback error:', errText);
-        return { error: `Web search failed: ${results.statusText || 'HTTP error'}` };
-      } catch (e: any) {
-        console.error('[web_search] Execution error:', e);
-        return { error: `Web search failed: ${e?.message || 'Network error'}` };
-      }
-    }
+  execute: async ({ query, max_results }: { query: string; max_results?: number }) => {
+    const response = await searchWeb(query, { maxResults: clampMaxResults(max_results) });
+    return {
+      query: response.query,
+      results: response.results,
+      note: 'Cite these sources by their original URLs. Do not invent additional sources.',
+    };
   },
 });

@@ -5,7 +5,7 @@
 import crypto from 'crypto';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://eywpksapztzbnthlgfhd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5d3Brc2FwenR6Ym50aGxnZmhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3NDUwNTM2NDAsImV4cCI6MTYyOTQwMTAwMH0.eyJzdWIiOiJzdXBhYmFzZSIsImF1ZCI6bnVsbCwicm9sZSI6ImFub24ifQ==';
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 const DEFAULT_FIREBASE_PROJECT_ID = 'vantlab';
 
 const corsHeaders = {
@@ -78,13 +78,17 @@ export async function POST(req: Request) {
         return jsonResponse({ error: 'Missing required fields: (targetUserId or fcmToken) and message' }, 400);
       }
 
-      const token = fcmToken || await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${targetUserId}&select=fcm_token`, {
-        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-      }).then(async (res) => {
+      const token = fcmToken || await (async () => {
+        if (!SUPABASE_ANON_KEY) {
+          throw new Error('SUPABASE_ANON_KEY is not configured for notification token lookup.');
+        }
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${targetUserId}&select=fcm_token`, {
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+        });
         if (!res.ok) return null;
         const rows = await res.json();
         return rows?.[0]?.fcm_token || null;
-      });
+      })();
 
       if (!token) {
         return jsonResponse({ success: false, reason: `Target user ${targetUserId} does not have an active FCM token registered.` }, 200);

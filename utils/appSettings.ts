@@ -32,19 +32,19 @@ export const CANONICAL_PRICING: CanonicalPricingConfig = {
     live_tutorial_15: {
       id: 'live_tutorial_15',
       durationMinutes: 15,
-      priceNgn: 299,
+      priceNgn: 70,
       displayName: '15 Live Tutorial minutes',
     },
     live_tutorial_30: {
       id: 'live_tutorial_30',
       durationMinutes: 30,
-      priceNgn: 599,
+      priceNgn: 130,
       displayName: '30 Live Tutorial minutes',
     },
     live_tutorial_60: {
       id: 'live_tutorial_60',
       durationMinutes: 60,
-      priceNgn: 1099,
+      priceNgn: 270,
       displayName: '60 Live Tutorial minutes',
     },
   },
@@ -53,9 +53,9 @@ export const CANONICAL_PRICING: CanonicalPricingConfig = {
 export function resolvePackagePriceNgn(packageId: string): number | null {
   const pkg = CANONICAL_PRICING.packages[packageId as LiveTutorialPackageId];
   if (pkg) return pkg.priceNgn;
-  if (packageId === 'live_tutorial_15' || packageId === 'live_tutorial_pass') return 299;
-  if (packageId === 'live_tutorial_30' || packageId === 'live_tutorial_30_pass') return 599;
-  if (packageId === 'live_tutorial_60' || packageId === 'live_tutorial_60_pass') return 1099;
+  if (packageId === 'live_tutorial_15' || packageId === 'live_tutorial_pass') return 70;
+  if (packageId === 'live_tutorial_30' || packageId === 'live_tutorial_30_pass') return 130;
+  if (packageId === 'live_tutorial_60' || packageId === 'live_tutorial_60_pass') return 270;
   return null;
 }
 
@@ -241,7 +241,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   primary_ai_provider: 'alibaba_qwen',
   openrouter_api_key: '',
   openrouter_model: 'qwen/qwen3.5-omni-flash',
-  alibaba_api_key: 'sk-ws-H.DDLPMIE.fbaD.MEQCIFkao1-I0HQyUMxmrty8-k1S70b0xjgF1BoNksO2pM6WAiACzxp1ojlxhmc6YQFNodecye0oQOBAalaHxCVNdJfQjA',
+  alibaba_api_key: '',
   alibaba_base_url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
   alibaba_model: 'qwen3.5-omni-flash',
   active_voice_provider: 'grok',
@@ -269,28 +269,14 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 };
 
 /**
- * Central resolution helper for OpenRouter API Key.
- * Priority: AppSettings -> Environment variables -> User hardcoded fallback.
+ * Central resolution helper for the OpenRouter API key.
+ *
+ * Only an admin-configured value is returned. Build-time VITE_* variables are
+ * deliberately ignored because Vite inlines them into the browser bundle.
+ * Server requests fall back to the server-only OPENROUTER_API_KEY.
  */
 export const getOpenRouterApiKey = (appSettings?: AppSettings | Partial<AppSettings> | null): string => {
-  const fromSettings = appSettings?.openrouter_api_key?.trim();
-  if (fromSettings) {
-    return fromSettings;
-  }
-
-  let fromEnv = '';
-  try {
-    const metaEnv = (import.meta as any)?.env;
-    if (metaEnv) {
-      fromEnv = metaEnv.VITE_OPENROUTER_API_KEY || metaEnv.OPENROUTER_API_KEY || '';
-    }
-  } catch (_) {}
-
-  if (!fromEnv && typeof process !== 'undefined' && process?.env) {
-    fromEnv = process.env.VITE_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || '';
-  }
-
-  return fromEnv.trim();
+  return (appSettings?.openrouter_api_key || '').trim();
 };
 
 /**
@@ -308,10 +294,10 @@ export const getOpenRouterModel = (appSettings?: AppSettings | Partial<AppSettin
 
   let fromEnv = '';
   try {
-    const metaEnv = (import.meta as any)?.env;
-    if (metaEnv) {
-      fromEnv = metaEnv.OPENROUTER_MODEL || metaEnv.VITE_OPENROUTER_MODEL || '';
-    }
+    // Access the specific public model variable instead of the whole
+    // `import.meta.env` object: Vite inlines every VITE_* key when the bare
+    // object is referenced, which would copy private keys into the bundle.
+    fromEnv = import.meta.env.VITE_OPENROUTER_MODEL || '';
   } catch (_) {}
 
   if (!fromEnv && typeof process !== 'undefined' && process?.env) {
@@ -322,30 +308,13 @@ export const getOpenRouterModel = (appSettings?: AppSettings | Partial<AppSettin
 };
 
 /**
- * Central resolution helper for Alibaba Cloud (DashScope / Model Studio) API Key for CosyVoice.
- * Order of resolution:
- * 1. App settings `alibaba_api_key`
- * 2. Client / environment variables (VITE_ALIBABA_API_KEY / ALIBABA_API_KEY)
+ * Central resolution helper for the Alibaba DashScope key.
+ *
+ * Only an admin-configured value is returned. Server-only ALIBABA_API_KEY is
+ * used by the API routes and never inlined into the client bundle.
  */
 export const getAlibabaApiKey = (appSettings?: AppSettings | Partial<AppSettings> | null): string => {
-  const fromSettings = appSettings?.alibaba_api_key?.trim();
-  if (fromSettings) {
-    return fromSettings;
-  }
-
-  let fromEnv = '';
-  try {
-    const metaEnv = (import.meta as any)?.env;
-    if (metaEnv) {
-      fromEnv = metaEnv.VITE_ALIBABA_API_KEY || metaEnv.ALIBABA_API_KEY || '';
-    }
-  } catch (_) {}
-
-  if (!fromEnv && typeof process !== 'undefined' && process?.env) {
-    fromEnv = process.env.VITE_ALIBABA_API_KEY || process.env.ALIBABA_API_KEY || '';
-  }
-
-  return fromEnv ? fromEnv.trim() : 'sk-ws-H.DDLPMIE.fbaD.MEQCIFkao1-I0HQyUMxmrty8-k1S70b0xjgF1BoNksO2pM6WAiACzxp1ojlxhmc6YQFNodecye0oQOBAalaHxCVNdJfQjA';
+  return (appSettings?.alibaba_api_key || '').trim();
 };
 
 export const cleanQwenModel = (model?: any, fallback: string = 'qwen3.5-omni-flash'): string => {

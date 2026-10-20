@@ -313,7 +313,7 @@ export const PlansWeb: React.FC<PlansWebProps> = ({ appSettings, userProfile }) 
                         </span>
                         <h4 className="text-lg sm:text-xl font-black">Need extra Live Tutorial time?</h4>
                         <p className="text-xs text-slate-300 max-w-md">
-                            Buy Live Tutorial credit packages anytime: 15 min (₦299), 30 min (₦599), or 60 min (₦1,099).
+                            Buy Live Tutorial credit packages anytime: 15 min (₦70 / 70 credits), 30 min (₦130 / 130 credits), or 60 min (₦270 / 270 credits).
                         </p>
                     </div>
                     <a

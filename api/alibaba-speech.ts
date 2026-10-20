@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       process.env.ALIBABA_API_KEY ||
       process.env.VITE_ALIBABA_API_KEY ||
       req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
-      'sk-ws-H.DDLPMIE.fbaD.MEQCIFkao1-I0HQyUMxmrty8-k1S70b0xjgF1BoNksO2pM6WAiACzxp1ojlxhmc6YQFNodecye0oQOBAalaHxCVNdJfQjA';
+      '';
 
     if (!apiKey) {
       return new Response(

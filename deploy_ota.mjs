@@ -66,9 +66,10 @@ function uploadFileToSupabaseStorage(supabaseUrl, key, bucket, objectPath, fileP
 async function deployOTA() {
   try {
     const supabaseUrl = process.env.SUPABASE_URL || "https://eywpksapztzbnthlgfhd.supabase.co";
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5d3Brc2FwenR6Ym50aGxnZmhkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODAyNzkzNiwiZXhwIjoyMTAzNjAzOTM2fQ.nFcGWEvj9H0MTlksKR48ldaK3_q9yGsZkeo6WMsuZZ4";
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseKey) {
+      throw new Error("Set SUPABASE_SERVICE_ROLE_KEY before running the OTA deploy script.");
+    }
 
     console.log(`[OTA] Connecting to Supabase: ${supabaseUrl}`);
     const supabase = createClient(supabaseUrl, supabaseKey);

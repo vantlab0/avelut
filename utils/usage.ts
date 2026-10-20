@@ -62,8 +62,8 @@ export const triggerPaystackPurchase = async (options: PaystackPurchaseOptions) 
   };
 
   if (!publicKey) {
-    const isProd = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.PROD;
-    const allowDemo = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_ALLOW_DEMO_PAYMENTS === 'true';
+    const isProd = import.meta.env.PROD;
+    const allowDemo = import.meta.env.VITE_ALLOW_DEMO_PAYMENTS === 'true';
 
     if (isProd && !allowDemo) {
       addToast('Payment gateway is not configured.', 'error');
@@ -81,6 +81,59 @@ export const triggerPaystackPurchase = async (options: PaystackPurchaseOptions) 
       }
     }, 2000);
     return;
+  }
+
+  const isNativeApp = typeof window !== 'undefined' && Boolean(
+    (window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor?.getPlatform?.() !== 'web'
+  );
+
+  if (isNativeApp) {
+    try {
+      addToast('Opening Paystack checkout...', 'info');
+      const apiBase = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()
+        ? 'https://www.avelut.xyz'
+        : '';
+      const initRes = await fetch(`${apiBase}/api/paystack?action=initialize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          email,
+          userId,
+          type: purchaseType,
+          packageId: metadata?.package_id,
+          planKey: metadata?.plan_key,
+          callback_url: 'https://www.avelut.xyz/billing?status=success',
+        }),
+      });
+
+      const initData = await initRes.json();
+      if (!initRes.ok || !initData?.authorization_url) {
+        throw new Error(initData?.error || 'Failed to initialize external checkout');
+      }
+
+      const externalUrl = initData.authorization_url;
+
+      let opened = false;
+      try {
+        const { Browser } = await import('@capacitor/browser');
+        await Browser.open({ url: externalUrl });
+        opened = true;
+      } catch (browserErr) {
+        console.warn('[paystack] @capacitor/browser failed, falling back to window.open:', browserErr);
+      }
+
+      if (!opened) {
+        window.open(externalUrl, '_system');
+      }
+
+      return;
+    } catch (nativeErr: any) {
+      console.error('[paystack] Native external checkout error:', nativeErr);
+      addToast(nativeErr?.message || 'Failed to open payment page.', 'error');
+      if (onError) onError(nativeErr);
+      return;
+    }
   }
 
   const isLoaded = await loadPaystackScript();

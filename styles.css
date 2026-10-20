@@ -112,6 +112,19 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  /* The app shell is viewport-constrained; only designated panes scroll. */
+  html, body, #root {
+    height: 100%;
+  }
+
+  /* While the soft keyboard is open the document must not pan or rubber-band.
+     The chat message list keeps its own scroll position. */
+  html.keyboard-open,
+  html.keyboard-open body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);

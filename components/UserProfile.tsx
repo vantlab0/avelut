@@ -1,4 +1,4 @@
-import { auth, db, equalTo, functions, get, getDownloadURL, orderByChild, query, ref as dbRef, ref as storageRef, storage, type AuthUser, update, uploadBytes, uploadBytesResumable } from '@/lib/backend';
+import { db, equalTo, get, orderByChild, query, ref as dbRef, update, type AuthUser } from '@/lib/backend';
 import React, { useState, useEffect, useRef } from 'react';
 import type { UserProfile } from '../types';
 import { readCachedJson, writeCachedJson } from '../utils/cache';
@@ -6,6 +6,12 @@ import { useToast } from '../hooks/useToast';
 import { Avatar } from './Avatar';
 import { VerificationBadge } from './VerificationBadge';
 import { SchoolHierarchySelector } from './SchoolHierarchySelector';
+import {
+  UploadError,
+  classifyUploadError,
+  describeUploadFailure,
+  validateProfileImage,
+} from '../utils/uploadErrors';
 
 
 interface UserProfileProps {
@@ -61,6 +67,7 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
   const { addToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const uploadInFlightRef = useRef(false);
 
   useEffect(() => {
     if (user && !userProfile.referral_code) {
@@ -232,10 +239,20 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
       return new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.readAsDataURL(blob);
+          reader.onerror = () => reject(new UploadError('decode', 'The selected image could not be read.'));
           reader.onload = event => {
+              const dataUrl = event.target?.result;
+              if (typeof dataUrl !== 'string' || !dataUrl) {
+                  reject(new UploadError('decode', 'The selected image is empty or unreadable.'));
+                  return;
+              }
               const img = new Image();
-              img.src = event.target?.result as string;
+              img.decoding = 'async';
               img.onload = () => {
+                  if (!img.width || !img.height) {
+                      reject(new UploadError('decode', 'The selected image has invalid dimensions.'));
+                      return;
+                  }
                   const canvas = document.createElement('canvas');
                   let width = img.width;
                   let height = img.height;
@@ -255,47 +272,61 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
                   canvas.width = width;
                   canvas.height = height;
                   const ctx = canvas.getContext('2d');
-                  ctx?.drawImage(img, 0, 0, width, height);
+                  if (!ctx) {
+                      reject(new UploadError('decode', 'The browser could not prepare the image canvas.'));
+                      return;
+                  }
+                  ctx.drawImage(img, 0, 0, width, height);
                   
                   canvas.toBlob((blobResult) => {
                       if (!blobResult) {
-                          reject(new Error("Canvas to Blob failed"));
+                          reject(new UploadError('decode', 'The image could not be compressed.'));
                           return;
                       }
                       resolve(blobResult);
                   }, 'image/jpeg', quality);
               };
-              img.onerror = (e) => reject(e);
+              img.onerror = () => reject(new UploadError('decode', 'This image format could not be opened by the browser.'));
+              img.src = dataUrl;
           };
-          reader.onerror = (e) => reject(e);
       });
   };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'cover') => {
-    const file = event.target.files?.[0];
-    if (!file || !user) return;
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-        addToast("File is too large. Please select an image under 5MB.", "error");
-        return;
+    // Validate before touching any upload state, then always clear the picker so
+    // selecting the same file again still fires onChange.
+    try {
+      validateProfileImage(file);
+    } catch (validationError) {
+      addToast(describeUploadFailure(validationError, type), 'error');
+      input.value = '';
+      return;
+    }
+    input.value = '';
+
+    if (!user) {
+      addToast('Please sign in again before uploading a photo.', 'error');
+      return;
+    }
+    if (uploadInFlightRef.current) {
+      addToast('An image upload is already in progress.', 'info');
+      return;
     }
 
-    if (event.target) event.target.value = '';
-
+    uploadInFlightRef.current = true;
     setIsSaving(true);
-    setUploadProgress({ type, progress: 0 });
+    setUploadProgress({ type, progress: 5 });
 
-    let simulatedProgress = 0;
+    let simulatedProgress = 5;
     const progressInterval = setInterval(() => {
         simulatedProgress = Math.min(simulatedProgress + 8, 85);
         setUploadProgress(prev => prev.type === type ? { type, progress: simulatedProgress } : prev);
     }, 300);
 
-    const path = type === 'avatar'
-        ? `profile-pictures/${user.uid}/profile.jpg`
-        : `cover-photos/${user.uid}/cover.jpg`;
-    const sRef = storageRef(storage, path);
-    
     try {
         const compressedFile = await compressImage(
             file, 
@@ -305,32 +336,46 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
         );
         
         const { supabaseStorageService } = await import('../services/supabaseStorageService');
-        const uploadResult = await supabaseStorageService.uploadAvatar(user.uid, compressedFile);
-
-        clearInterval(progressInterval);
-        setUploadProgress({ type, progress: 100 });
+        const uploadResult = await supabaseStorageService.uploadProfileImage(user.uid, compressedFile, type);
 
         if (uploadResult.error || !uploadResult.url) {
-            throw new Error(uploadResult.error || 'Upload failed');
+            // Preserve the actual storage cause (auth / RLS / quota / network)
+            // instead of reporting a misleading connection problem.
+            throw classifyUploadError({
+                message: uploadResult.error || 'Upload failed',
+                statusCode: uploadResult.errorStatus ?? undefined,
+                code: uploadResult.errorCode ?? undefined,
+            });
         }
 
+        setUploadProgress({ type, progress: 95 });
         const cacheBustURL = `${uploadResult.url}?t=${new Date().getTime()}`;
         const updateData = type === 'avatar' ? { photo_url: cacheBustURL } : { cover_photo: cacheBustURL };
         const updateResult = await onProfileUpdate(updateData);
-        
-        if (updateResult.success) {
-            addToast(`${type === 'avatar' ? 'Profile' : 'Cover'} picture updated!`, "success");
-        } else {
-            addToast(updateResult.error || `Could not update ${type} picture.`, "error");
-        }
-    } catch (error: any) {
-        clearInterval(progressInterval);
-        console.error(`Failed to upload ${type}:`, error);
-        addToast(`Could not update ${type === 'avatar' ? 'profile' : 'cover'} picture. Check your connection.`, "error");
-    }
 
-    setIsSaving(false);
-    setUploadProgress({ type: null, progress: 0 });
+        if (!updateResult.success) {
+            throw new UploadError(
+                'profile_update',
+                updateResult.error || `Could not save the ${type === 'avatar' ? 'profile' : 'cover'} picture to your profile.`
+            );
+        }
+
+        setUploadProgress({ type, progress: 100 });
+        addToast(`${type === 'avatar' ? 'Profile' : 'Cover'} picture updated!`, "success");
+    } catch (error) {
+        const classified = error instanceof UploadError ? error : classifyUploadError(error);
+        console.error('[profile-upload] failed', {
+            type,
+            kind: classified.kind,
+            code: classified.causeCode || null,
+        });
+        addToast(describeUploadFailure(classified, type), "error");
+    } finally {
+        clearInterval(progressInterval);
+        uploadInFlightRef.current = false;
+        setIsSaving(false);
+        setUploadProgress({ type: null, progress: 0 });
+    }
   };
 
   return (
@@ -341,7 +386,7 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
                 <img src={userProfile.cover_photo} alt="Cover" className="w-full h-full object-cover" />
             )}
             
-            <input type="file" ref={coverInputRef} hidden accept="image/*" onChange={(e) => handleImageUpload(e, 'cover')} />
+            <input type="file" ref={coverInputRef} hidden accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => handleImageUpload(e, 'cover')} />
             
             {uploadProgress.type === 'cover' && (
                 <div className="absolute inset-0 z-10 bg-black/50 flex items-center justify-center backdrop-blur-sm transition-all duration-200">
@@ -374,7 +419,7 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
                         <Avatar className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover" photo_url={userProfile.photo_url} display_name={userProfile.display_name || 'User'} />
                     </div>
                     
-                    <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} />
+                    <input type="file" ref={fileInputRef} hidden accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => handleImageUpload(e, 'avatar')} />
 
                     {uploadProgress.type === 'avatar' && (
                         <div className="absolute inset-0 z-20 bg-black/60 rounded-full flex items-center justify-center flex-col gap-1 backdrop-blur-sm">

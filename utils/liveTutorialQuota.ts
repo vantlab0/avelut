@@ -233,8 +233,8 @@ export function evaluateLiveTutorialStart(
     };
   }
 
-  // If pool is exhausted, allow pay-as-you-go with credits at 10 credits / minute
-  if (balance >= 10) {
+  // If pool is exhausted, allow pay-as-you-go with credits
+  if (balance >= creditCost) {
     return {
       allowed: true,
       payment: 'credits',
@@ -244,7 +244,7 @@ export function evaluateLiveTutorialStart(
       poolUsed: pool.used,
       poolRemaining: pool.remaining,
       reason: 'allowed_credits',
-      message: `Pool exhausted. Billed at 10 credits / minute from your balance (${balance} credits available).`,
+      message: `Pool exhausted. Billed at ${creditCost} credits for ${minutes} minutes (${balance} credits available).`,
     };
   }
 
@@ -258,7 +258,7 @@ export function evaluateLiveTutorialStart(
       poolUsed: pool.used,
       poolRemaining: pool.remaining,
       reason: 'locked_free',
-      message: `Free trial minutes used up. Upgrade to Pro for 180 monthly live minutes or buy credits.`,
+      message: `Free trial minutes used up. Upgrade to Pro for 180 monthly live minutes or buy credits (${creditCost} credits for ${minutes}m).`,
     };
   }
 
@@ -271,7 +271,7 @@ export function evaluateLiveTutorialStart(
     poolUsed: pool.used,
     poolRemaining: pool.remaining,
     reason: 'insufficient_credits',
-    message: `Need at least 10 credits to start a live tutorial (you have ${balance}). Included minutes left: ${pool.remaining}.`,
+    message: `Need at least ${creditCost} credits to start a ${minutes}-minute live tutorial (you have ${balance}). Included minutes left: ${pool.remaining}.`,
   };
 }
 

@@ -259,67 +259,31 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
         </div>
       </div>
 
-      {/* Profile & Academic Details */}
-      {(matchSearch('Profile Details', 'Display name, avatar, bio & contact') ||
-        matchSearch('Academic Information', 'School, department, academic level') ||
-        matchSearch('Avelut Pro & Verification', 'Get verified badge, unlimited AI tokens & perks')) && (
-        <div className="bg-white dark:bg-[#111111] mt-2.5 divide-y divide-neutral-100 dark:divide-white/5">
-          {matchSearch('Profile Details', 'Display name, avatar, bio & contact') && (
-            <SettingsRow
-              icon={<i className="bi bi-person text-lg" />}
-              title="Profile Details"
-              subtitle="Display name, avatar, bio & contact"
-              onClick={() => onNavigate('user_profile')}
-            />
-          )}
-          {matchSearch('Academic Information', 'School, department, academic level') && (
-            <SettingsRow
-              icon={<i className="bi bi-mortarboard text-lg" />}
-              title="Academic Information"
-              subtitle={
-                userProfile.department_id || userProfile.level
-                  ? `${userProfile.department_id ? userProfile.department_id.replace(/_/g, ' ') : ''}${userProfile.department_id && userProfile.level ? ' • ' : ''}${userProfile.level ? userProfile.level + ' Level' : ''}`
-                  : 'School, department, academic level'
-              }
-              onClick={() => onNavigate('user_profile')}
-            />
-          )}
-          {matchSearch('Avelut Pro & Verification', 'Get verified badge, unlimited AI tokens & perks') && (
-            <SettingsRow
-              icon={<i className="bi bi-patch-check text-lg text-[#009EE2]" />}
-              title="Avelut Pro & Verification"
-              subtitle="Get verified badge, unlimited AI tokens & perks"
-              onClick={() => onNavigate('billing')}
-            />
-          )}
-        </div>
-      )}
-
-      {/* Study Network & History */}
-      {(matchSearch('Study Partners', 'Find classmates & manage connection requests') ||
-        matchSearch('Study History & AI Logs', 'Past conversations, tutorials, and notes') ||
+      {/* Learning & Academic Tools */}
+      {(matchSearch('Timetable & Schedule', 'Lecture schedule, alarms & reminders') ||
+        matchSearch('Live Voice Classroom', 'Interactive voice tutor & live whiteboard') ||
         matchSearch('Study Guide & Courses', 'Browse curriculum, syllabus & unit progress') ||
         matchSearch('Notebooks', 'Saved study notes and summaries')) && (
         <div className="bg-white dark:bg-[#111111] mt-2.5 divide-y divide-neutral-100 dark:divide-white/5">
-          {matchSearch('Study Partners', 'Find classmates & manage connection requests') && (
+          {matchSearch('Timetable & Schedule', 'Lecture schedule, alarms & reminders') && (
             <SettingsRow
-              icon={<i className="bi bi-people text-lg" />}
-              title="Study Partners"
-              subtitle="Find classmates & manage connection requests"
-              onClick={() => onNavigate('study_partners')}
+              icon={<i className="bi bi-calendar-week text-lg text-blue-500" />}
+              title="Timetable & Schedule"
+              subtitle="Lecture schedule, alarms & reminders"
+              onClick={() => onNavigate('timetable')}
             />
           )}
-          {matchSearch('Study History & AI Logs', 'Past conversations, tutorials, and notes') && (
+          {matchSearch('Live Voice Classroom', 'Interactive voice tutor & live whiteboard') && (
             <SettingsRow
-              icon={<i className="bi bi-clock-history text-lg" />}
-              title="Study History & AI Logs"
-              subtitle="Past conversations, tutorials, and notes"
-              onClick={() => onNavigate('history')}
+              icon={<i className="bi bi-mic text-lg text-emerald-500" />}
+              title="Live Voice Classroom"
+              subtitle="Interactive voice tutor & live whiteboard"
+              onClick={() => onNavigate('voice_tutorial')}
             />
           )}
           {matchSearch('Study Guide & Courses', 'Browse curriculum, syllabus & unit progress') && (
             <SettingsRow
-              icon={<i className="bi bi-book text-lg" />}
+              icon={<i className="bi bi-book text-lg text-indigo-500" />}
               title="Study Guide & Courses"
               subtitle="Browse curriculum, syllabus & unit progress"
               onClick={() => onNavigate('study_guide')}
@@ -327,7 +291,7 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
           )}
           {matchSearch('Notebooks', 'Saved study notes and summaries') && (
             <SettingsRow
-              icon={<i className="bi bi-journal-text text-lg" />}
+              icon={<i className="bi bi-journal-text text-lg text-amber-500" />}
               title="Notebooks"
               subtitle="Saved study notes and summaries"
               onClick={() => onNavigate('notebooks')}
@@ -336,10 +300,43 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
         </div>
       )}
 
+      {/* Community & Progress */}
+      {(matchSearch('Study Partners', 'Find classmates & manage connection requests') ||
+        matchSearch('Academic Leaderboard', 'Class rankings, streak & study milestones') ||
+        matchSearch('Study History & AI Logs', 'Past conversations, tutorials, and notes')) && (
+        <div className="bg-white dark:bg-[#111111] mt-2.5 divide-y divide-neutral-100 dark:divide-white/5">
+          {matchSearch('Study Partners', 'Find classmates & manage connection requests') && (
+            <SettingsRow
+              icon={<i className="bi bi-people text-lg text-teal-500" />}
+              title="Study Partners"
+              subtitle="Find classmates & manage connection requests"
+              onClick={() => onNavigate('study_partners')}
+            />
+          )}
+          {matchSearch('Academic Leaderboard', 'Class rankings, streak & study milestones') && (
+            <SettingsRow
+              icon={<i className="bi bi-trophy text-lg text-amber-500" />}
+              title="Academic Leaderboard"
+              subtitle="Class rankings, streak & study milestones"
+              onClick={() => onNavigate('leaderboard')}
+            />
+          )}
+          {matchSearch('Study History & AI Logs', 'Past conversations, tutorials, and notes') && (
+            <SettingsRow
+              icon={<i className="bi bi-clock-history text-lg text-slate-500" />}
+              title="Study History & AI Logs"
+              subtitle="Past conversations, tutorials, and notes"
+              onClick={() => onNavigate('history')}
+            />
+          )}
+        </div>
+      )}
+
       {/* App Preferences */}
       {(matchSearch('Appearance', 'Chat theme, app icon, app theme') ||
         matchSearch('Push Notifications', 'Alerts for messages, requests & updates') ||
-        matchSearch('Billing & Plans', 'Top-up AI credits, view plans & invoices')) && (
+        matchSearch('Notification Center', 'View recent updates, reminders & alerts') ||
+        matchSearch('Interactive Playground', 'Experiment with AI prompts & tools')) && (
         <div className="bg-white dark:bg-[#111111] mt-2.5 divide-y divide-neutral-100 dark:divide-white/5">
           {matchSearch('Appearance', 'Chat theme, app icon, app theme') && (
             <SettingsRow
@@ -422,12 +419,20 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
                 }}
              />
           )}
-          {matchSearch('Billing & Plans', 'Top-up AI credits, view plans & invoices') && (
+          {matchSearch('Notification Center', 'View recent updates, reminders & alerts') && (
             <SettingsRow
-              icon={<i className="bi bi-credit-card text-lg" />}
-              title="Billing & Plans"
-              subtitle="Top-up AI credits, view plans & invoices"
-              onClick={() => onNavigate('billing')}
+              icon={<i className="bi bi-bell-fill text-lg text-blue-500" />}
+              title="Notification Center"
+              subtitle="View recent updates, reminders & alerts"
+              onClick={() => onNavigate('notifications')}
+            />
+          )}
+          {matchSearch('Interactive Playground', 'Experiment with AI prompts & tools') && (
+            <SettingsRow
+              icon={<i className="bi bi-cpu text-lg text-purple-500" />}
+              title="Interactive Playground"
+              subtitle="Experiment with AI prompts & tools"
+              onClick={() => onNavigate('playground')}
             />
           )}
         </div>
@@ -460,6 +465,14 @@ export const SettingsScreen: React.FC<SettingsProps> = ({
               title="Send Feedback"
               subtitle="Report issues or suggest features"
               onClick={() => onNavigate('feedback')}
+            />
+          )}
+          {(userProfile.is_admin || userProfile.role === 'superadmin' || userProfile.role === 'deptadmin') && matchSearch('Admin Panel', 'Manage schools, courses & platform settings') && (
+            <SettingsRow
+              icon={<i className="bi bi-shield-check text-lg text-rose-500" />}
+              title="Admin Panel"
+              subtitle="Manage schools, courses & platform settings"
+              onClick={() => onNavigate('admin')}
             />
           )}
         </div>

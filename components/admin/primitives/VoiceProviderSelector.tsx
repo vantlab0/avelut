@@ -182,7 +182,7 @@ export const VoiceProviderSelector: React.FC<VoiceProviderSelectorProps> = ({
               onChange={(e) => onChange({ ...appSettings, alibaba_api_key: e.target.value })}
               className="w-full p-3 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs outline-none focus:border-[#0066FF]"
             />
-            <p className="text-[11px] text-slate-400">Can also be supplied via VITE_ALIBABA_API_KEY environment variable.</p>
+            <p className="text-[11px] text-slate-400">Server env key: ALIBABA_API_KEY (never VITE_-prefixed). Leave blank to use the server key.</p>
           </div>
 
           {/* Grok API Key */}

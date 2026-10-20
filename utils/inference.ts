@@ -397,7 +397,7 @@ function paramsToChatMessages(params: any): { systemPrompt: string; messages: Ar
 }
 
 export const OPENROUTER_MODEL =
-  (typeof import.meta !== 'undefined' && ((import.meta as any)?.env?.OPENROUTER_MODEL || (import.meta as any)?.env?.VITE_OPENROUTER_MODEL)) ||
+  import.meta.env.VITE_OPENROUTER_MODEL ||
   (typeof process !== 'undefined' && (process?.env?.OPENROUTER_MODEL || process?.env?.VITE_OPENROUTER_MODEL)) ||
   'qwen/qwen3.5-omni-flash';
 
@@ -470,6 +470,7 @@ async function callOpenRouterQwen(params: any, appSettings: AppSettings): Promis
       temperature: params?.config?.temperature ?? 0.7,
       max_tokens: params?.config?.maxOutputTokens ?? 4096,
       include_reasoning: false,
+      web_search: params?.config?.webSearch === true,
     };
 
     if (params?.config?.responseMimeType === 'application/json' || params?.config?.response_format?.type === 'json_object') {
@@ -573,6 +574,7 @@ async function* callOpenRouterQwenStream(params: any, appSettings: AppSettings):
     temperature: params?.config?.temperature ?? 0.7,
     max_tokens: params?.config?.maxOutputTokens ?? 4096,
       include_reasoning: false,
+    web_search: params?.config?.webSearch === true,
   };
 
   if (params?.config?.responseMimeType === 'application/json' || params?.config?.response_format?.type === 'json_object') {
@@ -775,6 +777,7 @@ async function callAlibabaQwen(
   const apiKey = getAlibabaApiKey(appSettings);
   const { messages, hasImage, hasDocument } = paramsToChatMessages(params);
   const primaryModel = normalizeAlibabaDashScopeModel(params?.model || appSettings?.alibaba_model || 'qwen3.5-omni-flash', hasImage, hasDocument);
+  const webSearchEnabled = params?.config?.webSearch === true;
   const candidateModels = hasDocument
     ? Array.from(new Set([primaryModel, 'qwen3.8-flash', 'qwen3.8-max']))
     : Array.from(new Set([primaryModel, 'qwen3.5-omni-flash', 'qwen3.8-omni-flash', 'qwen3.8-flash', 'qwen3.7-flash']));
@@ -803,6 +806,7 @@ async function callAlibabaQwen(
       temperature: params?.config?.temperature ?? 0.7,
       max_tokens: params?.config?.maxOutputTokens ?? (hasDocument ? 16384 : 4096),
       include_reasoning: false,
+      web_search: webSearchEnabled,
     };
 
     if (params?.config?.responseMimeType === 'application/json' || params?.config?.response_format?.type === 'json_object') {
@@ -829,7 +833,7 @@ async function callAlibabaQwen(
           if (callerSignal) {
             callerSignal.addEventListener('abort', onCallerAbort, { once: true });
           }
-          const timeoutMs = hasDocument ? 280000 : 45000;
+          const timeoutMs = hasDocument ? 280000 : (webSearchEnabled ? 150000 : 45000);
           const timeoutId = setTimeout(() => fetchController.abort(), timeoutMs);
 
           let response: Response;
@@ -943,6 +947,7 @@ async function* callAlibabaQwenStream(
   const apiKey = getAlibabaApiKey(appSettings);
   const { messages, hasImage } = paramsToChatMessages(params);
   const model = normalizeAlibabaDashScopeModel(params?.model || appSettings?.alibaba_model || 'qwen3.5-omni-flash', hasImage);
+  const webSearchEnabled = params?.config?.webSearch === true;
 
   const isNative = typeof window !== 'undefined' && (
     (window as any).Capacitor?.isNativePlatform?.() ||
@@ -960,6 +965,7 @@ async function* callAlibabaQwenStream(
     include_reasoning: false,
     temperature: params?.config?.temperature ?? 0.7,
     max_tokens: params?.config?.maxOutputTokens ?? 4096,
+    web_search: webSearchEnabled,
   };
 
   if (params?.config?.responseMimeType === 'application/json' || params?.config?.response_format?.type === 'json_object') {
@@ -987,7 +993,7 @@ async function* callAlibabaQwenStream(
       if (callerSignal) {
         callerSignal.addEventListener('abort', onCallerAbort, { once: true });
       }
-      const timeoutId = setTimeout(() => fetchController.abort(), 45000);
+      const timeoutId = setTimeout(() => fetchController.abort(), webSearchEnabled ? 150000 : 45000);
 
       let res: Response;
       try {

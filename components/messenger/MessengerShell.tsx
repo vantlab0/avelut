@@ -23,6 +23,8 @@ import { ProgressiveImageBubble } from "../messenger/ProgressiveImageBubble";
 import { VoiceNotePlayer } from "../messenger/VoiceNotePlayer";
 import { AvelutMessageInput } from "../messenger/AvelutMessageInput";
 import { ForwardModal } from "../messenger/ForwardModal";
+import { computeActionMenuPosition, toAnchorRect, type AnchorRect, type MenuPosition } from "../../utils/actionMenuPosition";
+import { isNearBottom, scrollContainerToBottom } from "../../utils/scrollUtils";
 
 export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: string | null; onNavigate?: (tab: string) => void; setCustomHeaderConfig?: (config: any) => void }> = ({ userProfile, initialChatId = null, onNavigate, setCustomHeaderConfig }) => {
       const [authUser, setAuthUser] = useState<AuthUser | null>(auth.currentUser);
@@ -81,13 +83,18 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         text?: string;
         type?: string;
         isUploading?: boolean;
+        status?: 'sending' | 'sent' | 'delivered' | 'read';
+        isPending?: boolean;
         reactions?: Record<string, string>;
         replyTo?: any;
         is_forwarded?: boolean;
         timestamp?: number;
         isRead?: boolean;
       } | null>(null);
-      const [messageActionPosition, setMessageActionPosition] = useState<{ x: number; y: number } | null>(null);
+      const [messageActionAnchor, setMessageActionAnchor] = useState<AnchorRect | null>(null);
+      const [messageActionMenuSize, setMessageActionMenuSize] = useState<{ width: number; height: number } | null>(null);
+      const [messageActionPlacement, setMessageActionPlacement] = useState<MenuPosition | null>(null);
+      const [blockConfirmTargets, setBlockConfirmTargets] = useState<{ uids: string[]; label: string } | null>(null);
       const [optimisticMessages, setOptimisticMessages] = useState<any[]>([]);
       const [fetchedUserProfiles, setFetchedUserProfiles] = useState<Record<string, UserProfile>>(() =>
         readCachedJson<Record<string, UserProfile>>(`avelut_resolved_profiles_${userProfile.uid}`, {})
@@ -105,16 +112,36 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       const startYRef = useRef<number>(0);
       const messagesContainerRef = useRef<HTMLDivElement>(null);
       const messagesEndRef = useRef<HTMLDivElement>(null);
+      const stickToBottomRef = useRef(true);
+      const messageLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+      const messagePressStartRef = useRef<{ id: string | null; x: number; y: number }>({ id: null, x: 0, y: 0 });
+      const chatRowPressStartRef = useRef<{ id: string | null; x: number; y: number }>({ id: null, x: 0, y: 0 });
 
       const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTo({
-            top: messagesContainerRef.current.scrollHeight,
-            behavior,
-          });
+        const container = messagesContainerRef.current;
+        if (container) {
+          scrollContainerToBottom(container, behavior);
         } else if (messagesEndRef.current) {
           messagesEndRef.current.scrollIntoView({ behavior });
         }
+      }, []);
+
+      const handleMessagesScroll = useCallback(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        stickToBottomRef.current = isNearBottom(container);
+      }, []);
+
+      // Media bubbles grow after their images decode; keep the view pinned only
+      // when the user was already following the conversation.
+      useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        const handleMediaLoad = () => {
+          if (stickToBottomRef.current) scrollContainerToBottom(container, 'auto');
+        };
+        container.addEventListener('load', handleMediaLoad, true);
+        return () => container.removeEventListener('load', handleMediaLoad, true);
       }, []);
 
       // Listen to typing status for active chat
@@ -159,6 +186,69 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
       const lastTapRef = useRef<{ id: string | null; time: number }>({ id: null, time: 0 });
 
+      // Measure the floating menu, then place it next to the selected bubble.
+      // Re-runs when the viewport changes so rotation/keyboard keeps it visible.
+      useEffect(() => {
+        if (!messageActionTarget || !messageActionAnchor) {
+          setMessageActionPlacement(null);
+          return;
+        }
+
+        let frame: number | null = null;
+        const compute = () => {
+          frame = null;
+          const el = messageActionMenuRef.current;
+          if (el) {
+            const measured = el.getBoundingClientRect();
+            if (measured.width && measured.height) {
+              const size = { width: Math.round(measured.width), height: Math.round(measured.height) };
+              setMessageActionMenuSize((prev) => (
+                prev && prev.width === size.width && prev.height === size.height ? prev : size
+              ));
+            }
+          }
+          const viewport = window.visualViewport;
+          const rootStyle = getComputedStyle(document.documentElement);
+          const readInset = (name: string) => {
+            const value = Number.parseFloat(rootStyle.getPropertyValue(name));
+            return Number.isFinite(value) ? value : 0;
+          };
+          setMessageActionPlacement(computeActionMenuPosition({
+            anchor: messageActionAnchor,
+            menu: messageActionMenuSize ?? undefined,
+            viewport: {
+              width: viewport?.width ?? window.innerWidth,
+              height: viewport?.height ?? window.innerHeight,
+            },
+            safeArea: {
+              top: readInset('--safe-area-top'),
+              bottom: readInset('--safe-area-bottom'),
+              left: readInset('--safe-area-left'),
+              right: readInset('--safe-area-right'),
+            },
+          }));
+        };
+
+        const schedule = () => {
+          if (frame !== null) return;
+          frame = requestAnimationFrame(compute);
+        };
+
+        schedule();
+        const viewport = window.visualViewport;
+        viewport?.addEventListener('resize', schedule);
+        viewport?.addEventListener('scroll', schedule);
+        window.addEventListener('resize', schedule);
+        window.addEventListener('orientationchange', schedule);
+        return () => {
+          if (frame !== null) cancelAnimationFrame(frame);
+          viewport?.removeEventListener('resize', schedule);
+          viewport?.removeEventListener('scroll', schedule);
+          window.removeEventListener('resize', schedule);
+          window.removeEventListener('orientationchange', schedule);
+        };
+      }, [messageActionTarget, messageActionAnchor, messageActionMenuSize]);
+
       // Study Partners contact system states
       const [studyPartners, setStudyPartners] = useState<Record<string, boolean>>(() => readCachedJson<Record<string, boolean>>(getMessengerCacheKey(userProfile.uid, 'study_partners'), {}));
       const [partnerRequests, setPartnerRequests] = useState<Record<string, any>>(() => readCachedJson<Record<string, any>>(getMessengerCacheKey(userProfile.uid, 'partner_requests'), {}));
@@ -195,6 +285,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       const chatRowLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
       const swipeToReplyRef = useRef<{ id: string | null; startX: number; startY: number; currentX: number; currentY: number; moved: boolean }>({ id: null, startX: 0, startY: 0, currentX: 0, currentY: 0, moved: false });
       const suppressNextChatOpenRef = useRef(false);
+      const lastChatRowGestureAtRef = useRef(0);
       const unreadCountsRef = useRef<Record<string, number>>({});
       const lastNotificationTimestampRef = useRef<Record<string, number>>({});
       const { addToast } = useToast();
@@ -202,23 +293,56 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       const isBlocked = activeChat && userProfile?.blocked_users?.[activeChat.otherUser.uid];
       const isBlockingMe = activeChat && activeChat.otherUser.blocked_users?.[userProfile.uid];
 
-      const closeMessageActions = () => {
-        setTimeout(() => {
+      const closeMessageActionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+      const closeMessageActions = (options?: { immediate?: boolean } | unknown) => {
+        if (closeMessageActionsTimerRef.current) {
+          clearTimeout(closeMessageActionsTimerRef.current);
+          closeMessageActionsTimerRef.current = null;
+        }
+
+        const dismiss = () => {
+          closeMessageActionsTimerRef.current = null;
           setMessageActionTarget(null);
-          setMessageActionPosition(null);
-        }, 350); // Delay to prevent ghost clicks falling through to underlying elements on mobile
+          setMessageActionAnchor(null);
+          setMessageActionPlacement(null);
+          setMessageActionMenuSize(null);
+        };
+
+        const isImmediate = Boolean(
+          options && typeof options === 'object' && 'immediate' in options && (options as { immediate?: boolean }).immediate
+        );
+
+        if (isImmediate) {
+          dismiss();
+        } else {
+          closeMessageActionsTimerRef.current = setTimeout(dismiss, 350); // Delay to prevent ghost clicks falling through to underlying elements on mobile
+        }
       };
 
       const handleBlockUser = async () => {
         if (!authUser || !activeChat) return;
+        setShowUserOptions(false);
+        setBlockConfirmTargets({
+          uids: [activeChat.otherUser.uid],
+          label: activeChat.otherUser.display_name || 'this user',
+        });
+      };
+
+      const confirmBlockUsers = async () => {
+        if (!authUser || !blockConfirmTargets) return;
+        const uniqueUids = Array.from(new Set(blockConfirmTargets.uids.filter(Boolean)));
         try {
-          const dbRefPath = `users/${authUser.uid}/blocked_users/${activeChat.otherUser.uid}`;
-          await set(dbRef(db, dbRefPath), true);
-          addToast("User has been blocked.", "success");
-          setShowUserOptions(false);
+          for (const uid of uniqueUids) {
+            await set(dbRef(db, `users/${authUser.uid}/blocked_users/${uid}`), true);
+          }
+          addToast(uniqueUids.length > 1 ? 'Users blocked.' : 'User blocked.', 'success');
+          setBlockConfirmTargets(null);
+          setSelectedChatIds([]);
+          setShowSelectedMenu(false);
         } catch (err) {
-          console.error("Failed to block user:", err);
-          addToast("Failed to block user.", "error");
+          console.error('Failed to block user(s):', err);
+          addToast('Failed to block user.', 'error');
         }
       };
 
@@ -707,6 +831,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         const cached = readCachedJson<any[]>(getMessengerCacheKey(userProfile.uid, `messages_${activeChat.chatId}`), []);
         setMessages(ensureArray(cached));
         setOptimisticMessages([]);
+        stickToBottomRef.current = true;
         if (cached.length > 0) {
           setTimeout(() => scrollToBottom('instant' as ScrollBehavior), 30);
         }
@@ -728,7 +853,11 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
 
           setOptimisticMessages(prev => ensureArray(prev).filter(opt => !cloudMsgs.some(cloud => cloud.id === opt.id)));
 
-          setTimeout(() => scrollToBottom(cached.length === 0 ? ('instant' as ScrollBehavior) : 'smooth'), 40);
+          const lastCloudMessage = cloudMsgs[cloudMsgs.length - 1];
+          const shouldStick = stickToBottomRef.current || lastCloudMessage?.senderId === authUser?.uid;
+          if (shouldStick) {
+            setTimeout(() => scrollToBottom(cached.length === 0 ? ('instant' as ScrollBehavior) : 'smooth'), 40);
+          }
           if (authUser) {
             void markChatAsRead(activeChat.chatId, authUser.uid)
               .catch(console.error);
@@ -766,38 +895,67 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         }
       };
 
-      const startChatRowLongPress = (chat: any) => {
-        if (chatRowLongPressTimerRef.current) {
-          clearTimeout(chatRowLongPressTimerRef.current);
-        }
-        chatRowLongPressTimerRef.current = setTimeout(() => {
-          suppressNextChatOpenRef.current = true;
-          void handleDeleteChatThread(chat);
-        }, 520);
-      };
-
       const clearChatRowLongPress = () => {
         if (chatRowLongPressTimerRef.current) {
           clearTimeout(chatRowLongPressTimerRef.current);
           chatRowLongPressTimerRef.current = null;
         }
+        chatRowPressStartRef.current = { id: null, x: 0, y: 0 };
       };
 
-      const openMessageActions = (msg: any, x: number, y: number) => {
+      const beginChatRowPress = (chatId: string, clientX: number, clientY: number) => {
+        clearChatRowLongPress();
+        chatRowPressStartRef.current = { id: chatId, x: clientX, y: clientY };
+        chatRowLongPressTimerRef.current = setTimeout(() => {
+          chatRowLongPressTimerRef.current = null;
+          if (chatRowPressStartRef.current.id !== chatId) return;
+          // Android also emits `contextmenu` for a long press. Whichever event
+          // arrives first owns the gesture so selection is never toggled twice.
+          if (Date.now() - lastChatRowGestureAtRef.current < 700) return;
+          lastChatRowGestureAtRef.current = Date.now();
+          suppressNextChatOpenRef.current = true;
+          setSelectedChatIds(prev =>
+            prev.includes(chatId) ? prev.filter(id => id !== chatId) : [...prev, chatId]
+          );
+        }, 500);
+      };
+
+      const moveChatRowPress = (clientX: number, clientY: number) => {
+        const start = chatRowPressStartRef.current;
+        if (!start.id) return;
+        if (Math.abs(clientX - start.x) > 10 || Math.abs(clientY - start.y) > 10) {
+          clearChatRowLongPress();
+        }
+      };
+
+      const openMessageActions = (msg: any, anchor: AnchorRect) => {
         if (msg?.isUploading) return;
+        if (closeMessageActionsTimerRef.current) {
+          clearTimeout(closeMessageActionsTimerRef.current);
+          closeMessageActionsTimerRef.current = null;
+        }
         setMessageActionTarget({
           id: msg.id,
           senderId: msg.senderId,
           text: msg.text,
           type: msg.type,
           isUploading: msg.isUploading,
+          status: msg.status,
+          isPending: msg.isPending,
           reactions: msg.reactions || {},
           replyTo: msg.replyTo,
           is_forwarded: msg.is_forwarded,
           timestamp: msg.timestamp,
           isRead: msg.isRead
         });
-        setMessageActionPosition({ x, y });
+        setMessageActionAnchor(anchor);
+        setMessageActionMenuSize(null);
+        setMessageActionPlacement(null);
+      };
+
+      const openMessageActionsFromElement = (msg: any, element: HTMLElement | EventTarget | null) => {
+        if (!(element instanceof Element)) return;
+        openMessageActions(msg, toAnchorRect(element.getBoundingClientRect()));
       };
 
       const copyMessageContent = async () => {
@@ -808,21 +966,41 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           : rawText;
         if (!copiedValue) {
           addToast('Nothing to copy.', 'info');
-          closeMessageActions();
+          closeMessageActions({ immediate: true });
           return;
         }
 
         try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
+          let copied = false;
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
             await navigator.clipboard.writeText(copiedValue);
-            addToast('Message copied.', 'success');
+            copied = true;
           } else {
-            addToast('Message copied.', 'success');
+            // Older WebViews (notably some Android builds) do not expose the
+            // async clipboard API. Fall back to a temporary selection instead of
+            // claiming success without copying anything.
+            const textarea = document.createElement('textarea');
+            textarea.value = copiedValue;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            textarea.style.pointerEvents = 'none';
+            document.body.appendChild(textarea);
+            try {
+              textarea.select();
+              copied = document.execCommand('copy');
+            } finally {
+              document.body.removeChild(textarea);
+            }
           }
-        } catch (error) {
+
+          if (!copied) throw new Error('Clipboard write was rejected.');
           addToast('Message copied.', 'success');
+        } catch (error) {
+          console.error('Failed to copy message:', error);
+          addToast('Could not copy this message. Press and hold the text to select it manually.', 'error');
         }
-        closeMessageActions();
+        closeMessageActions({ immediate: true });
       };
 
       const handleDeleteMessageAction = (forEveryone = true) => {
@@ -830,7 +1008,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         if (!target || !activeChat || !authUser) return;
 
         setDeleteConfirmTarget(null);
-        closeMessageActions();
+        closeMessageActions({ immediate: true });
 
         // Instant deletion call
         (async () => {
@@ -850,7 +1028,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           id: messageActionTarget.id,
           senderId: messageActionTarget.senderId
         });
-        closeMessageActions();
+        closeMessageActions({ immediate: true });
       };
 
       const reactToMessage = async (emoji: string) => {
@@ -868,7 +1046,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           console.error('Failed to react to message:', error);
           addToast(error?.message || 'Failed to add reaction.', 'error');
         }
-        closeMessageActions();
+        closeMessageActions({ immediate: true });
       };
 
       const quickReactToMessage = async (msg: any, emoji: string) => {
@@ -1249,7 +1427,9 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
             ...prev,
             { id: optimisticId, ...data, timestamp: clientTimestamp, status: 'sending', isPending: true, isRead: false }
           ]);
+          stickToBottomRef.current = true;
           playBubbleSound();
+          requestAnimationFrame(() => scrollToBottom('auto'));
           await set(msgRef, data);
           setMessages(prev =>
             prev.map(msg =>
@@ -1415,9 +1595,9 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                     setShowSelectedMenu(false);
                   }}
                   className="w-9 h-9 flex items-center justify-center text-slate-700 dark:text-[#FAFAFA] hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-                  aria-label="Cancel selection"
+                  aria-label="Exit selection mode"
                 >
-                  <i className="bi bi-arrow-left text-xl"></i>
+                  <i className="bi bi-x-lg text-lg"></i>
                 </button>
                 <span className="text-lg font-bold text-[#0A0A0A] dark:text-[#FAFAFA]">
                   {selectedChatIds.length}
@@ -1482,6 +1662,22 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                   </button>
                   {showSelectedMenu && (
                     <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-[#141414] border border-slate-200 dark:border-[#2A2A2A] rounded-xl shadow-xl z-50 py-1 origin-top-right">
+                      {selectedChatIds.length === 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const chat = chats.find(c => c.id === selectedChatIds[0]);
+                            if (chat?.otherUser?.uid) {
+                              onNavigate?.(`public_profile_${chat.otherUser.uid}`);
+                            }
+                            setSelectedChatIds([]);
+                            setShowSelectedMenu(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 dark:text-[#FAFAFA] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                        >
+                          Chat info
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -1502,17 +1698,18 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                       </button>
                       <button
                         type="button"
-                        onClick={async () => {
-                          if (authUser) {
-                            for (const chatId of selectedChatIds) {
-                              const chat = chats.find(c => c.id === chatId);
-                              if (chat?.otherUser?.uid) {
-                                await set(dbRef(db, `users/${authUser.uid}/blocked_users/${chat.otherUser.uid}`), true);
-                              }
-                            }
-                            addToast('User blocked.', 'success');
+                        onClick={() => {
+                          const targets = Array.from(new Set(
+                            selectedChatIds
+                              .map(chatId => chats.find(c => c.id === chatId)?.otherUser?.uid)
+                              .filter((uid): uid is string => Boolean(uid))
+                          ));
+                          if (targets.length) {
+                            setBlockConfirmTargets({
+                              uids: targets,
+                              label: targets.length > 1 ? `${targets.length} users` : (chats.find(c => c.id === selectedChatIds[0])?.otherUser?.display_name || 'this user'),
+                            });
                           }
-                          setSelectedChatIds([]);
                           setShowSelectedMenu(false);
                         }}
                         className="w-full text-left px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
@@ -1935,35 +2132,21 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                         }
                         setActiveChat({ chatId: c.id, otherUser: c.otherUser });
                       }}
-                      onTouchStart={() => {
-                        if (chatRowLongPressTimerRef.current) clearTimeout(chatRowLongPressTimerRef.current);
-                        chatRowLongPressTimerRef.current = setTimeout(() => {
-                          suppressNextChatOpenRef.current = true;
-                          setSelectedChatIds(prev =>
-                            prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                          );
-                        }, 500);
+                      onPointerDown={(event) => {
+                        if (event.pointerType === 'mouse' && event.button !== 0) return;
+                        beginChatRowPress(c.id, event.clientX, event.clientY);
                       }}
-                      onTouchEnd={() => {
-                        if (chatRowLongPressTimerRef.current) {
-                          clearTimeout(chatRowLongPressTimerRef.current);
-                          chatRowLongPressTimerRef.current = null;
-                        }
-                      }}
-                      onTouchCancel={() => {
-                        if (chatRowLongPressTimerRef.current) {
-                          clearTimeout(chatRowLongPressTimerRef.current);
-                          chatRowLongPressTimerRef.current = null;
-                        }
-                      }}
-                      onTouchMove={() => {
-                        if (chatRowLongPressTimerRef.current) {
-                          clearTimeout(chatRowLongPressTimerRef.current);
-                          chatRowLongPressTimerRef.current = null;
-                        }
+                      onPointerMove={(event) => moveChatRowPress(event.clientX, event.clientY)}
+                      onPointerUp={clearChatRowLongPress}
+                      onPointerCancel={clearChatRowLongPress}
+                      onPointerLeave={(event) => {
+                        if (event.pointerType === 'mouse') clearChatRowLongPress();
                       }}
                       onContextMenu={(event) => {
                         event.preventDefault();
+                        if (Date.now() - lastChatRowGestureAtRef.current < 700) return;
+                        lastChatRowGestureAtRef.current = Date.now();
+                        suppressNextChatOpenRef.current = true;
                         setSelectedChatIds(prev =>
                           prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
                         );
@@ -2051,7 +2234,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
             {activeChat ? (
               <div className="flex flex-col h-full w-full relative overflow-hidden">
                 {/* 2. Messages List */}
-                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto min-h-0 px-2 sm:px-3 pt-3 pb-3 md:py-6 bg-[#FAFAFA] dark:bg-[#0A0A0A] dark:bg-[#000000] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth">
+                <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="flex-1 overflow-y-auto min-h-0 px-2 sm:px-3 pt-3 pb-3 md:py-6 bg-[#FAFAFA] dark:bg-[#0A0A0A] dark:bg-[#000000] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth overscroll-contain">
                   <div className="min-h-full flex flex-col justify-end">
                   {combinedMessageStream.length === 0 ? (
                     <div className="my-auto flex flex-col items-center justify-center px-4 py-8">
@@ -2087,14 +2270,47 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                           )}
 
                           <div className={`message-bubble ${isMe ? 'outgoing' : 'incoming'} relative select-none ${messageActionTarget?.id === msg.id ? 'ring-2 ring-[#3A3A3A] z-[60] !bg-[#1C1C1C]' : ''}`.trim()}
+                            data-message-id={msg.id}
                             onContextMenu={(event) => {
                               event.preventDefault();
-                              openMessageActions(msg, event.clientX, event.clientY);
+                              openMessageActionsFromElement(msg, event.currentTarget);
+                            }}
+                            onMouseDown={(event) => {
+                              if (event.button !== 0) return;
+                              if (messageLongPressTimerRef.current) clearTimeout(messageLongPressTimerRef.current);
+                              messagePressStartRef.current = { id: msg.id, x: event.clientX, y: event.clientY };
+                              const element = event.currentTarget;
+                              messageLongPressTimerRef.current = setTimeout(() => {
+                                messageLongPressTimerRef.current = null;
+                                if (messagePressStartRef.current.id === msg.id) {
+                                  openMessageActionsFromElement(msg, element);
+                                }
+                              }, 500);
+                            }}
+                            onMouseMove={(event) => {
+                              const start = messagePressStartRef.current;
+                              if (start.id !== msg.id) return;
+                              if (Math.abs(event.clientX - start.x) > 10 || Math.abs(event.clientY - start.y) > 10) {
+                                if (messageLongPressTimerRef.current) clearTimeout(messageLongPressTimerRef.current);
+                                messageLongPressTimerRef.current = null;
+                                messagePressStartRef.current = { id: null, x: 0, y: 0 };
+                              }
+                            }}
+                            onMouseUp={() => {
+                              if (messageLongPressTimerRef.current) clearTimeout(messageLongPressTimerRef.current);
+                              messageLongPressTimerRef.current = null;
+                              messagePressStartRef.current = { id: null, x: 0, y: 0 };
+                            }}
+                            onMouseLeave={() => {
+                              if (messageLongPressTimerRef.current) clearTimeout(messageLongPressTimerRef.current);
+                              messageLongPressTimerRef.current = null;
+                              messagePressStartRef.current = { id: null, x: 0, y: 0 };
                             }}
                             onTouchStart={(event) => {
                               if (!event.touches[0]) return;
                               if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
                               const touch = event.touches[0];
+                              const element = event.currentTarget;
                               swipeToReplyRef.current = {
                                 id: msg.id,
                                 startX: touch.clientX,
@@ -2105,10 +2321,10 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                               };
                               longPressTimerRef.current = setTimeout(() => {
                                 if (swipeToReplyRef.current.id === msg.id && !swipeToReplyRef.current.moved) {
-                                  openMessageActions(msg, touch.clientX, touch.clientY);
+                                  openMessageActionsFromElement(msg, element);
                                 }
                                 swipeToReplyRef.current = { id: null, startX: 0, startY: 0, currentX: 0, currentY: 0, moved: false };
-                              }, 1000);
+                              }, 500);
                             }}
                             onTouchEnd={(e) => {
                               if (longPressTimerRef.current) {
@@ -2399,23 +2615,32 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                   )}
                 </div>
 
-                {messageActionTarget && (
+                {messageActionTarget && messageActionAnchor && (
                   <div
-                    className="fixed inset-0 z-[80] animate-fade-in flex items-center justify-center p-4 select-none"
-                    style={{
-                      backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                      backdropFilter: 'blur(4px)',
-                      WebkitBackdropFilter: 'blur(4px)'
+                    className="fixed inset-0 z-[80] select-none animate-fade-in"
+                    onClick={() => closeMessageActions()}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      closeMessageActions();
                     }}
-                    onClick={closeMessageActions}
                   >
                     <div
                       ref={messageActionMenuRef}
-                      className="flex flex-col gap-3 items-center animate-scale-in max-w-sm w-full"
+                      role="menu"
+                      aria-label="Message actions"
+                      className="fixed flex flex-col gap-2 items-stretch overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-2 shadow-2xl backdrop-blur-md animate-scale-in dark:border-[#2A2A2A] dark:bg-[#141414]/95 [scrollbar-width:thin]"
+                      style={{
+                        left: messageActionPlacement?.left ?? 8,
+                        top: messageActionPlacement?.top ?? 8,
+                        width: 'min(320px, calc(100vw - 16px))',
+                        maxHeight: messageActionPlacement?.maxHeight ?? 'calc(100vh - 16px)',
+                        visibility: messageActionPlacement ? 'visible' : 'hidden',
+                        paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+                      }}
                       onClick={(e) => e.stopPropagation()}
                     >
                       {/* Floating Emoji Reaction Bar */}
-                      <div className="bg-[#F1F5F9] dark:bg-[#141414] border border-slate-200/80 dark:border-[#2A2A2A] rounded-full px-3 py-1.5 shadow-2xl flex items-center gap-1 sm:gap-2">
+                      <div className="self-center bg-[#F1F5F9] dark:bg-[#1C1C1C] border border-slate-200/80 dark:border-[#2A2A2A] rounded-full px-2.5 py-1 shadow-sm flex items-center gap-0.5 sm:gap-1">
                         {REACTION_EMOJIS.map((emoji) => (
                           <button
                             key={emoji}
@@ -2438,7 +2663,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                         }
 
                         return (
-                          <div className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} px-2 max-w-[340px] sm:max-w-[380px]`}>
+                          <div className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} px-2 max-w-full`}>
                             <div className={`message-bubble ${isMe ? 'outgoing' : 'incoming'} shadow-2xl border border-white/10`}>
                               <div className="flex flex-col w-full">
                                 {messageActionTarget.is_forwarded && (
@@ -2513,13 +2738,13 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                       })()}
 
                       {/* Floating Context Action Menu */}
-                      <div className="bg-[#F1F5F9] dark:bg-[#141414] border border-slate-200/80 dark:border-[#2A2A2A] rounded-2xl shadow-2xl w-60 p-1.5 flex flex-col gap-0.5">
+                      <div className="bg-[#F1F5F9] dark:bg-[#1C1C1C] border border-slate-200/80 dark:border-[#2A2A2A] rounded-2xl shadow-sm w-full p-1 flex flex-col gap-0.5">
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             setReplyingTo(messageActionTarget);
-                            closeMessageActions();
+                            closeMessageActions({ immediate: true });
                           }}
                           className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-slate-800/80 transition-colors"
                           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
@@ -2548,7 +2773,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                             setForwardTargetContent(messageActionTarget.text || '');
                             setForwardTargetType(messageActionTarget.type || 'text');
                             setIsForwardModalOpen(true);
-                            closeMessageActions();
+                            closeMessageActions({ immediate: true });
                           }}
                           className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-800 dark:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-slate-800/80 transition-colors"
                           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
@@ -2684,6 +2909,42 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                     className="text-[15px] font-bold text-[#0A0A0A] dark:text-[#FAFAFA] hover:opacity-80 transition active:scale-95 text-right mt-1"
                   >
                     Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Block User Confirmation Modal */}
+          {blockConfirmTargets && (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0A0A0A]/40 backdrop-blur-sm animate-fade-in select-none"
+              onClick={() => setBlockConfirmTargets(null)}
+            >
+              <div
+                className="bg-white dark:bg-black rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-100 dark:border-[#2A2A2A] animate-slide-up"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <h3 className="text-xl font-black text-[#0A0A0A] dark:text-[#FAFAFA] mb-2">
+                  Block {blockConfirmTargets.label}?
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-[#A3A3A3] mb-4 font-semibold">
+                  Blocked users cannot message you or find your profile. You can unblock them later from their profile.
+                </p>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setBlockConfirmTargets(null)}
+                    className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:text-[#A3A3A3] dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void confirmBlockUsers()}
+                    className="px-4 py-2 text-sm font-black text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Block
                   </button>
                 </div>
               </div>

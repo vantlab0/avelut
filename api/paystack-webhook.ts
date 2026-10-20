@@ -22,7 +22,7 @@ export const config = {
 };
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://eywpksapztzbnthlgfhd.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5d3Brc2FwenR6Ym50aGxnZmhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMjc5MzYsImV4cCI6MjEwMzYwMzkzNn0.uLZ-LBLWBmcgZYHnSDkbMV-BJA26I9x-pGDTZZxzyPI';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 async function getRawBody(req: VercelRequest): Promise<Buffer> {
@@ -182,9 +182,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       } else {
         let creditsToAdd = Math.round(verifiedAmountNgn);
-        if (packageId === 'live_tutorial_15') creditsToAdd = 299;
-        else if (packageId === 'live_tutorial_30') creditsToAdd = 599;
-        else if (packageId === 'live_tutorial_60') creditsToAdd = 1099;
+        if (packageId === 'live_tutorial_15') creditsToAdd = 70;
+        else if (packageId === 'live_tutorial_30') creditsToAdd = 130;
+        else if (packageId === 'live_tutorial_60') creditsToAdd = 270;
 
         const { data: profile } = await supabaseAdmin
           .from('profiles')

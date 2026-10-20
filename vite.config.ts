@@ -35,10 +35,10 @@ export default defineConfig(({ command, mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     return {
       base: process.env.VERCEL ? '/' : (command === 'build' ? './' : '/'),
-      envPrefix: ['VITE_', 'OPENROUTER_'],
+      envPrefix: ['VITE_'],
       define: {
         'process.env.OPENROUTER_MODEL': JSON.stringify(env.OPENROUTER_MODEL || env.VITE_OPENROUTER_MODEL || 'qwen/qwen3.5-omni-flash'),
-        'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY || env.VITE_OPENROUTER_API_KEY || ''),
+        // Never inject a server API key into the client bundle.
       },
       server: {
         port: 3000,

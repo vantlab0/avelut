@@ -127,9 +127,9 @@ export const InsufficientCreditsModal: React.FC<InsufficientCreditsModalProps> =
               <span className="text-xs text-[#666666] dark:text-[#A3A3A3]">Pay-as-you-go packages:</span>
             </div>
             <div className="text-xs space-y-1 text-[#666666] dark:text-[#A3A3A3] font-medium">
-              <div className="flex justify-between"><span>15 min</span><span className="font-bold text-[#111111] dark:text-[#F5F5F5]">₦299</span></div>
-              <div className="flex justify-between"><span>30 min</span><span className="font-bold text-[#111111] dark:text-[#F5F5F5]">₦599</span></div>
-              <div className="flex justify-between"><span>60 min</span><span className="font-bold text-[#111111] dark:text-[#F5F5F5]">₦1,099</span></div>
+              <div className="flex justify-between"><span>15 min (70 credits)</span><span className="font-bold text-[#111111] dark:text-[#F5F5F5]">₦70</span></div>
+              <div className="flex justify-between"><span>30 min (130 credits)</span><span className="font-bold text-[#111111] dark:text-[#F5F5F5]">₦130</span></div>
+              <div className="flex justify-between"><span>60 min (270 credits)</span><span className="font-bold text-[#111111] dark:text-[#F5F5F5]">₦270</span></div>
             </div>
             <button
               onClick={handleBuyCreditsAction}

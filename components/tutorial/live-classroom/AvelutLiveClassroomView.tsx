@@ -615,8 +615,17 @@ export const AvelutLiveClassroomView: React.FC<AvelutLiveClassroomViewProps> = (
         metadata: { ...sessionMeta, remaining_pool_minutes: undefined },
       });
     } else if (paymentMode === 'credits') {
-      // 10 credits per actual minute spent
-      const creditCost = actualMinutes * 10;
+      // 15m = 70 credits, 30m = 130 credits, 60m = 270 credits
+      let creditCost = 70;
+      if (actualMinutes <= 15) {
+        creditCost = Math.max(10, Math.round(actualMinutes * (70 / 15)));
+      } else if (actualMinutes <= 30) {
+        creditCost = 70 + Math.round((actualMinutes - 15) * ((130 - 70) / 15));
+      } else if (actualMinutes <= 60) {
+        creditCost = 130 + Math.round((actualMinutes - 30) * ((270 - 130) / 30));
+      } else {
+        creditCost = 270 + Math.round((actualMinutes - 60) * 4.5);
+      }
       deductAICredits(userProfile.uid, creditCost, `live_tutorial_${actualMinutes}m`, appSettings)
         .then((res) => {
           if (res.success && typeof res.balance === 'number') {

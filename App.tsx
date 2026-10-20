@@ -48,6 +48,12 @@ import TermsAndConditions from './components/TermsAndConditions';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import { initNativeNotifications, cleanupNativeNotifications } from './utils/nativeNotifications';
 import { listenToKeyboard } from './utils/capacitorUtils';
+import {
+    computeKeyboardHeight,
+    createViewportScheduler,
+    isEditableElement,
+    readViewportMetrics,
+} from './utils/keyboardViewport';
 
 import { Skeleton, PageSkeleton } from './components/Skeleton';
 import { useOTAUpdater } from './hooks/useOTAUpdater';
@@ -787,9 +793,12 @@ const App: React.FC = () => {
         enabled: !isSidebarSwipeDisabled,
     });
 
-    // Ensure window, html, body and mainRef never scroll upward when soft keyboard appears
+    // Keep the document itself pinned while the soft keyboard is open. Only the
+    // chat's own message scroller is allowed to scroll; resetting it here would
+    // fight the message list.
     useEffect(() => {
         const resetWindowScroll = () => {
+            if (!document.documentElement.classList.contains('keyboard-open')) return;
             if (window.scrollY !== 0 || window.scrollX !== 0) {
                 window.scrollTo(0, 0);
             }
@@ -799,64 +808,94 @@ const App: React.FC = () => {
             if (document.body.scrollTop !== 0) {
                 document.body.scrollTop = 0;
             }
-            if (mainRef.current && mainRef.current.scrollTop !== 0) {
-                mainRef.current.scrollTop = 0;
-            }
         };
 
-        window.addEventListener('scroll', resetWindowScroll, { passive: false });
+        window.addEventListener('scroll', resetWindowScroll, { passive: true });
         return () => window.removeEventListener('scroll', resetWindowScroll);
-    }, [mainRef]);
+    }, []);
 
+    /**
+     * Single authoritative keyboard-layout strategy.
+     *
+     * Capacitor's Keyboard plugin is configured with `resize: "none"`, so the
+     * native WebView never resizes for us. We derive the keyboard height from
+     * the visual viewport and publish it once as `--keyboard-height`; the chat
+     * composer is the only consumer that adds that offset. Capacitor keyboard
+     * events merely schedule a re-measure — they never supply a competing
+     * height value, so native resizing and JS padding cannot both apply.
+     */
     useEffect(() => {
-        const viewport = (window as any).visualViewport;
-        const applyKeyboardViewportOffset = (keyboardHeight?: number) => {
-            const calculatedHeight = typeof keyboardHeight === 'number' && keyboardHeight > 0
-                ? keyboardHeight
-                : (viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0);
+        const root = document.documentElement;
+        const viewport = window.visualViewport;
+        let lastAppliedHeight = -1;
+        let lastWidth = window.innerWidth;
 
-            document.documentElement.style.setProperty('--keyboard-offset', `${calculatedHeight}px`);
-            document.documentElement.style.setProperty('--keyboard-height', `${calculatedHeight}px`);
-
-            window.scrollTo(0, 0);
-            if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
-            if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
-            if (mainRef.current) mainRef.current.scrollTop = 0;
+        const writeHeight = (height: number) => {
+            if (height === lastAppliedHeight) return;
+            lastAppliedHeight = height;
+            root.style.setProperty('--keyboard-height', `${height}px`);
+            // Kept as an alias for any older styles; its value is always the
+            // same as --keyboard-height and both are never summed together.
+            root.style.setProperty('--keyboard-offset', `${height}px`);
+            root.classList.toggle('keyboard-open', height > 0);
         };
 
-        applyKeyboardViewportOffset();
+        const measure = () => {
+            const metrics = readViewportMetrics(window);
+            // On rotation the old visual-viewport delta is stale. Reset first
+            // and let the next frame measure the new geometry.
+            if (metrics.layoutWidth !== lastWidth) {
+                lastWidth = metrics.layoutWidth;
+                writeHeight(0);
+                return;
+            }
+            const editableFocused = isEditableElement(document.activeElement);
+            writeHeight(editableFocused ? computeKeyboardHeight(metrics) : 0);
+        };
 
-        const handleViewportChange = () => applyKeyboardViewportOffset();
+        const scheduler = createViewportScheduler(measure);
+        const schedule = () => scheduler.schedule();
+
+        // Measure once on mount (hot reload / returning to a focused input).
+        scheduler.schedule();
 
         if (viewport) {
-            viewport.addEventListener('resize', handleViewportChange);
-            viewport.addEventListener('scroll', handleViewportChange);
+            viewport.addEventListener('resize', schedule);
+            viewport.addEventListener('scroll', schedule);
         }
+        window.addEventListener('resize', schedule);
+        window.addEventListener('orientationchange', schedule);
 
-        const cleanup = listenToKeyboard(
-            (height) => {
-                applyKeyboardViewportOffset(height);
-            },
+        const cleanupKeyboard = listenToKeyboard(
+            () => schedule(),
             () => {
-                document.documentElement.style.setProperty('--keyboard-offset', '0px');
-                document.documentElement.style.setProperty('--keyboard-height', '0px');
-                window.scrollTo(0, 0);
-                if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
-                if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
-                if (mainRef.current) mainRef.current.scrollTop = 0;
+                // Native hide event is authoritative for closing: clear the
+                // offset immediately instead of waiting for a stale measurement.
+                writeHeight(0);
+                schedule();
             }
         );
 
+        const handleFocusChange = () => schedule();
+        document.addEventListener('focusin', handleFocusChange);
+        document.addEventListener('focusout', handleFocusChange);
+
         return () => {
-            cleanup();
-            document.documentElement.style.setProperty('--keyboard-offset', '0px');
-            document.documentElement.style.setProperty('--keyboard-height', '0px');
+            scheduler.cancel();
+            cleanupKeyboard();
             if (viewport) {
-                viewport.removeEventListener('resize', handleViewportChange);
-                viewport.removeEventListener('scroll', handleViewportChange);
+                viewport.removeEventListener('resize', schedule);
+                viewport.removeEventListener('scroll', schedule);
             }
+            window.removeEventListener('resize', schedule);
+            window.removeEventListener('orientationchange', schedule);
+            document.removeEventListener('focusin', handleFocusChange);
+            document.removeEventListener('focusout', handleFocusChange);
+            root.style.setProperty('--keyboard-height', '0px');
+            root.style.setProperty('--keyboard-offset', '0px');
+            root.classList.remove('keyboard-open');
         };
-    }, [mainRef]);
+    }, []);
     const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState<boolean>(() => {
         if (typeof window !== 'undefined') {
             return window.localStorage?.getItem('avelut_sidebar_collapsed') === 'true';
@@ -1125,11 +1164,19 @@ const App: React.FC = () => {
         try {
             const userRef = dbRef(db, `users/${user.uid}`);
             await update(userRef, updatedData);
+            // The Realtime Database row is the source of truth for the profile.
+            // Auth metadata is only a mirror used by some SDK surfaces and by
+            // Firebase rules; a failure to mirror it must not report the saved
+            // profile as failed (which would also leave the local UI stale).
             if (updatedData.display_name || updatedData.photo_url) {
                 const profileUpdates: any = {};
                 if (updatedData.display_name) profileUpdates.displayName = updatedData.display_name;
                 if (updatedData.photo_url) profileUpdates.photoURL = updatedData.photo_url;
-                await updateProfile(user, profileUpdates);
+                try {
+                    await updateProfile(user, profileUpdates);
+                } catch (authMirrorError: any) {
+                    console.warn('Profile saved, but Firebase Auth metadata sync failed:', authMirrorError?.message || authMirrorError);
+                }
             }
             setUserProfile(prevProfile => {
                 if (!prevProfile) return null;

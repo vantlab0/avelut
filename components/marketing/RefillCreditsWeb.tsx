@@ -23,24 +23,24 @@ export const RefillCreditsWeb: React.FC<RefillCreditsWebProps> = ({ appSettings,
             id: 'live_tutorial_15',
             title: '15 Minutes Package',
             amount: CANONICAL_PRICING.packages.live_tutorial_15.priceNgn,
-            description: 'Unlocks 15 minutes of interactive live voice & whiteboard tutorial access.',
-            badge: '15 Mins',
+            description: 'Unlocks 15 minutes of interactive live voice & whiteboard tutorial access (70 credits).',
+            badge: '15 Mins / 70 Credits',
             icon: 'bi-broadcast',
         },
         {
             title: '30 Minutes Package',
             id: 'live_tutorial_30',
             amount: CANONICAL_PRICING.packages.live_tutorial_30.priceNgn,
-            description: 'Unlocks 30 minutes of interactive live voice & whiteboard tutorial access.',
-            badge: '30 Mins',
+            description: 'Unlocks 30 minutes of interactive live voice & whiteboard tutorial access (130 credits).',
+            badge: '30 Mins / 130 Credits',
             icon: 'bi-collection-play',
         },
         {
             title: '60 Minutes Package',
             id: 'live_tutorial_60',
             amount: CANONICAL_PRICING.packages.live_tutorial_60.priceNgn,
-            description: 'Unlocks 60 minutes of interactive live voice & whiteboard tutorial access.',
-            badge: '60 Mins',
+            description: 'Unlocks 60 minutes of interactive live voice & whiteboard tutorial access (270 credits).',
+            badge: '60 Mins / 270 Credits',
             icon: 'bi-lightning-charge',
         },
     ];
@@ -55,8 +55,8 @@ export const RefillCreditsWeb: React.FC<RefillCreditsWebProps> = ({ appSettings,
             alert("Please log in to purchase credits.");
             return;
         }
-        if (amount < 100) {
-            alert("Minimum amount is ₦100");
+        if (amount < 50) {
+            alert("Minimum amount is ₦50");
             return;
         }
         if (!finalEmail || !finalEmail.includes('@')) {

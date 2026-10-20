@@ -9,6 +9,17 @@ import { useGoogleDrivePicker } from '../hooks/useGoogleDrivePicker';
 import type { Course, Topic } from '../types';
 import { getWindowPathname } from '../utils/pathname';
 import { PDFDocument } from 'pdf-lib';
+import {
+  CourseExtractionError,
+  capPromptText,
+  inspectExtractionFile,
+  inspectPdfFile,
+  isUsablePdfText,
+  parseCoursesResponse,
+  parsePastQuestionsResponse,
+  parseSyllabusResponse,
+  validateCourseUploadMetadata,
+} from '../utils/courseExtraction';
 import { PageSkeleton } from './Skeleton';
 import { SchoolHierarchySelector } from './SchoolHierarchySelector';
 import { UploadCloud, X, LayoutDashboard, BookOpen, FolderOpen, FileQuestion, List, Menu, HardDrive, ChevronRight, Plus, Trash2, Layers } from 'lucide-react';
@@ -199,15 +210,91 @@ const isPQUploaded = (course: Course, deptId: string, pqIdx: Record<string, any>
     return Boolean(pqIdx[deptId]?.[course.level]?.[course.course_id]);
 };
 
+const MAX_INLINE_PDF_BYTES = 8 * 1024 * 1024;
+const TARGET_INLINE_CHUNK_BYTES = 2.5 * 1024 * 1024;
+const MAX_INLINE_BASE64_CHARS = 4_200_000;
+
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => {
     const result = typeof reader.result === 'string' ? reader.result : '';
-    resolve(result.includes(',') ? result.split(',')[1] : result);
+    const base64 = result.includes(',') ? result.split(',')[1] : result;
+    if (!base64) {
+      reject(new CourseExtractionError('FILE_READ_FAILED', `Could not read ${file.name || 'the file'}. The file appears to be empty.`));
+      return;
+    }
+    resolve(base64);
   };
-  reader.onerror = () => reject(new Error(`Failed to read PDF: ${reader.error?.message || 'Unknown error'}`));
+  reader.onerror = () => reject(new CourseExtractionError(
+    'FILE_READ_FAILED',
+    `Could not read ${file.name || 'the file'}: ${reader.error?.message || 'unknown read error'}.`
+  ));
+  reader.onabort = () => reject(new CourseExtractionError('FILE_READ_FAILED', 'File reading was cancelled.'));
   reader.readAsDataURL(file);
 });
+
+/**
+ * Prepare inline PDF chunks that fit the server's request-body budget.
+ * Text-based PDFs normally take the extracted-text path instead of this one.
+ */
+const createPdfInlineChunks = async (file: File): Promise<string[]> => {
+  if (file.size <= TARGET_INLINE_CHUNK_BYTES) {
+    return [await fileToBase64(file)];
+  }
+  if (file.size > MAX_INLINE_PDF_BYTES) {
+    throw new CourseExtractionError(
+      'FILE_TOO_LARGE',
+      'This scanned PDF is too large to send to the AI (8 MB maximum). Upload a smaller scan or a text-based PDF.'
+    );
+  }
+
+  let pdfDoc;
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    pdfDoc = await PDFDocument.load(arrayBuffer);
+  } catch {
+    throw new CourseExtractionError(
+      'FILE_READ_FAILED',
+      'The PDF could not be opened. It may be corrupted or password-protected. Export a fresh PDF and retry.'
+    );
+  }
+
+  const totalPages = pdfDoc.getPageCount();
+  if (!totalPages) {
+    throw new CourseExtractionError('EMPTY_DOCUMENT', 'The PDF has no pages.');
+  }
+
+  const chunkCount = Math.min(4, Math.max(1, Math.ceil(file.size / TARGET_INLINE_CHUNK_BYTES)));
+  const pagesPerChunk = Math.ceil(totalPages / chunkCount);
+  const chunks: string[] = [];
+
+  for (let index = 0; index < chunkCount; index += 1) {
+    const startPage = index * pagesPerChunk;
+    if (startPage >= totalPages) break;
+    const endPage = Math.min(startPage + pagesPerChunk, totalPages);
+    const chunkDoc = await PDFDocument.create();
+    const pageIndices = Array.from({ length: endPage - startPage }, (_, offset) => startPage + offset);
+    const copiedPages = await chunkDoc.copyPages(pdfDoc, pageIndices);
+    copiedPages.forEach((page) => chunkDoc.addPage(page));
+    const bytes = await chunkDoc.save();
+    const base64 = uint8ToBase64(bytes);
+    if (!base64) {
+      throw new CourseExtractionError('FILE_READ_FAILED', `PDF chunk ${index + 1} could not be encoded.`);
+    }
+    if (base64.length > MAX_INLINE_BASE64_CHARS) {
+      throw new CourseExtractionError(
+        'FILE_TOO_LARGE',
+        'This scanned PDF produces an AI request that is too large. Compress the scan or upload a text-based PDF.'
+      );
+    }
+    chunks.push(base64);
+  }
+
+  if (!chunks.length) {
+    throw new CourseExtractionError('EMPTY_DOCUMENT', 'The PDF could not be split into readable chunks.');
+  }
+  return chunks;
+};
 
 const createUserDisplayName = (email: string) => {
   const prefix = email.split('@')[0] || 'uploader';
@@ -479,15 +566,46 @@ export const UploadCenter: React.FC = () => {
   const handleFileUpload = async (course: Course, courseKey: string, deptPath: string, files: FileList | File[], type: 'textbook'|'past_question', year?: string) => {
     const currentUser = auth.currentUser;
     if (!currentUser || !profile) return addToast('Please sign in again.', 'error');
-    if (!ai) return addToast('AI features unavailable.', 'error');
     if (!appSettings.upload_center_uploads_enabled) return addToast('Uploads are disabled.', 'error');
+    if (!ai || !aiModel?.trim()) {
+      return addToast('No extraction model is configured. Set one in Admin settings before uploading.', 'error');
+    }
+    if (type === 'past_question' && !year?.trim()) {
+      return addToast('Choose the exam year before uploading past questions.', 'error');
+    }
+
+    const metadataErrors = validateCourseUploadMetadata({
+      course,
+      deptPath,
+      courseKey,
+      fallbackSemester: selectedSemester,
+      year: type === 'past_question' ? year : undefined,
+    });
+    if (metadataErrors.length) {
+      return addToast(metadataErrors[0], 'error');
+    }
 
     const pdfFiles = Array.from(files).filter((file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
     if (!pdfFiles.length) return addToast('Please choose PDF files only.', 'error');
 
+    try {
+      pdfFiles.forEach(inspectPdfFile);
+    } catch (fileError) {
+      return addToast(
+        fileError instanceof CourseExtractionError ? fileError.message : 'One of the selected PDFs is invalid.',
+        'error'
+      );
+    }
+
+    const normalizedLevel = normalizeLevel(course.level);
+    const effectiveSemester = normalizeSemester(course.semester || selectedSemester);
+
     setIsUploadingCourseKey(courseKey);
     setUploadProgress({ status: 'Starting upload...', percent: 5 });
     
+    let phase: 'extract' | 'save' = 'extract';
+    const pdfTextCache = new Map<File, string>();
+
     try {
       const uploadedUrls: string[] = [];
       const extractedTopicGroups: Topic[][] = [];
@@ -504,48 +622,44 @@ export const UploadCenter: React.FC = () => {
 
         setUploadProgress({ status: `Extracting textbook contents (${index + 1}/${pdfFiles.length})...`, percent: 20 + (index * 5) });
         
-        let base64Chunks: string[] = [];
-        if (file.size > 15 * 1024 * 1024) {
-          setUploadProgress({ status: `Splitting large PDF into chunks (${index + 1}/${pdfFiles.length})...`, percent: 25 + (index * 5) });
-          try {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdfDoc = await PDFDocument.load(arrayBuffer);
-            const totalPages = pdfDoc.getPageCount();
-            const chunkCount = 3;
-            const pagesPerChunk = Math.ceil(totalPages / chunkCount);
-            
-            for (let i = 0; i < chunkCount; i++) {
-              const startPage = i * pagesPerChunk;
-              if (startPage >= totalPages) break;
-              const endPage = Math.min(startPage + pagesPerChunk, totalPages);
-              
-              const newPdfDoc = await PDFDocument.create();
-              const pageIndices = Array.from({ length: endPage - startPage }, (_, k) => startPage + k);
-              const copiedPages = await newPdfDoc.copyPages(pdfDoc, pageIndices);
-              copiedPages.forEach((page) => newPdfDoc.addPage(page));
-              
-              const pdfBytes = await newPdfDoc.save();
-              base64Chunks.push(uint8ToBase64(pdfBytes));
-            }
-          } catch (e) {
-            console.warn("PDF splitting failed, using whole file", e);
-            base64Chunks = [await fileToBase64(file)];
+        setUploadProgress({ status: `Reading PDF text (${index + 1}/${pdfFiles.length})...`, percent: 20 + (index * 5) });
+
+        // Prefer real PDF text: it avoids request-size limits, works on scanned
+        // and text PDFs alike (with a vision fallback), and can be reused for
+        // vector indexing without reading the file twice.
+        let source: { kind: 'text'; text: string } | { kind: 'pdf'; chunks: string[] };
+        let extractedText = '';
+        try {
+          const { extractTextFromPDF } = await import('../utils/pdfExtraction');
+          extractedText = await extractTextFromPDF(file);
+        } catch (textError) {
+          console.warn('[UploadCenter] PDF text extraction failed; trying document vision.', (textError as Error)?.message);
+        }
+
+        if (isUsablePdfText(extractedText)) {
+          pdfTextCache.set(file, extractedText);
+          const capped = capPromptText(extractedText);
+          source = { kind: 'text', text: capped.text };
+          if (capped.truncated) {
+            addToast(`Large PDF: only the first ${capped.text.length.toLocaleString()} characters were sent for topic extraction.`, 'info');
           }
         } else {
-          base64Chunks = [await fileToBase64(file)];
+          setUploadProgress({ status: `Preparing scanned PDF (${index + 1}/${pdfFiles.length})...`, percent: 25 + (index * 5) });
+          source = { kind: 'pdf', chunks: await createPdfInlineChunks(file) };
         }
         
         setUploadProgress({ status: `AI extracting syllabus topics (${index + 1}/${pdfFiles.length})...`, percent: 35 + (index * 5) });
 
         
-        const textbookPrompt = `Analyze this PDF textbook for "${course.course_name}" at "${course.level}" level.
+        const textbookPrompt = `Analyze this PDF textbook for "${course.course_name}" at "${normalizedLevel}" level.
 First, determine if this document is ACTUALLY related to the course "${course.course_name}".
 If it is completely unrelated (e.g. a cooking recipe for a Math course), set "is_related" to false and provide an "unrelated_reason" explaining why.
 If it is related, set "is_related" to true and extract a comprehensive syllabus/course outline into a structured JSON array of topics with concise grounding context.
+Only extract topics that are explicitly supported by the source. Never invent topics.
 RULES:
 1. Output ONLY the JSON object.
 2. The root object must have "is_related" (boolean), "unrelated_reason" (string, optional), and "syllabus" (array) keys.
-3. Each topic object must have: topic_name, topic_id, topic_context, start_point, end_point.
+3. Each topic object must have a non-empty topic_name, plus topic_id, topic_context, start_point, end_point.
 FORMAT: { "is_related": true, "unrelated_reason": "", "syllabus": [ { "topic_name": "...", "topic_id": "...", "topic_context": "...", "start_point": "...", "end_point": "..." } ] }`;
 
         const pqPrompt = `Analyze this PDF past question paper for "${course.course_name}".
@@ -558,11 +672,16 @@ RULES:
 3. Each question object must have: "question" (string), "options" (array of strings), "correctAnswer" (string), "explanation" (string).
 FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question": "...", "options": ["..."], "correctAnswer": "...", "explanation": "..." } ] }`;
 
-        const chunkPromises = base64Chunks.map(async (chunkBase64) => {
+        const promptText = type === 'textbook' ? textbookPrompt : pqPrompt;
+        const chunkInputs = source.kind === 'text' ? [source.text] : source.chunks;
+        const chunkPromises = chunkInputs.map(async (chunkInput) => {
           return attemptApiCall(async () => {
+            const userParts = source.kind === 'text'
+              ? [{ text: `${promptText}\n\nDOCUMENT TEXT (extracted from the uploaded PDF):\n${chunkInput}` }]
+              : [{ text: promptText }, { inlineData: { mimeType: 'application/pdf', data: chunkInput } }];
             const aiResponse = await ai.models.generateContent({
               model: aiModel,
-              contents: [{ role: 'user', parts: [{ text: type === 'textbook' ? textbookPrompt : pqPrompt }, { inlineData: { mimeType: 'application/pdf', data: chunkBase64 } }] }],
+              contents: [{ role: 'user', parts: userParts }],
               config: {
                 responseMimeType: 'application/json',
                 responseSchema: type === 'textbook' ? {
@@ -611,12 +730,8 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
             });
   
             const text = getResponseText(aiResponse);
-            if (!text) throw new Error(`AI returned an empty response.`);
-            const parsed = JSON.parse(text);
-            if (parsed.is_related === false) {
-                throw new Error(`Upload Rejected: ${parsed.unrelated_reason || 'Document is not related to this course.'}`);
-            }
-            return parsed;
+            if (!text) throw new CourseExtractionError('INVALID_RESPONSE', 'AI returned an empty response.', true);
+            return type === 'textbook' ? parseSyllabusResponse(text) : parsePastQuestionsResponse(text);
           });
         });
 
@@ -626,23 +741,32 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
           if (!aiResult.success) {
             addToast(aiResult.message, 'error');
             setIsUploadingCourseKey('');
+            setUploadProgress(null);
             return;
           }
           const responseData = aiResult.data as any;
           if (type === 'textbook') {
-              extractedTopicGroups.push(Array.isArray(responseData?.syllabus) ? responseData.syllabus.map((t: any, i: number) => sanitizeTopicMetadata(t, i)) : []);
-          } else {
-              if (Array.isArray(responseData?.questions)) {
-                  extractedQuestions = [...extractedQuestions, ...responseData.questions];
-              }
+              extractedTopicGroups.push(Array.isArray(responseData?.topics) ? responseData.topics : []);
+          } else if (Array.isArray(responseData)) {
+              extractedQuestions = [...extractedQuestions, ...responseData];
           }
         }
       }
 
+      // Never write an empty/partial extraction result to the database.
+      if (type === 'textbook' && !extractedTopicGroups.flat().length) {
+          throw new CourseExtractionError('NO_TOPICS', 'No topics were extracted from the PDF. Nothing was saved.');
+      }
+      if (type === 'past_question' && !extractedQuestions.length) {
+          throw new CourseExtractionError('NO_QUESTIONS', 'No questions were extracted from the PDF. Nothing was saved.');
+      }
+
+      phase = 'save';
+
       if (type === 'past_question' && year) {
           // Save Past Questions
           const resolvedDeptId = deptPath.split('/').pop() || selectedDepartmentId;
-          const pqPath = `past_questions/${resolvedDeptId}/${course.level}/${course.course_id}/${year}`;
+          const pqPath = `past_questions/${resolvedDeptId}/${normalizedLevel}/${course.course_id}/${year}`;
           await set(dbRef(db, pqPath), extractedQuestions);
           addToast(`Past Questions for ${year} uploaded successfully.`, 'success');
           await loadCatalog();
@@ -659,19 +783,19 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
           const mergedSharedSyllabus = mergeTopics(Array.isArray(existingShared?.syllabus) ? existingShared.syllabus : [], extractedTopicGroups.flat());
           const primaryPdfUrl = selectPrimaryPdfUrl(uploadedUrls, existingShared?.pdf_url, mergedSharedPdfUrls);
 
-          await set(dbRef(db, `textbook_contexts/shared/${courseKey}`), {
+          const sharedContext = {
             course_key: courseKey,
             course_name: course.course_name,
-            level: course.level,
-            semester: course.semester || selectedSemester,
+            level: normalizedLevel,
+            semester: effectiveSemester,
             pdf_url: primaryPdfUrl,
             pdf_urls: mergedSharedPdfUrls,
             syllabus: mergedSharedSyllabus,
             uploaded_at: Date.now(),
             uploader_uid: currentUser.uid,
-          });
+          };
 
-          const coursesRef = dbRef(db, `schools_data/${deptPath}/levels/${course.level}/courses`);
+          const coursesRef = dbRef(db, `schools_data/${deptPath}/levels/${normalizedLevel}/courses`);
           const coursesSnapshot = await get(coursesRef);
           const existingCourse = (coursesSnapshot.val() || {})[course.course_id] || {};
           
@@ -681,21 +805,29 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
             textbook_urls: mergedSharedPdfUrls,
             textbook_shared_key: courseKey,
           }, mergedSharedSyllabus, mergedSharedPdfUrls);
-          
-          await update(dbRef(db, `schools_data/${deptPath}/levels/${course.level}/courses/${course.course_id}`), mergedCourse);
+
+          // Commit the shared context, the course record, and the uploader
+          // history in one multi-path update. A partial write would leave the
+          // catalog pointing at topics/PDFs that were never saved.
+          const updates: Record<string, unknown> = {
+            [`textbook_contexts/shared/${courseKey}`]: sharedContext,
+            [`schools_data/${deptPath}/levels/${normalizedLevel}/courses/${course.course_id}`]: mergedCourse,
+          };
 
           const uploadRecordId = push(dbRef(db, `uploaders/${currentUser.uid}/uploads`)).key;
           if (uploadRecordId) {
-            await set(dbRef(db, `uploaders/${currentUser.uid}/uploads/${uploadRecordId}`), {
+            updates[`uploaders/${currentUser.uid}/uploads/${uploadRecordId}`] = {
               course_key: courseKey,
               course_name: course.course_name,
-              level: course.level,
-              semester: course.semester || selectedSemester,
+              level: normalizedLevel,
+              semester: effectiveSemester,
               department_ids: [deptPath],
               uploaded_urls: mergedSharedPdfUrls,
               uploaded_at: Date.now(),
-            } satisfies UploadRecord);
+            } satisfies UploadRecord;
           }
+
+          await update(dbRef(db), updates);
 
           addToast(`${course.course_name} textbook uploaded successfully.`, 'success');
           await loadCatalog();
@@ -707,12 +839,19 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
 
             addToast('Extracting textbook content...', 'info');
             setUploadProgress({ status: 'Parsing raw text from PDF for database...', percent: 65 });
-            const rawText = await extractTextFromPDF(pdfFiles[0]);
+            const cachedText = pdfTextCache.get(pdfFiles[0]);
+            const rawText = cachedText || await extractTextFromPDF(pdfFiles[0]);
+            if (!isUsablePdfText(rawText)) {
+              throw new CourseExtractionError(
+                'EMPTY_DOCUMENT',
+                'This PDF has no selectable text, so vector search indexing was skipped.'
+              );
+            }
             
             addToast('Syncing to Pinecone database...', 'info');
             setUploadProgress({ status: 'Connecting to Pinecone...', percent: 70 });
             const ingestResult = await ingestTextToPinecone(
-              rawText, courseKey, course.course_name, course.level, course.semester || selectedSemester, appSettings,
+              rawText, courseKey, course.course_name, normalizedLevel, effectiveSemester, appSettings,
               (progress) => {
                 let percent = 80;
                 if (progress.includes('Split text')) percent = 75;
@@ -737,7 +876,18 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
       }
       
     } catch (error: any) {
-      addToast(error?.message || 'Could not upload the course.', 'error');
+      console.error('[UploadCenter] upload failed', {
+        phase,
+        code: error instanceof CourseExtractionError ? error.code : 'UNEXPECTED',
+        message: String(error?.message || error).slice(0, 300),
+      });
+      if (error instanceof CourseExtractionError) {
+        addToast(error.message, 'error');
+      } else if (phase === 'save') {
+        addToast('Topics were extracted, but saving to the course database failed. Please retry the upload.', 'error');
+      } else {
+        addToast('Extraction failed before anything was saved. Check the PDF and try again.', 'error');
+      }
     } finally {
       setIsUploadingCourseKey('');
       setUploadProgress(null);
@@ -790,21 +940,27 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
   };
 
   const handleExtractCoursesFromPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!ai || !e.target.files || e.target.files.length === 0) return;
+    if (!e.target.files || e.target.files.length === 0) return;
+    if (!ai || !aiModel?.trim()) {
+      e.target.value = '';
+      return addToast('No extraction model is configured. Set one in Admin settings first.', 'error');
+    }
+
     const file = e.target.files[0];
-    
-    // Support PDFs and common image formats (photos of printed course forms / timetables)
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif|bmp|gif)$/i.test(file.name);
-    
-    if (!isPdf && !isImage) {
-      return addToast('Please upload a PDF or image of your course form.', 'error');
+    let fileInfo;
+    try {
+      fileInfo = inspectExtractionFile(file);
+    } catch (error) {
+      e.target.value = '';
+      return addToast(
+        error instanceof CourseExtractionError ? error.message : 'Choose a valid PDF or image of the course form.',
+        'error'
+      );
     }
 
     setIsExtractingCourses(true);
     try {
-      const base64Chunk = await fileToBase64(file);
-      const mimeType = isPdf ? 'application/pdf' : (file.type || 'image/jpeg');
+      const { kind, mimeType } = fileInfo;
       const prompt = `Analyze this course form, timetable, syllabus, registration slip, or academic document carefully.
 
 Extract EVERY course with:
@@ -817,9 +973,36 @@ Group and return only courses that clearly belong on the document. Prefer accura
 
 Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level": "100lvl", "semester": "first" } ] }`;
 
+      let userParts: Array<Record<string, any>>;
+      if (kind === 'pdf') {
+        let pdfText = '';
+        try {
+          const { extractTextFromPDF } = await import('../utils/pdfExtraction');
+          pdfText = await extractTextFromPDF(file);
+        } catch (textError) {
+          console.warn('[UploadCenter] Course-form PDF text extraction failed.', (textError as Error)?.message);
+        }
+
+        if (isUsablePdfText(pdfText)) {
+          userParts = [{ text: `${prompt}\n\nDOCUMENT TEXT (extracted from the uploaded PDF):\n${capPromptText(pdfText).text}` }];
+        } else {
+          const chunks = await createPdfInlineChunks(file);
+          if (chunks.length > 1) {
+            throw new CourseExtractionError(
+              'FILE_TOO_LARGE',
+              'This scanned course form is too large to process in one request. Upload a single-page scan or a clear photo instead.'
+            );
+          }
+          userParts = [{ text: prompt }, { inlineData: { mimeType: 'application/pdf', data: chunks[0] } }];
+        }
+      } else {
+        const base64Chunk = await fileToBase64(file);
+        userParts = [{ text: prompt }, { inlineData: { mimeType, data: base64Chunk } }];
+      }
+
       const aiResponse = await attemptApiCall(() => ai.models.generateContent({
         model: aiModel,
-        contents: [{ role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType, data: base64Chunk } }] }],
+        contents: [{ role: 'user', parts: userParts }],
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
@@ -845,50 +1028,24 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
       }));
 
       const text = getResponseText(aiResponse);
-      if (!text) throw new Error("Failed to get response from AI");
+      if (!text) throw new CourseExtractionError('INVALID_RESPONSE', 'Failed to get a response from the AI.', true);
       
-      // Robust JSON extraction handling any markdown wrappers
-      let cleanJson = text.trim();
-      const codeBlockMatch = cleanJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (codeBlockMatch) {
-        cleanJson = codeBlockMatch[1].trim();
-      }
-      const firstBrace = cleanJson.indexOf('{');
-      const lastBrace = cleanJson.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1) {
-        cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
-      }
-
-      const data = JSON.parse(cleanJson);
-      if (data.courses && Array.isArray(data.courses) && data.courses.length > 0) {
-        const validated = data.courses
-          .filter((c: any) => c && (c.course_name || c.name) && (c.course_code || c.code))
-          .map((c: any) => {
-            const courseCode = String(c.course_code || c.code).trim().toUpperCase();
-            const rawLevel = c.level ? normalizeLevel(String(c.level)) : undefined;
-            const rawSemester = c.semester ? normalizeSemester(c.semester) : (inferSemesterFromCode(courseCode) || undefined);
-            return {
-              course_name: String(c.course_name || c.name).trim(),
-              course_code: courseCode,
-              selected: true,
-              type: 'private' as const,
-              level: rawLevel,
-              semester: rawSemester as 'first' | 'second' | undefined,
-            };
-          });
-
-        if (validated.length === 0) {
-          throw new Error("No valid courses could be identified in the uploaded document.");
-        }
-
-        setExtractedCourses(validated);
-        addToast(`Extracted ${validated.length} courses successfully!`, 'success');
-      } else {
-        throw new Error("No courses found in the document. Please verify the document has clear course titles and codes.");
-      }
+      // cleanAndParseJson handles markdown fences, surrounding prose, and
+      // common JSON repair cases; the parser validates every course row.
+      const validated = parseCoursesResponse(text);
+      setExtractedCourses(validated);
+      addToast(`Extracted ${validated.length} courses successfully!`, 'success');
     } catch (err: any) {
-      console.error('Course form extraction error:', err);
-      addToast(err.message || 'Failed to extract courses from the document.', 'error');
+      console.error('Course form extraction error:', {
+        code: err instanceof CourseExtractionError ? err.code : 'UNEXPECTED',
+        message: String(err?.message || err).slice(0, 300),
+      });
+      addToast(
+        err instanceof CourseExtractionError
+          ? err.message
+          : 'Course-form extraction failed. Check the document and try again.',
+        'error'
+      );
     } finally {
       setIsExtractingCourses(false);
       if (e.target) e.target.value = '';

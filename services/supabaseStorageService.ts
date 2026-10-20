@@ -13,35 +13,87 @@ export interface UploadResult {
   url: string | null;
   path: string | null;
   error?: string | null;
+  errorCode?: string | null;
+  errorStatus?: number | null;
 }
 
 class SupabaseStorageService {
   /**
-   * Upload Profile Avatar
+   * Upload a profile avatar or cover image.
+   *
+   * Paths are scoped to the authenticated user's id (`<uid>/...`), which is the
+   * exact predicate enforced by the `profile_avatars` RLS policies. A unique
+   * object name avoids overwriting the previous image before the profile row is
+   * updated successfully.
    */
-  public async uploadAvatar(userId: string, file: Blob | File): Promise<UploadResult> {
+  public async uploadProfileImage(
+    userId: string,
+    file: Blob | File,
+    kind: 'avatar' | 'cover' = 'avatar'
+  ): Promise<UploadResult> {
     if (!isSupabaseConfigured || !userId) {
-      return { url: null, path: null, error: 'Supabase or User not initialized' };
+      return {
+        url: null,
+        path: null,
+        error: 'Supabase or user is not initialized.',
+        errorCode: 'STORAGE_NOT_CONFIGURED',
+      };
+    }
+
+    if (!file || !file.size) {
+      return { url: null, path: null, error: 'The selected image is empty.', errorCode: 'EMPTY_FILE' };
     }
 
     try {
-      const ext = (file as File).name?.split('.').pop() || 'jpg';
-      const filePath = `${userId}/avatar_${Date.now()}.${ext}`;
+      const mimeType = file.type || 'image/jpeg';
+      const extensionFromName = (file as File).name?.split('.').pop()?.toLowerCase();
+      const extensionFromMime = mimeType.split('/')[1]?.toLowerCase();
+      const rawExtension = extensionFromName || extensionFromMime || 'jpg';
+      const extension = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(rawExtension)
+        ? (rawExtension === 'jpeg' ? 'jpg' : rawExtension)
+        : 'jpg';
+      const filePath = `${userId}/${kind}_${Date.now()}.${extension}`;
 
       const { data, error } = await supabase.storage
         .from('profile_avatars')
         .upload(filePath, file, {
-          upsert: true,
-          contentType: file.type || 'image/jpeg',
+          upsert: false,
+          contentType: mimeType === 'image/jpg' ? 'image/jpeg' : mimeType,
+          cacheControl: '31536000',
         });
 
       if (error) {
-        return { url: null, path: null, error: error.message };
+        const numericStatus = error.statusCode ? Number.parseInt(String(error.statusCode), 10) : NaN;
+        const errorStatus = Number.isFinite(numericStatus) ? numericStatus : null;
+        // Safe diagnostics: no tokens, no signed URLs, no full object paths.
+        console.error('[storage] profile image upload failed', {
+          kind,
+          statusCode: errorStatus,
+          errorName: error.name,
+          message: String(error.message || '').slice(0, 200),
+        });
+        return {
+          url: null,
+          path: null,
+          error: error.message,
+          errorCode: error.name || (errorStatus ? String(errorStatus) : 'STORAGE_ERROR'),
+          errorStatus,
+        };
       }
 
       const { data: publicUrlData } = supabase.storage
         .from('profile_avatars')
         .getPublicUrl(data.path);
+
+      if (!publicUrlData?.publicUrl) {
+        console.error('[storage] profile image uploaded but public URL is missing', { kind });
+        return {
+          url: null,
+          path: data.path,
+          error: 'Storage returned no public URL for the uploaded image.',
+          errorCode: 'MISSING_PUBLIC_URL',
+        };
+      }
 
       return {
         url: publicUrlData.publicUrl,
@@ -49,8 +101,25 @@ class SupabaseStorageService {
         error: null,
       };
     } catch (err: any) {
-      return { url: null, path: null, error: err.message || 'Avatar upload failed' };
+      console.error('[storage] profile image upload threw', {
+        kind,
+        name: err?.name,
+        message: String(err?.message || err).slice(0, 200),
+      });
+      return {
+        url: null,
+        path: null,
+        error: err?.message || 'Image upload failed.',
+        errorCode: err?.name || 'STORAGE_EXCEPTION',
+      };
     }
+  }
+
+  /**
+   * Backwards-compatible avatar upload used by older callers.
+   */
+  public async uploadAvatar(userId: string, file: Blob | File): Promise<UploadResult> {
+    return this.uploadProfileImage(userId, file, 'avatar');
   }
 
   /**

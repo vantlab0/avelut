@@ -585,9 +585,7 @@ export class QwenRealtimeTeacherService {
     let wsUrl: string;
     const modelParam = `model=${encodeURIComponent(modelToUse)}`;
 
-    const isDev =
-      typeof import.meta !== 'undefined' &&
-      Boolean((import.meta as any).env?.DEV);
+    const isDev = import.meta.env.DEV;
 
     const isNative =
       typeof window !== 'undefined' &&
@@ -606,7 +604,7 @@ export class QwenRealtimeTeacherService {
     const useLocal = isDev && isLocalHost && !isNative;
 
     const proxyBase = (
-      (import.meta as any).env?.VITE_QWEN_PROXY_URL ||
+      import.meta.env.VITE_QWEN_PROXY_URL ||
       (useLocal ? DEFAULT_LOCAL_PROXY : DEFAULT_REALTIME_PROXY)
     ).trim();
 
