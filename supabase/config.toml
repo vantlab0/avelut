@@ -1,5 +1,4 @@
-# Minimal Supabase config for Edge Functions in this repo folder.
-# Full project is already hosted; use `supabase link` then deploy functions.
+project_id = "eywpksapztzbnthlgfhd"
 
 [functions.lesson-prep-enqueue]
 verify_jwt = true
