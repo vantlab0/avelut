@@ -34,3 +34,4 @@ avelut-release-key.keystore
 *.keystore
 !app-release.apk
 graphify-out/
+supabase/.temp/
