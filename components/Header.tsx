@@ -112,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
         isFloating
           ? className
           : `sticky top-0 flex-shrink-0 px-3 sm:px-6 md:px-8 pt-1 pb-2 ${
-              className || 'bg-white/80 dark:bg-black/60 backdrop-blur-xl border-b border-[#E5E5E5] dark:border-white/8'
+              className || 'bg-white/80 dark:bg-black/60 backdrop-blur-xl border-b border-[#E5E5E5] dark:border-transparent'
             }`
       }`}
       style={!isFloating ? { paddingTop: 'calc(var(--header-safe-top, 0px) + 2px)' } : undefined}
