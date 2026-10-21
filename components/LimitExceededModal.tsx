@@ -18,6 +18,7 @@ interface LimitExceededModalProps {
 export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
   isOpen,
   onClose,
+  userProfile,
   cost,
   balance,
   onNavigate,
