@@ -28,6 +28,7 @@ import { MarkdownContent } from './MarkdownContent';
 import { ThinkingTypingIndicator } from './ThinkingTypingIndicator';
 import { ChatLimitBanner } from './ChatLimitBanner';
 import { ToolStatus } from './chat/ToolStatus';
+import { isRealTimeSearchNeeded, cleanSearchQuery } from '../lib/web-search-detector';
 import {
   RefreshCcw,
   ThumbsUp,
@@ -1545,7 +1546,7 @@ export const Chat: React.FC<ChatProps> = ({
         '',
         'STRICT RULES:',
         aiCapabilities.browse
-          ? '- Browse is ON: A real web_search tool is available and executed server-side. Use it for current events, live data, news, prices, and recent facts. Cite the original URLs returned by the tool and end with a "Sources" section. Never claim to have searched the web unless the tool actually ran.'
+          ? '- Browse is ON: You have internet browsing capability available for real-time web searches. When questions involve current events, today\'s news, live data, or recent facts (2024-2026), live web search results will be retrieved for you. Use them to answer accurately and cite source URLs. For timeless topics, science, math, code, concepts, and general conversation, answer directly from your knowledge base with clear, elite clarity.'
           : '- Browse is OFF: NEVER browse the web, never search, and never cite live web results. Answer only from knowledge + conversation.',
         aiCapabilities.flashcards
           ? '- Flashcards is ON: You may generate flashcards when the user asks or when it clearly helps learning.'
@@ -1560,7 +1561,7 @@ export const Chat: React.FC<ChatProps> = ({
         '',
         'Guidelines:',
         aiCapabilities.browse
-          ? '- Web search is enabled through the real web_search tool. Use it whenever the answer depends on current or live information, then cite the returned source URLs.'
+          ? '- Web search capability is active. If grounding search results are provided in your context, base your answer on them and cite the sources.'
           : '- Web browsing is disabled by the user toggle.',
         '- Treat users naturally, warmly, and directly as a helpful general-purpose assistant. When greeted with casual greetings like "hello", "hi", "hey", or "good morning", respond concisely and friendly without assuming any specialized topic, course, or engineering major.',
         '- For substantive questions, study topics, homework, or tasks, provide elite, clear, structured explanations.',
@@ -1643,6 +1644,9 @@ export const Chat: React.FC<ChatProps> = ({
         parts: userParts,
       });
 
+      const shouldSearch = aiCapabilities.browse && isRealTimeSearchNeeded(promptText);
+      const searchQuery = shouldSearch ? cleanSearchQuery(promptText) : '';
+
       const aiParams = {
         model: aiModel,
         contents: historyContents,
@@ -1651,10 +1655,7 @@ export const Chat: React.FC<ChatProps> = ({
           systemInstruction: fullSystemInstruction,
           temperature: selectedMode === 'fast' ? 0.3 : 0.5,
           signal: currentAbort.signal,
-          // Server-side switches: when true the proxy defines and executes the
-          // web_search tool. A prompt alone never performs a search.
-          webSearch: aiCapabilities.browse,
-          // Lower temperature = faster, more deterministic responses
+          webSearch: shouldSearch,
         },
       };
 
@@ -1669,12 +1670,12 @@ export const Chat: React.FC<ChatProps> = ({
         return;
       }
 
-      let browsingPart: MessagePart | null = aiCapabilities.browse ? {
+      let browsingPart: MessagePart | null = shouldSearch ? {
         type: 'tool-invocation',
         toolInvocation: {
           toolName: 'web_search',
           state: 'input-streaming',
-          args: { query: promptText },
+          args: { query: searchQuery || promptText },
           result: null,
         },
       } : null;
@@ -1722,8 +1723,8 @@ export const Chat: React.FC<ChatProps> = ({
                 toolInvocation: {
                   toolName: 'web_search',
                   state: 'output-available',
-                  args: { query: promptText },
-                  result: results.length > 0 ? results : [{ title: 'Web Search', url: `https://www.google.com/search?q=${encodeURIComponent(promptText)}` }],
+                  args: { query: searchQuery || promptText },
+                  result: results,
                 },
               };
             }
@@ -1776,8 +1777,8 @@ export const Chat: React.FC<ChatProps> = ({
                 toolInvocation: {
                   toolName: 'web_search',
                   state: 'output-available',
-                  args: { query: promptText },
-                  result: results.length > 0 ? results : [{ title: 'Web Search', url: `https://www.google.com/search?q=${encodeURIComponent(promptText)}` }],
+                  args: { query: searchQuery || promptText },
+                  result: results,
                 },
               };
             }

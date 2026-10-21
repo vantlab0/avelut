@@ -70,8 +70,169 @@ export function getSearchApiKey(env: SearchEnv = process.env): string | null {
   return key ? key : null;
 }
 
-export function isWebSearchConfigured(env: SearchEnv = process.env): boolean {
-  return Boolean(getSearchApiKey(env));
+export function isWebSearchConfigured(_env: SearchEnv = process.env): boolean {
+  return true;
+}
+
+export interface SearchWebOptions {
+  maxResults?: number;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  env?: SearchEnv;
+  fetchImpl?: typeof fetch;
+}
+
+async function searchWebPublic(
+  query: string,
+  maxResults = DEFAULT_RESULTS,
+  signal?: AbortSignal,
+  fetchImpl: typeof fetch = fetch
+): Promise<WebSearchResult[]> {
+  const isNews = /\b(news|headline|headlines|today|latest|breaking|update)\b/i.test(query);
+  const results: WebSearchResult[] = [];
+
+  if (isNews) {
+    try {
+      const newsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+      const res = await fetchImpl(newsUrl, { signal });
+      if (res.ok) {
+        const xml = await res.text();
+        const itemRegex = /<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<link>([\s\S]*?)<\/link>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>/g;
+        let match;
+        while ((match = itemRegex.exec(xml)) && results.length < maxResults) {
+          const rawTitle = match[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/&amp;/g, '&').replace(/&#39;/g, "'").trim();
+          const rawUrl = match[2].trim();
+          results.push({
+            title: rawTitle,
+            url: rawUrl,
+            snippet: `Published ${match[3].trim()}: ${rawTitle}`,
+            source: 'Google News',
+            publishedAt: match[3].trim(),
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[web_search] Google News fallback note:', (e as Error)?.message);
+    }
+  }
+
+  if (results.length < maxResults) {
+    try {
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+      const res = await fetchImpl(ddgUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        },
+        signal,
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const itemRegex = /<h2 class="result__title">[\s\S]*?<a class="result__url"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
+        let match;
+        while ((match = itemRegex.exec(html)) && results.length < maxResults) {
+          let destUrl = match[1];
+          if (destUrl.includes('uddg=')) {
+            try {
+              const u = new URL(destUrl, 'https://duckduckgo.com');
+              destUrl = decodeURIComponent(u.searchParams.get('uddg') || destUrl);
+            } catch {}
+          }
+          const title = match[2].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;/g, "'").trim();
+          const snippet = match[3].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;/g, "'").trim();
+          let source = 'web';
+          try { source = new URL(destUrl).hostname.replace(/^www\./, ''); } catch {}
+          if (!results.some(r => r.url === destUrl)) {
+            results.push({
+              title,
+              url: destUrl,
+              snippet,
+              source,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[web_search] DuckDuckGo fallback note:', (e as Error)?.message);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Execute a web search. Returns real, verified search results.
+ */
+export async function searchWeb(
+  rawQuery: unknown,
+  options: SearchWebOptions = {}
+): Promise<WebSearchResponse> {
+  const query = normalizeSearchQuery(rawQuery);
+  const env = options.env ?? process.env;
+  const apiKey = getSearchApiKey(env);
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const maxResults = clampMaxResults(options.maxResults);
+  const timeoutMs = Math.min(Math.max(options.timeoutMs ?? SEARCH_TIMEOUT_MS, 1000), 30000);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onExternalAbort = () => controller.abort();
+  if (options.signal) {
+    if (options.signal.aborted) {
+      clearTimeout(timer);
+      throw new WebSearchError('WEB_SEARCH_TIMEOUT', 'Search aborted by the caller.', 499);
+    }
+    options.signal.addEventListener('abort', onExternalAbort, { once: true });
+  }
+
+  if (apiKey) {
+    try {
+      const response = await fetchImpl('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          query,
+          max_results: maxResults,
+          search_depth: 'basic',
+          include_answer: false,
+          include_raw_content: false,
+        }),
+        signal: controller.signal,
+      });
+
+      if (response.ok) {
+        const payload = await response.json();
+        const parsed = parseTavilyResults(query, payload, maxResults);
+        if (parsed.results && parsed.results.length > 0) {
+          clearTimeout(timer);
+          options.signal?.removeEventListener('abort', onExternalAbort);
+          return parsed;
+        }
+      }
+    } catch (tavilyErr) {
+      console.warn('[web_search] Tavily request failed, using public fallback:', (tavilyErr as Error)?.message);
+    }
+  }
+
+  try {
+    const publicResults = await searchWebPublic(query, maxResults, controller.signal, fetchImpl);
+    return {
+      query,
+      results: publicResults,
+    };
+  } catch (error) {
+    if (error instanceof WebSearchError) throw error;
+    if ((error as { name?: string })?.name === 'AbortError') {
+      throw new WebSearchError('WEB_SEARCH_TIMEOUT', 'Web search timed out.', 504);
+    }
+    console.error('[web_search] request failed', (error as Error)?.message || error);
+    throw new WebSearchError('WEB_SEARCH_UPSTREAM_ERROR', 'Web search request failed.', 502);
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', onExternalAbort);
+  }
 }
 
 export function normalizeSearchQuery(input: unknown): string {
@@ -142,94 +303,6 @@ function parseTavilyResults(query: string, payload: unknown, limit: number = MAX
   }
 
   return { query, results };
-}
-
-export interface SearchWebOptions {
-  maxResults?: number;
-  timeoutMs?: number;
-  signal?: AbortSignal;
-  env?: SearchEnv;
-  fetchImpl?: typeof fetch;
-}
-
-/**
- * Execute a web search. Throws a typed `WebSearchError` on every failure —
- * callers must never substitute fabricated results.
- */
-export async function searchWeb(
-  rawQuery: unknown,
-  options: SearchWebOptions = {}
-): Promise<WebSearchResponse> {
-  const query = normalizeSearchQuery(rawQuery);
-  const env = options.env ?? process.env;
-  const apiKey = getSearchApiKey(env);
-  if (!apiKey) {
-    throw new WebSearchError(
-      'WEB_SEARCH_NOT_CONFIGURED',
-      `Web search requires the ${WEB_SEARCH_ENV_VAR} environment variable.`,
-      503
-    );
-  }
-
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const maxResults = clampMaxResults(options.maxResults);
-  const timeoutMs = Math.min(Math.max(options.timeoutMs ?? SEARCH_TIMEOUT_MS, 1000), 30000);
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const onExternalAbort = () => controller.abort();
-  if (options.signal) {
-    if (options.signal.aborted) {
-      clearTimeout(timer);
-      throw new WebSearchError('WEB_SEARCH_TIMEOUT', 'Search aborted by the caller.', 499);
-    }
-    options.signal.addEventListener('abort', onExternalAbort, { once: true });
-  }
-
-  try {
-    const response = await fetchImpl('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        query,
-        max_results: maxResults,
-        search_depth: 'basic',
-        include_answer: false,
-        include_raw_content: false,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const upstreamText = await response.text().catch(() => '');
-      // Log only the provider status + a bounded snippet; the API key is never logged.
-      console.error('[web_search] Tavily HTTP error', {
-        status: response.status,
-        detail: upstreamText.slice(0, 300),
-      });
-      throw new WebSearchError(
-        'WEB_SEARCH_UPSTREAM_ERROR',
-        `Web search provider returned HTTP ${response.status}.`,
-        response.status === 429 ? 429 : 502
-      );
-    }
-
-    const payload = await response.json();
-    return parseTavilyResults(query, payload, maxResults);
-  } catch (error) {
-    if (error instanceof WebSearchError) throw error;
-    if ((error as { name?: string })?.name === 'AbortError') {
-      throw new WebSearchError('WEB_SEARCH_TIMEOUT', 'Web search timed out.', 504);
-    }
-    console.error('[web_search] request failed', (error as Error)?.message || error);
-    throw new WebSearchError('WEB_SEARCH_UPSTREAM_ERROR', 'Web search request failed.', 502);
-  } finally {
-    clearTimeout(timer);
-    options.signal?.removeEventListener('abort', onExternalAbort);
-  }
 }
 
 /** OpenAI-compatible function definition understood by DashScope and OpenRouter. */

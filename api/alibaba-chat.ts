@@ -1,3 +1,6 @@
+import { searchWeb, type WebSearchResult } from '../lib/server/web-search';
+import { isRealTimeSearchNeeded, cleanSearchQuery } from '../lib/web-search-detector';
+
 export const maxDuration = 60;
 
 export async function OPTIONS() {
@@ -40,7 +43,7 @@ export async function POST(req: Request) {
       'ws-o3v6mh0i8y9tqdfx';
 
     // Normalize messages and detect vision / PDF-document requests
-    const messages = body.messages || [];
+    const messages = Array.isArray(body.messages) ? [...body.messages] : [];
     const hasDocument = messages.some((m: any) =>
       Array.isArray(m.content) && m.content.some((c: any) =>
         c.type === 'file' || c.file_url || c.file_data || c.file
@@ -62,6 +65,49 @@ export async function POST(req: Request) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), hasDocument ? 55000 : 25000);
 
+    // Real web search grounding when browse/search is requested
+    let searchResults: WebSearchResult[] = [];
+    if (body.web_search || body.enable_search) {
+      const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
+      let userQuery = '';
+      if (typeof lastUserMsg?.content === 'string') {
+        userQuery = lastUserMsg.content;
+      } else if (Array.isArray(lastUserMsg?.content)) {
+        userQuery = lastUserMsg.content.map((c: any) => c.text || '').join(' ');
+      }
+
+      // Check if this query actually requires web search (making it adaptive / optional)
+      const needsSearch = isRealTimeSearchNeeded(userQuery);
+      const queryToSearch = cleanSearchQuery(userQuery);
+
+      if (needsSearch && queryToSearch && queryToSearch.trim().length >= 2) {
+        try {
+          const searchResponse = await searchWeb(queryToSearch, { signal: controller.signal, timeoutMs: 8000 });
+          searchResults = searchResponse.results || [];
+          if (searchResults.length > 0) {
+            const searchGrounding = [
+              `[REAL-TIME LIVE WEB SEARCH RESULTS FOR: "${queryToSearch}"]`,
+              ...searchResults.map((r, i) =>
+                `Source ${i + 1}: ${r.title}\nURL: ${r.url}\nSummary: ${r.snippet}`
+              ),
+              'INSTRUCTIONS FOR ASSISTANT:',
+              `- You have been provided with real-time web search results above for current date and events.`,
+              `- Answer the user's question directly, clearly, and thoroughly using these live results.`,
+              `- Cite the relevant source URLs as clickable markdown links (e.g. [Source Name](url)).`,
+              `- Do not state that you cannot browse or lack real-time access; answer directly using the search results above.`,
+            ].join('\n\n');
+
+            messages.unshift({
+              role: 'system',
+              content: searchGrounding,
+            });
+          }
+        } catch (searchErr) {
+          console.warn('[alibaba-chat] web search note:', (searchErr as Error)?.message);
+        }
+      }
+    }
+
     const payload: any = {
       model,
       messages,
@@ -76,10 +122,6 @@ export async function POST(req: Request) {
       payload.stream = false;
     } else if (body.stream) {
       payload.stream = true;
-    }
-
-    if (body.web_search || body.enable_search) {
-      payload.enable_search = true;
     }
 
     const requestHeaders: Record<string, string> = {
@@ -105,7 +147,42 @@ export async function POST(req: Request) {
         if (response.ok) {
           clearTimeout(timer);
           if (payload.stream && response.body) {
-            return new Response(response.body, {
+            let streamBody = response.body;
+
+            // If we have search results, inject the search_info SSE event at the start
+            if (searchResults.length > 0) {
+              const encoder = new TextEncoder();
+              const searchInfoChunk = encoder.encode(
+                `data: ${JSON.stringify({
+                  choices: [{ delta: { content: '' }, index: 0 }],
+                  search_info: {
+                    search_results: searchResults.map((r) => ({
+                      title: r.title,
+                      url: r.url,
+                      snippet: r.snippet,
+                    })),
+                  },
+                })}\n\n`
+              );
+
+              const originalReader = response.body.getReader();
+              streamBody = new ReadableStream({
+                async start(controllerStream) {
+                  controllerStream.enqueue(searchInfoChunk);
+                  try {
+                    while (true) {
+                      const { done, value } = await originalReader.read();
+                      if (done) break;
+                      controllerStream.enqueue(value);
+                    }
+                  } finally {
+                    controllerStream.close();
+                  }
+                },
+              });
+            }
+
+            return new Response(streamBody, {
               status: 200,
               headers: {
                 'Content-Type': 'text/event-stream; charset=utf-8',

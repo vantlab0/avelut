@@ -21,19 +21,19 @@ export function ToolStatus({ toolName, state, args, result, isStreaming }: ToolS
   useEffect(() => {
     if (isSearching) {
       setIsOpen(true);
-    } else if (isDone && !isStreaming) {
-      // Auto-collapse once search finishes and streaming commences
-      setIsOpen(false);
+    } else if (isDone) {
+      // Auto-collapse cleanly once search finishes so the AI streaming answer takes focus
+      const timer = setTimeout(() => {
+        setIsOpen(false);
+      }, 1200);
+      return () => clearTimeout(timer);
     }
-  }, [isSearching, isDone, isStreaming]);
+  }, [isSearching, isDone]);
 
   const rawResults = Array.isArray(result) ? result : [];
-  const resultsList = rawResults.length > 0
-    ? rawResults
-    : (args?.query ? [{ title: 'Web Search', url: `https://www.google.com/search?q=${encodeURIComponent(args.query)}` }] : []);
-  
-  const pageCount = resultsList.length || 8;
-  const topUrl = resultsList[0]?.url || 'https://github.com/vantlab0/avelut/';
+  const resultsList = rawResults;
+  const pageCount = resultsList.length;
+  const topUrl = resultsList[0]?.url || '';
 
   const searchQuery = args?.query || '';
   const searchPlanText = searchQuery
@@ -66,7 +66,7 @@ export function ToolStatus({ toolName, state, args, result, isStreaming }: ToolS
           <span className="tracking-tight text-neutral-800 dark:text-neutral-200">
             {isSearching ? 'Browsing the web...' : 'Browsing the web'}
           </span>
-          {isDone && !isOpen && (
+          {isDone && !isOpen && pageCount > 0 && (
             <span className="text-xs text-neutral-400 dark:text-neutral-500 font-normal">
               • {pageCount} pages
             </span>
@@ -90,46 +90,50 @@ export function ToolStatus({ toolName, state, args, result, isStreaming }: ToolS
           </p>
 
           {/* Found pages count & link pills */}
-          <div className="flex items-center flex-wrap gap-2 pt-0.5">
-            <div className="flex items-center gap-1.5 font-medium text-neutral-800 dark:text-neutral-200">
-              <Search className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400" strokeWidth={2.2} />
-              <span>Found {pageCount} web pages</span>
-            </div>
+          {pageCount > 0 && (
+            <div className="flex items-center flex-wrap gap-2 pt-0.5">
+              <div className="flex items-center gap-1.5 font-medium text-neutral-800 dark:text-neutral-200">
+                <Search className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400" strokeWidth={2.2} />
+                <span>Found {pageCount} web pages</span>
+              </div>
 
-            {/* Link pills */}
-            <div className="flex items-center gap-1">
-              {resultsList.slice(0, 4).map((item: any, idx: number) => (
+              {/* Link pills */}
+              <div className="flex items-center gap-1">
+                {resultsList.slice(0, 5).map((item: any, idx: number) => (
+                  <a
+                    key={idx}
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-5 h-5 rounded-full bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 flex items-center justify-center text-neutral-500 dark:text-neutral-400 transition-colors cursor-pointer border border-neutral-200/60 dark:border-neutral-700/60"
+                    title={item.title || item.url}
+                  >
+                    <Link2 className="w-2.5 h-2.5" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Read page item */}
+          {topUrl && (
+            <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400 truncate pl-0.5">
+              <FileText className="w-3.5 h-3.5 shrink-0 text-neutral-400 dark:text-neutral-500" strokeWidth={2} />
+              <span className="truncate">
+                Read page{' '}
                 <a
-                  key={idx}
-                  href={item.url}
+                  href={topUrl}
                   target="_blank"
                   rel="noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="w-5 h-5 rounded-full bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 flex items-center justify-center text-neutral-500 dark:text-neutral-400 transition-colors cursor-pointer border border-neutral-200/60 dark:border-neutral-700/60"
-                  title={item.title || item.url}
+                  className="hover:underline text-neutral-700 dark:text-neutral-300 font-mono text-[11px]"
                 >
-                  <Link2 className="w-2.5 h-2.5" />
+                  {topUrl}
                 </a>
-              ))}
+              </span>
             </div>
-          </div>
-
-          {/* Read page item */}
-          <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400 truncate pl-0.5">
-            <FileText className="w-3.5 h-3.5 shrink-0 text-neutral-400 dark:text-neutral-500" strokeWidth={2} />
-            <span className="truncate">
-              Read page{' '}
-              <a
-                href={topUrl}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="hover:underline text-neutral-700 dark:text-neutral-300 font-mono text-[11px]"
-              >
-                {topUrl}
-              </a>
-            </span>
-          </div>
+          )}
         </div>
       )}
     </div>
