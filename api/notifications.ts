@@ -157,7 +157,12 @@ export async function POST(req: Request) {
       const accessToken = await getFCMV1AccessToken(firebaseConfig as any);
 
       // Ensure all customData entries are strings for FCM v1 spec
-      const stringifiedData: Record<string, string> = { route: 'chat' };
+      const stringifiedData: Record<string, string> = {
+        route: 'chat',
+        title: title || 'Avelut',
+        body: message || '',
+        message: message || '',
+      };
       if (customData && typeof customData === 'object') {
         for (const [k, v] of Object.entries(customData)) {
           if (v !== undefined && v !== null) {
@@ -166,23 +171,16 @@ export async function POST(req: Request) {
         }
       }
 
+      // Omit top-level notification and android.notification to ensure FCM delivers a data-only payload.
+      // This forces FirebaseMessagingService.onMessageReceived() (AvelutMessagingService) to always run
+      // in foreground, background, or closed states on Android, constructing custom notifications with
+      // native action buttons (Inline Reply, Mark as read).
       const messagePayload = {
         message: {
           token,
-          notification: {
-            title: title || 'Avelut',
-            body: message,
-          },
           data: stringifiedData,
           android: {
             priority: 'high',
-            notification: {
-              channel_id: 'default',
-              icon: 'ic_stat_name',
-              sound: 'default',
-              default_vibrate_timings: true,
-              click_action: 'FCM_PLUGIN_ACTIVITY',
-            },
           },
         },
       };
