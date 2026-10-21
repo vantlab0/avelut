@@ -66,6 +66,7 @@ interface MainContentProps {
     userProgress: UserProgress;
     dashboardData: DashboardData | null;
     initialMessengerChatId?: string | null;
+    onClearMessengerChatId?: () => void;
     unreadMessagesCount?: number;
     handleLogout: () => void;
     handleProfileUpdate: (updatedData: Partial<UserProfile>) => Promise<{ success: boolean; error?: string; }>;
@@ -94,6 +95,7 @@ export const MainContent: React.FC<MainContentProps> = ({
     userProgress,
     dashboardData,
     initialMessengerChatId,
+    onClearMessengerChatId,
     unreadMessagesCount = 0,
     handleLogout,
     handleProfileUpdate,
@@ -202,12 +204,16 @@ export const MainContent: React.FC<MainContentProps> = ({
                     case 'feedback':
                         return <Feedback userProfile={userProfile} />;
                     case 'messenger':
+                        if (!userProfile) {
+                            return <MessengerSkeleton />;
+                        }
                         return (
                             <Messenger
                                 userProfile={userProfile}
                                 initialChatId={initialMessengerChatId}
                                 onNavigate={onNavigate}
                                 setCustomHeaderConfig={setCustomHeaderConfig}
+                                onClearInitialChatId={onClearMessengerChatId}
                             />
                         );
                     case 'admin':

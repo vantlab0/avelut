@@ -93,6 +93,19 @@ Deno.serve(async (req) => {
       return json({ success: true, delivered: 0, reason: "no recipients" });
     }
 
+    // Fetch sender's name so notification shows their real name
+    let senderName = "New Message";
+    try {
+      const { data: senderProf } = await admin
+        .from("profiles")
+        .select("full_name, username")
+        .eq("id", senderId)
+        .maybeSingle();
+      if (senderProf?.full_name || senderProf?.username) {
+        senderName = senderProf.full_name || senderProf.username;
+      }
+    } catch (_) {}
+
     // Call your existing production notifications API
     const apiBase = env("AVELUT_API_BASE") || "https://www.avelut.xyz";
     let delivered = 0;
@@ -102,13 +115,35 @@ Deno.serve(async (req) => {
       members.map(async (m) => {
         if (!m.user_id) return;
         try {
+          // Resolve FCM token directly using service role client
+          let fcmToken: string | undefined = undefined;
+          try {
+            const { data: prof } = await admin
+              .from("profiles")
+              .select("fcm_token")
+              .eq("id", m.user_id)
+              .maybeSingle();
+            if (prof?.fcm_token) {
+              fcmToken = prof.fcm_token;
+            } else {
+              const { data: kv } = await admin
+                .from("app_kv")
+                .select("value")
+                .eq("key", `user_device_tokens/${m.user_id}`)
+                .maybeSingle();
+              const val = kv?.value;
+              fcmToken = typeof val === "object" ? val?.fcm_token : val;
+            }
+          } catch (_) {}
+
           const res = await fetch(`${apiBase}/api/notifications`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               action: "send",
               targetUserId: m.user_id,
-              title: "New Message",
+              fcmToken,
+              title: senderName,
               message: summary.slice(0, 180),
               data: {
                 route: "messenger",

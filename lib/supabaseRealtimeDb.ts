@@ -6,7 +6,7 @@
  * Messages / chats / notifications use tables + postgres_changes WebSockets.
  */
 
-import { supabase, supabaseAdmin, isSupabaseConfigured, supabaseUrl } from './supabaseClient';
+import { supabase, supabaseAdmin, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from './supabaseClient';
 
 export type DbRef = { path: string };
 
@@ -318,7 +318,11 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     const pushUrl = `${supabaseUrl}/functions/v1/push-on-message`;
     await fetch(pushUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'apikey': supabaseAnonKey,
+      },
       body: JSON.stringify({ record: messageRecord }),
     });
   } catch (pushErr) {

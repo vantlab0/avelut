@@ -27,19 +27,20 @@ import { ForwardModal } from "../messenger/ForwardModal";
 import { computeActionMenuPosition, toAnchorRect, type AnchorRect, type MenuPosition } from "../../utils/actionMenuPosition";
 import { isNearBottom, scrollContainerToBottom } from "../../utils/scrollUtils";
 
-export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: string | null; onNavigate?: (tab: string) => void; setCustomHeaderConfig?: (config: any) => void }> = ({ userProfile, initialChatId = null, onNavigate, setCustomHeaderConfig }) => {
+export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: string | null; onNavigate?: (tab: string) => void; setCustomHeaderConfig?: (config: any) => void; onClearInitialChatId?: () => void }> = ({ userProfile, initialChatId = null, onNavigate, setCustomHeaderConfig, onClearInitialChatId }) => {
+      const currentUid = userProfile?.uid || auth.currentUser?.uid || '';
       const [authUser, setAuthUser] = useState<AuthUser | null>(auth.currentUser);
       const [activeChat, setActiveChat] = useState<{ chatId: string, otherUser: UserProfile } | null>(null);
-      const [chats, setChats] = useState<any[]>(() => ensureArray(readCachedJson<any[]>(getMessengerCacheKey(userProfile.uid, 'chats'), [])));
-      const [allUsers, setAllUsers] = useState<UserProfile[]>(() => ensureArray<UserProfile>(readCachedJson<UserProfile[]>(getMessengerCacheKey(userProfile.uid, 'all_users'), [])));
-      const [messages, setMessages] = useState<any[]>(() => ensureArray(readCachedJson<any[]>(getMessengerCacheKey(userProfile.uid, 'messages_default'), [])));
+      const [chats, setChats] = useState<any[]>(() => ensureArray(readCachedJson<any[]>(getMessengerCacheKey(currentUid || 'anon', 'chats'), [])));
+      const [allUsers, setAllUsers] = useState<UserProfile[]>(() => ensureArray<UserProfile>(readCachedJson<UserProfile[]>(getMessengerCacheKey(currentUid || 'anon', 'all_users'), [])));
+      const [messages, setMessages] = useState<any[]>(() => ensureArray(readCachedJson<any[]>(getMessengerCacheKey(currentUid || 'anon', 'messages_default'), [])));
       const [isLoading, setIsLoading] = useState(() => (Array.isArray(chats) ? chats.length : 0) === 0 && (Array.isArray(allUsers) ? allUsers.length : 0) === 0);
       const [replyingTo, setReplyingTo] = useState<any | null>(null);
       const [chatSearchQuery, setChatSearchQuery] = useState("");
       const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
       const [showDeleteChatConfirmDialog, setShowDeleteChatConfirmDialog] = useState(false);
-      const [pinnedChatIds, setPinnedChatIds] = useState<Record<string, boolean>>(() => readCachedJson<Record<string, boolean>>(`avelut_pinned_chats_${userProfile.uid}`, {}));
-      const [mutedChatIds, setMutedChatIds] = useState<Record<string, boolean>>(() => readCachedJson<Record<string, boolean>>(`avelut_muted_chats_${userProfile.uid}`, {}));
+      const [pinnedChatIds, setPinnedChatIds] = useState<Record<string, boolean>>(() => currentUid ? readCachedJson<Record<string, boolean>>(`avelut_pinned_chats_${currentUid}`, {}) : {});
+      const [mutedChatIds, setMutedChatIds] = useState<Record<string, boolean>>(() => currentUid ? readCachedJson<Record<string, boolean>>(`avelut_muted_chats_${currentUid}`, {}) : {});
       const [showSelectedMenu, setShowSelectedMenu] = useState(false);
       const selectedMenuRef = useRef<HTMLDivElement>(null);
       const getSubRoute = useCallback((pathname: string): 'list' | 'new' | 'find_friends' => {
@@ -371,7 +372,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
 
       const showIncomingMessageNotification = async (chat: any, summaryText: string) => {
         if (typeof window === 'undefined') return;
-        if (!userProfile.notifications_enabled) return;
+        if (userProfile && userProfile.notifications_enabled === false) return;
         if (!('Notification' in window) || Notification.permission !== 'granted') return;
         const title = chat?.otherUser?.display_name
           ? `New message from ${chat.otherUser.display_name}`
@@ -736,24 +737,24 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       }, [authUser]);
 
       useEffect(() => {
-        if (!authUser) return;
-        writeCachedJson(getMessengerCacheKey(userProfile.uid, 'chats'), safeChats);
-      }, [safeChats, authUser, userProfile.uid]);
+        if (!authUser || !currentUid) return;
+        writeCachedJson(getMessengerCacheKey(currentUid, 'chats'), safeChats);
+      }, [safeChats, authUser, currentUid]);
 
       useEffect(() => {
-        if (!authUser || !safeAllUsers.length) return;
-        writeCachedJson(getMessengerCacheKey(userProfile.uid, 'all_users'), safeAllUsers);
-      }, [safeAllUsers, authUser, userProfile.uid]);
+        if (!authUser || !currentUid || !safeAllUsers.length) return;
+        writeCachedJson(getMessengerCacheKey(currentUid, 'all_users'), safeAllUsers);
+      }, [safeAllUsers, authUser, currentUid]);
 
       useEffect(() => {
-        if (!authUser) return;
-        writeCachedJson(getMessengerCacheKey(userProfile.uid, 'study_partners'), safeStudyPartners);
-      }, [safeStudyPartners, authUser, userProfile.uid]);
+        if (!authUser || !currentUid) return;
+        writeCachedJson(getMessengerCacheKey(currentUid, 'study_partners'), safeStudyPartners);
+      }, [safeStudyPartners, authUser, currentUid]);
 
       useEffect(() => {
-        if (!authUser) return;
-        writeCachedJson(getMessengerCacheKey(userProfile.uid, 'partner_requests'), safePartnerRequests);
-      }, [safePartnerRequests, authUser, userProfile.uid]);
+        if (!authUser || !currentUid) return;
+        writeCachedJson(getMessengerCacheKey(currentUid, 'partner_requests'), safePartnerRequests);
+      }, [safePartnerRequests, authUser, currentUid]);
 
       const pendingFetches = useRef<Set<string>>(new Set());
 
@@ -785,7 +786,9 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                 };
                 setFetchedUserProfiles(prev => {
                   const next = { ...prev, [otherUserId]: profile };
-                  writeCachedJson(`avelut_resolved_profiles_${userProfile.uid}`, next);
+                  if (currentUid) {
+                    writeCachedJson(`avelut_resolved_profiles_${currentUid}`, next);
+                  }
                   return next;
                 });
               }
@@ -796,7 +799,9 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
             }
           }
         });
-      }, [safeChats, userMap, fetchedUserProfiles, userProfile.uid]);
+      }, [safeChats, userMap, fetchedUserProfiles, currentUid]);
+
+      const attemptedDirectChatTargets = useRef<Set<string>>(new Set());
 
       useEffect(() => {
         if (!initialChatId || !authUser) return;
@@ -805,6 +810,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           const resolvedUser = userMap.get(nextChat.otherUserId) || fetchedUserProfiles[nextChat.otherUserId] || nextChat.otherUser;
           if (activeChat?.chatId !== nextChat.id || activeChat.otherUser?.uid !== resolvedUser?.uid) {
             setActiveChat({ chatId: nextChat.id, otherUser: resolvedUser });
+            onClearInitialChatId?.();
           }
           return;
         }
@@ -812,16 +818,20 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         // Fallback if initialChatId is an otherUserId directly
         const targetUser = userMap.get(initialChatId) || fetchedUserProfiles[initialChatId];
         if (targetUser && activeChat?.otherUser?.uid !== targetUser.uid) {
+          if (attemptedDirectChatTargets.current.has(targetUser.uid)) return;
+          attemptedDirectChatTargets.current.add(targetUser.uid);
+
           ensureDirectChat(targetUser.uid)
             .then((chatId) => {
               setActiveChat({ chatId, otherUser: targetUser });
+              onClearInitialChatId?.();
             })
             .catch((error: any) => {
               console.error('Failed to open direct chat from initial target:', error);
               addToast(error?.message || 'Could not open this chat.', 'error');
             });
         }
-      }, [initialChatId, safeChats, activeChat, userMap, fetchedUserProfiles, authUser, addToast]);
+      }, [initialChatId, safeChats, activeChat, userMap, fetchedUserProfiles, authUser, addToast, onClearInitialChatId]);
 
       useEffect(() => {
         if (!activeChat) {
@@ -829,7 +839,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           return;
         }
 
-        const cached = readCachedJson<any[]>(getMessengerCacheKey(userProfile.uid, `messages_${activeChat.chatId}`), []);
+        const cached = readCachedJson<any[]>(getMessengerCacheKey(currentUid || 'anon', `messages_${activeChat.chatId}`), []);
         setMessages(ensureArray(cached));
         setOptimisticMessages([]);
         stickToBottomRef.current = true;
@@ -1439,6 +1449,32 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                 : msg
             )
           );
+
+          // Dispatch push notification to recipient immediately
+          const recipientUid = activeChat?.otherUser?.uid;
+          if (recipientUid) {
+            const apiBase = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()
+              ? 'https://www.avelut.xyz'
+              : '';
+            const senderName = userProfile?.displayName || userProfile?.name || userProfile?.username || authUser.displayName || 'Avelut User';
+            const pushText = type === 'voice' ? 'Sent a voice message' : type === 'image' ? 'Sent an image' : type === 'file' ? 'Sent a file' : (text || 'Sent a message');
+
+            fetch(`${apiBase}/api/notifications`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'send',
+                targetUserId: recipientUid,
+                title: senderName,
+                message: pushText,
+                customData: {
+                  route: 'messenger',
+                  chatId,
+                  senderId: authUser.uid,
+                },
+              }),
+            }).catch(err => console.warn('[Messenger] Direct push dispatch error:', err));
+          }
         } catch (error: any) {
           if (optimisticId) {
             setMessages(prev => prev.filter(message => message.id !== optimisticId));

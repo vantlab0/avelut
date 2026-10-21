@@ -2061,6 +2061,7 @@ const App: React.FC = () => {
                             userProgress={userProgress}
                             dashboardData={dashboardData}
                             initialMessengerChatId={pendingMessengerChatId}
+                            onClearMessengerChatId={() => setPendingMessengerChatId(null)}
                             unreadMessagesCount={unreadMessagesCount}
                             handleLogout={handleLogout}
                             handleProfileUpdate={handleProfileUpdate}

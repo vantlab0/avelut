@@ -21,16 +21,34 @@ export const getTodayDateString = (): string => {
 /**
  * Returns true if the user has already earned a streak today.
  */
-export const isStreakAlreadyAwardedToday = (userProfile: UserProfile): boolean => {
-  const lastActive = userProfile.last_activity_date ? new Date(userProfile.last_activity_date).toISOString().split('T')[0] : '';
+export const isStreakAlreadyAwardedToday = (userProfile?: UserProfile | null): boolean => {
+  if (!userProfile) return false;
+  let lastActive = '';
+  try {
+    if (userProfile.last_activity_date) {
+      const d = new Date(userProfile.last_activity_date);
+      if (!Number.isNaN(d.getTime())) {
+        lastActive = d.toISOString().split('T')[0];
+      }
+    }
+  } catch {}
   return userProfile.last_streak_date === getTodayDateString() || lastActive === getTodayDateString();
 };
 
 /**
  * Checks whether the user's streak is "active" (last award was today).
  */
-export const isStreakActiveToday = (userProfile: UserProfile): boolean => {
-  const lastActive = userProfile.last_activity_date ? new Date(userProfile.last_activity_date).toISOString().split('T')[0] : '';
+export const isStreakActiveToday = (userProfile?: UserProfile | null): boolean => {
+  if (!userProfile) return false;
+  let lastActive = '';
+  try {
+    if (userProfile.last_activity_date) {
+      const d = new Date(userProfile.last_activity_date);
+      if (!Number.isNaN(d.getTime())) {
+        lastActive = d.toISOString().split('T')[0];
+      }
+    }
+  } catch {}
   return userProfile.last_streak_date === getTodayDateString() || lastActive === getTodayDateString();
 };
 

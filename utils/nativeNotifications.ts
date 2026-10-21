@@ -106,6 +106,14 @@ export async function saveFcmToken(uid: string, token: string): Promise<void> {
   try {
     const platform = isNative() ? Capacitor.getPlatform() : 'web';
 
+    // 0. Cache in localStorage for immediate instant client-side lookups
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem('fcm_token', token);
+        window.localStorage.setItem('fcm_device_token', token);
+      } catch {}
+    }
+
     // 1. Save to app_kv table under user_device_tokens/<uid>
     const payload = {
       fcm_token: token,
@@ -118,10 +126,9 @@ export async function saveFcmToken(uid: string, token: string): Promise<void> {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'key' });
 
-    // 2. Mirror into profiles table
+    // 2. Mirror into profiles table (only columns that exist in the profiles schema)
     await supabase.from('profiles').update({
       fcm_token: token,
-      notifications_enabled: true,
     }).eq('id', uid);
 
     console.log('[FCM] Device token registered and saved for user:', uid);

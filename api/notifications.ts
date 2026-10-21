@@ -5,6 +5,7 @@
 import crypto from 'crypto';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://eywpksapztzbnthlgfhd.supabase.co';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 const DEFAULT_FIREBASE_PROJECT_ID = 'vantlab';
 
@@ -22,6 +23,68 @@ function jsonResponse(data: any, status = 200) {
       'Content-Type': 'application/json',
     },
   });
+}
+
+function resolveFirebaseConfig() {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+      const parsed = typeof process.env.FIREBASE_SERVICE_ACCOUNT === 'string'
+        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+        : process.env.FIREBASE_SERVICE_ACCOUNT;
+      if (parsed.client_email && parsed.private_key) {
+        return {
+          project_id: parsed.project_id || process.env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID,
+          client_email: parsed.client_email,
+          private_key: parsed.private_key.replace(/\\n/g, '\n'),
+        };
+      }
+    } catch (e) {
+      console.warn('[FCM] Error parsing FIREBASE_SERVICE_ACCOUNT JSON:', e);
+    }
+  }
+
+  return {
+    project_id: process.env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID,
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  };
+}
+
+async function lookupUserFcmToken(userId: string): Promise<string | null> {
+  const authKey = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+  if (!authKey) return null;
+
+  const headers = { apikey: authKey, Authorization: `Bearer ${authKey}` };
+
+  // 1. Try profiles table first
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=fcm_token`, { headers });
+    if (res.ok) {
+      const rows = await res.json();
+      if (rows?.[0]?.fcm_token) {
+        return rows[0].fcm_token;
+      }
+    }
+  } catch (err) {
+    console.warn('[FCM] profiles token lookup error:', err);
+  }
+
+  // 2. Fallback to app_kv table under user_device_tokens/<uid>
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_kv?key=eq.user_device_tokens/${userId}&select=value`, { headers });
+    if (res.ok) {
+      const rows = await res.json();
+      const val = rows?.[0]?.value;
+      const token = typeof val === 'object' ? val?.fcm_token : val;
+      if (token && typeof token === 'string') {
+        return token;
+      }
+    }
+  } catch (err) {
+    console.warn('[FCM] app_kv token lookup error:', err);
+  }
+
+  return null;
 }
 
 async function getFCMV1AccessToken(sa: { project_id: string; client_email: string; private_key: string }): Promise<string> {
@@ -67,7 +130,8 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { action, targetUserId, fcmToken, title, message, data: customData } = body;
+    const { action, targetUserId, fcmToken, title, message } = body;
+    const customData = body.customData || body.data;
 
     if (!action) {
       return jsonResponse({ error: 'Missing action.' }, 400);
@@ -78,33 +142,29 @@ export async function POST(req: Request) {
         return jsonResponse({ error: 'Missing required fields: (targetUserId or fcmToken) and message' }, 400);
       }
 
-      const token = fcmToken || await (async () => {
-        if (!SUPABASE_ANON_KEY) {
-          throw new Error('SUPABASE_ANON_KEY is not configured for notification token lookup.');
-        }
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${targetUserId}&select=fcm_token`, {
-          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-        });
-        if (!res.ok) return null;
-        const rows = await res.json();
-        return rows?.[0]?.fcm_token || null;
-      })();
+      const token = fcmToken || (targetUserId ? await lookupUserFcmToken(targetUserId) : null);
 
       if (!token) {
         return jsonResponse({ success: false, reason: `Target user ${targetUserId} does not have an active FCM token registered.` }, 200);
       }
 
-      const firebaseConfig = {
-        project_id: process.env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID,
-        client_email: process.env.FIREBASE_CLIENT_EMAIL,
-        private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      };
+      const firebaseConfig = resolveFirebaseConfig();
 
       if (!firebaseConfig.client_email || !firebaseConfig.private_key) {
         return jsonResponse({ success: false, reason: 'Firebase Service Account is not configured.' }, 200);
       }
 
       const accessToken = await getFCMV1AccessToken(firebaseConfig as any);
+
+      // Ensure all customData entries are strings for FCM v1 spec
+      const stringifiedData: Record<string, string> = { route: 'chat' };
+      if (customData && typeof customData === 'object') {
+        for (const [k, v] of Object.entries(customData)) {
+          if (v !== undefined && v !== null) {
+            stringifiedData[k] = String(v);
+          }
+        }
+      }
 
       const messagePayload = {
         message: {
@@ -113,7 +173,7 @@ export async function POST(req: Request) {
             title: title || 'Avelut',
             body: message,
           },
-          data: { ...(customData || {}), route: String((customData || {}).route || 'chat') },
+          data: stringifiedData,
           android: {
             priority: 'high',
             notification: {
