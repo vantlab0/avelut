@@ -1,4 +1,5 @@
 import { runQuery, runStatement } from '../lib/sqlite/sqliteService';
+import { isAiMessage } from '../utils/chatMessageNormalizer';
 
 export interface LocalConversation {
   id: string;
@@ -66,7 +67,13 @@ export async function getLocalMessages(conversationId: string): Promise<LocalMes
     WHERE conversation_id = ? AND is_deleted = 0
     ORDER BY timestamp ASC
   `;
-  return runQuery<LocalMessage>(sql, [conversationId]);
+  const rows = await runQuery<LocalMessage>(sql, [conversationId]);
+  return rows.map((m) => {
+    if (m.sender === 'user' && isAiMessage(m)) {
+      return { ...m, sender: 'assistant' as const };
+    }
+    return m;
+  });
 }
 
 /**
@@ -121,7 +128,7 @@ export async function saveLocalMessage(
     image_url?: string | null;
     timestamp?: number;
   },
-  enqueueSync: boolean = true
+  enqueueSync: boolean = false
 ): Promise<void> {
   const timestamp = message.timestamp || Date.now();
   const syncStatus = enqueueSync ? 'pending' : 'synced';
@@ -337,10 +344,14 @@ export async function bulkUpsertRemoteConversations(conversations: LocalConversa
  */
 export async function bulkUpsertRemoteMessages(messages: LocalMessage[]): Promise<void> {
   for (const msg of messages) {
+    const isBot = isAiMessage(msg) || msg.sender === 'assistant' || msg.sender === 'bot';
+    const correctedSender = isBot ? 'assistant' : 'user';
+
     const sql = `
       INSERT INTO messages (id, conversation_id, user_id, sender, text, attachments_json, image_url, timestamp, sync_status, is_deleted)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'synced', 0)
       ON CONFLICT(id) DO UPDATE SET
+        sender = CASE WHEN excluded.sender = 'assistant' THEN 'assistant' ELSE messages.sender END,
         text = excluded.text,
         attachments_json = excluded.attachments_json,
         image_url = excluded.image_url,
@@ -351,11 +362,34 @@ export async function bulkUpsertRemoteMessages(messages: LocalMessage[]): Promis
       msg.id,
       msg.conversation_id,
       msg.user_id,
-      msg.sender,
+      correctedSender,
       msg.text,
       msg.attachments_json || null,
       msg.image_url || null,
       msg.timestamp
     ]);
+  }
+}
+
+/**
+ * Automatically heals any historical AI messages in SQLite that were mistakenly saved or synced as 'user'.
+ */
+export async function healCorruptedMessagesInSqlite(): Promise<void> {
+  try {
+    await runStatement(`
+      UPDATE messages
+      SET sender = 'assistant'
+      WHERE sender = 'user'
+        AND (
+          id LIKE 'ai_%'
+          OR id LIKE 'bot_%'
+          OR text LIKE '%↳%'
+          OR text LIKE 'Hello! 👋%'
+          OR text LIKE 'Here are some of the latest updates%'
+          OR text LIKE 'I apologize, but I could not generate a response%'
+        )
+    `);
+  } catch (err) {
+    console.warn('[chatStorageService] healCorruptedMessagesInSqlite non-blocking warning:', err);
   }
 }

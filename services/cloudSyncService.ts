@@ -11,6 +11,7 @@ import {
   LocalConversation,
   LocalMessage
 } from './chatStorageService';
+import { isAiMessage } from '../utils/chatMessageNormalizer';
 
 export type CloudSyncStatus = 'synced' | 'syncing' | 'offline' | 'pending' | 'error';
 
@@ -152,12 +153,13 @@ class CloudSyncEngine {
         async (payload) => {
           if (payload.new) {
             const item = payload.new as any;
+            const isAi = isAiMessage({ text: item.text_content, id: item.id });
             await bulkUpsertRemoteMessages([
               {
                 id: item.id,
                 conversation_id: item.conversation_id,
                 user_id: item.sender_id,
-                sender: item.sender_id === userId ? 'user' : 'assistant',
+                sender: (item.sender_id === userId && !isAi) ? 'user' : 'assistant',
                 text: item.text_content || '',
                 attachments_json: null,
                 image_url: item.media_url || null,
@@ -281,6 +283,19 @@ class CloudSyncEngine {
                 .delete()
                 .eq('id', item.entity_id);
             } else {
+              // AI responses are local assistant messages, NOT peer messenger messages!
+              const isAi = payload.sender === 'assistant' ||
+                           payload.sender === 'bot' ||
+                           item.entity_id?.startsWith('ai_') ||
+                           item.entity_id?.startsWith('bot_') ||
+                           isAiMessage(payload);
+
+              if (isAi) {
+                await markMessageSynced(item.entity_id);
+                await removeSyncQueueItem(item.id);
+                break;
+              }
+
               const senderId = toDeterministicUUID(payload.user_id || this.currentUserId || '');
               const recipientId = toDeterministicUUID(payload.recipient_id || payload.user_id || this.currentUserId || '');
               await supabase
@@ -385,18 +400,21 @@ class CloudSyncEngine {
       }
 
       if (messages && messages.length > 0) {
-        const remoteMessages: LocalMessage[] = messages.map(item => ({
-          id: item.id,
-          conversation_id: item.conversation_id,
-          user_id: item.sender_id,
-          sender: item.sender_id === userId ? 'user' : 'assistant',
-          text: item.text_content || '',
-          attachments_json: null,
-          image_url: item.media_url || null,
-          timestamp: new Date(item.created_at).getTime(),
-          sync_status: 'synced',
-          is_deleted: 0,
-        }));
+        const remoteMessages: LocalMessage[] = messages.map(item => {
+          const isAi = isAiMessage({ text: item.text_content, id: item.id });
+          return {
+            id: item.id,
+            conversation_id: item.conversation_id,
+            user_id: item.sender_id,
+            sender: (item.sender_id === userId && !isAi) ? 'user' : 'assistant',
+            text: item.text_content || '',
+            attachments_json: null,
+            image_url: item.media_url || null,
+            timestamp: new Date(item.created_at).getTime(),
+            sync_status: 'synced',
+            is_deleted: 0,
+          };
+        });
         await bulkUpsertRemoteMessages(remoteMessages);
         notifyTableChanged('messages');
       }

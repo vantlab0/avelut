@@ -17,7 +17,9 @@ import {
   renameLocalConversation,
   deleteLocalConversation,
   generateLocalId,
+  healCorruptedMessagesInSqlite,
 } from '../services/chatStorageService';
+import { isAiMessage, normalizeConversationMessages } from '../utils/chatMessageNormalizer';
 import { getCachedAIResponse, setCachedAIResponse } from '../services/aiCacheService';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -825,10 +827,14 @@ export const Chat: React.FC<ChatProps> = ({
   const [activeConversationId, setActiveConversationId] = useState<string | null>(propActiveConversationId ?? null);
   const [messages, setMessages] = useState<Message[]>(() => {
     if (propActiveConversationId && chatMessagesMemoryCache.has(propActiveConversationId)) {
-      return chatMessagesMemoryCache.get(propActiveConversationId)!;
+      return normalizeConversationMessages(chatMessagesMemoryCache.get(propActiveConversationId)!);
     }
     return [];
   });
+
+  useEffect(() => {
+    void healCorruptedMessagesInSqlite();
+  }, []);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMode, setSelectedMode] = useState<ChatMode>('context');
@@ -1112,16 +1118,16 @@ export const Chat: React.FC<ChatProps> = ({
             }
             data.push({ id: child.key, ...val, attachments });
           });
-          const sorted = data.sort((a, b) => a.timestamp - b.timestamp);
+          const normalized = normalizeConversationMessages(data);
           setMessages((current) => {
-            const dbTexts = new Set(sorted.map((m: any) => `${m.sender === 'user' ? 'user' : 'bot'}:${m.text}`));
-            const dbIds = new Set(sorted.map((m: any) => m.id));
+            const dbTexts = new Set(normalized.map((m: any) => `${m.sender === 'user' ? 'user' : 'bot'}:${m.text}`));
+            const dbIds = new Set(normalized.map((m: any) => m.id));
             const inFlight = current.filter(
               (m) => !dbIds.has(m.id) && !dbTexts.has(`${m.sender}:${m.text}`)
             );
             const inFlightUsers = inFlight.filter((m) => m.sender === 'user');
             const inFlightBots = inFlight.filter((m) => m.sender !== 'user');
-            const merged = [...sorted, ...inFlightUsers].sort((a, b) => a.timestamp - b.timestamp);
+            const merged = [...normalized, ...inFlightUsers].sort((a, b) => a.timestamp - b.timestamp);
             return [...merged, ...inFlightBots] as Message[];
           });
         }
@@ -1137,7 +1143,9 @@ export const Chat: React.FC<ChatProps> = ({
 
     // Instant native render from memory cache if available (0ms - zero skeleton flicker)
     if (chatMessagesMemoryCache.has(activeConversationId)) {
-      setMessages(chatMessagesMemoryCache.get(activeConversationId)!);
+      const cached = normalizeConversationMessages(chatMessagesMemoryCache.get(activeConversationId)!);
+      chatMessagesMemoryCache.set(activeConversationId, cached);
+      setMessages(cached);
       setIsSwitchingChat(false);
     } else if (!isLoadingRef.current) {
       setIsSwitchingChat(true);
@@ -1146,23 +1154,7 @@ export const Chat: React.FC<ChatProps> = ({
     const loadLocal = () => {
       getLocalMessages(activeConversationId).then((localMsgs) => {
         if (isMounted && switchingConvoIdRef.current === activeConversationId) {
-          const localFormatted: Message[] = localMsgs.map((m) => {
-            let attachments: any[] | undefined = undefined;
-            if (m.attachments_json) {
-              try {
-                attachments = JSON.parse(m.attachments_json);
-              } catch {}
-            }
-            return {
-              id: m.id,
-              text: m.text,
-              image_url: m.image_url || undefined,
-              attachments,
-              sender: (m.sender === 'user' ? 'user' : 'bot') as 'user' | 'bot',
-              timestamp: m.timestamp,
-            };
-          });
-          const sorted = localFormatted.sort((a, b) => a.timestamp - b.timestamp);
+          const sorted = normalizeConversationMessages(localMsgs);
           chatMessagesMemoryCache.set(activeConversationId, sorted);
           setMessages((current) => {
             if (isLoadingRef.current) {
@@ -1404,8 +1396,8 @@ export const Chat: React.FC<ChatProps> = ({
     console.log(`[Chat] request started requestId=${requestId} imageCount=${currentImages.length} payloadMB=${payloadMB}`);
 
     const now = Date.now();
-    const userMsgId = generateLocalId('msg');
-    const aiMsgId = generateLocalId('msg');
+    const userMsgId = generateLocalId('user_msg');
+    const aiMsgId = generateLocalId('ai_msg');
 
     const userMsgAttachments = currentImages.map((img) => ({
       type: 'image' as const,
@@ -1634,7 +1626,7 @@ export const Chat: React.FC<ChatProps> = ({
             parts.push({ text: '[Image]' });
           }
           return {
-            role: m.sender === 'user' ? 'user' : 'assistant',
+            role: (m.sender === 'user' && !isAiMessage(m)) ? 'user' : 'assistant',
             parts,
           };
         });
@@ -1930,7 +1922,7 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleRegenerateMessage = (msgIndex: number) => {
     for (let i = msgIndex - 1; i >= 0; i--) {
-      if (messages[i].sender === 'user') {
+      if (messages[i].sender === 'user' && !isAiMessage(messages[i])) {
         void handleSendMessage(messages[i].text);
         break;
       }
@@ -2010,22 +2002,24 @@ export const Chat: React.FC<ChatProps> = ({
           <div className="flex-1 h-full min-h-[40vh]" />
         ) : (
           <div className="w-full max-w-3xl mx-auto space-y-8">
-            {messages.map((msg, index) => (
-              <div
-                key={msg.id}
-                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 80px' }}
-                className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} gpu-accelerated animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
-              >
-                {msg.sender === 'user' ? (
-                  <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
-                    {msg.attachments && msg.attachments.length > 0 ? (
-                      <ImageGridRenderer images={msg.attachments.map((a) => a.dataUrl)} />
-                    ) : msg.image_url ? (
-                      <ImageGridRenderer images={[msg.image_url]} />
-                    ) : null}
-                    {msg.text ? <CollapsibleUserMessage text={msg.text} /> : null}
-                  </div>
-                ) : (
+            {messages.map((msg, index) => {
+              const isUser = msg.sender === 'user' && !isAiMessage(msg);
+              return (
+                <div
+                  key={msg.id}
+                  style={{ contentVisibility: 'auto', containIntrinsicSize: '0 80px' }}
+                  className={`flex ${isUser ? 'justify-end' : 'justify-start'} gpu-accelerated animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
+                >
+                  {isUser ? (
+                    <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
+                      {msg.attachments && msg.attachments.length > 0 ? (
+                        <ImageGridRenderer images={msg.attachments.map((a) => a.dataUrl)} />
+                      ) : msg.image_url ? (
+                        <ImageGridRenderer images={[msg.image_url]} />
+                      ) : null}
+                      {msg.text ? <CollapsibleUserMessage text={msg.text} /> : null}
+                    </div>
+                  ) : (
                   <div className="w-full bg-transparent border-0 shadow-none p-0 min-w-0">
                     <div className="w-full min-w-0">
                       {(!msg.text && (!msg.parts || msg.parts.length === 0)) ? (
@@ -2257,7 +2251,8 @@ export const Chat: React.FC<ChatProps> = ({
                   </div>
                 )}
               </div>
-            ))}
+            );
+          })}
             <div ref={messagesEndRef} className="h-2" />
           </div>
         )}

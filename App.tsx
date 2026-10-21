@@ -61,6 +61,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { getDatabaseConnection } from './lib/sqlite/sqliteService';
 import { cleanExpiredAICache } from './services/aiCacheService';
 import { cloudSyncEngine } from './services/cloudSyncService';
+import { healCorruptedMessagesInSqlite } from './services/chatStorageService';
 
 declare var __app_id: string;
 
@@ -425,6 +426,7 @@ const App: React.FC = () => {
         getDatabaseConnection().then(() => {
             initCacheFromSqlite().catch(() => {});
             cleanExpiredAICache().catch(() => {});
+            healCorruptedMessagesInSqlite().catch(() => {});
         }).catch(err => {
             console.warn('[App] SQLite initialization note:', err);
         });

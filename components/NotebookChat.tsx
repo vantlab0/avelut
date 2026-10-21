@@ -23,6 +23,7 @@ import {
   getOrGenerateTopicStructure,
   type TopicStructureData,
 } from '../services/topicStructureService';
+import { isAiMessage } from '../utils/chatMessageNormalizer';
 import type { UserProfile } from '../types';
 import type { Notebook, NotebookChapter } from '../services/notebookStorageService';
 
@@ -641,20 +642,22 @@ export const NotebookChat: React.FC<NotebookChatProps> = ({
       {/* MESSAGES SCROLL CONTAINER */}
       <div className="flex-1 overflow-y-auto px-4 pt-3 sm:pt-4 pb-6 space-y-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="w-full max-w-3xl mx-auto space-y-8">
-          {messages.map((msg, index) => (
-            <div
-              key={msg.id}
-              style={{ contentVisibility: 'auto', containIntrinsicSize: '0 80px' }}
-              className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
-            >
-              {msg.sender === 'user' ? (
-                <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
-                  {msg.attachments && msg.attachments.length > 0 && (
-                    <ImageGridRenderer images={msg.attachments.map((a) => a.url)} />
-                  )}
-                  {msg.text && <CollapsibleUserMessage text={msg.text} />}
-                </div>
-              ) : (
+          {messages.map((msg, index) => {
+            const isUser = msg.sender === 'user' && !isAiMessage(msg);
+            return (
+              <div
+                key={msg.id}
+                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 80px' }}
+                className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
+              >
+                {isUser ? (
+                  <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <ImageGridRenderer images={msg.attachments.map((a) => a.url)} />
+                    )}
+                    {msg.text && <CollapsibleUserMessage text={msg.text} />}
+                  </div>
+                ) : (
                 <div className="w-full bg-transparent border-0 shadow-none p-0 min-w-0">
                   <div className="w-full min-w-0">
                     {!msg.text ? (
@@ -828,7 +831,8 @@ export const NotebookChat: React.FC<NotebookChatProps> = ({
                 </div>
               )}
             </div>
-          ))}
+          );
+        })}
           <div ref={messagesEndRef} className="h-2" />
         </div>
       </div>
