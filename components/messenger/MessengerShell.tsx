@@ -1,3 +1,4 @@
+import { ArrowLeft, Pin, Trash2, Bell, BellOff, MoreVertical } from "lucide-react";
 import { MessengerChatList } from "./pages/MessengerChatList";
 import { MessengerFindFriends } from "./pages/MessengerFindFriends";
 import { MessengerNewChat } from "./pages/MessengerNewChat";
@@ -1578,13 +1579,39 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         };
       }, [showUserOptions]);
 
+      const isAllMuted = selectedChatIds.length > 0 && selectedChatIds.every(id => mutedChatIds[id]);
+      const isAllPinned = selectedChatIds.length > 0 && selectedChatIds.every(id => pinnedChatIds[id]);
+
+      const togglePinChats = useCallback(() => {
+        setPinnedChatIds(prev => {
+          const next = { ...prev };
+          const targetState = !isAllPinned;
+          selectedChatIds.forEach(id => { next[id] = targetState; });
+          writeCachedJson(`avelut_pinned_chats_${userProfile.uid}`, next, userProfile.uid);
+          addToast(targetState ? 'Chat pinned.' : 'Chat unpinned.', 'info');
+          return next;
+        });
+        setSelectedChatIds([]);
+        setShowSelectedMenu(false);
+      }, [isAllPinned, selectedChatIds, userProfile.uid, addToast]);
+
+      const toggleMuteChats = useCallback(() => {
+        setMutedChatIds(prev => {
+          const next = { ...prev };
+          const targetState = !isAllMuted;
+          selectedChatIds.forEach(id => { next[id] = targetState; });
+          writeCachedJson(`avelut_muted_chats_${userProfile.uid}`, next, userProfile.uid);
+          addToast(targetState ? 'Notifications muted.' : 'Notifications unmuted.', 'info');
+          return next;
+        });
+        setSelectedChatIds([]);
+        setShowSelectedMenu(false);
+      }, [isAllMuted, selectedChatIds, userProfile.uid, addToast]);
+
       useEffect(() => {
         if (!setCustomHeaderConfig) return;
 
         if (selectedChatIds.length > 0) {
-          const isAllMuted = selectedChatIds.every(id => mutedChatIds[id]);
-          const isAllPinned = selectedChatIds.every(id => pinnedChatIds[id]);
-
           setCustomHeaderConfig({
             title: (
               <div className="flex items-center gap-3 w-full">
@@ -1597,7 +1624,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                   className="w-9 h-9 flex items-center justify-center text-slate-700 dark:text-[#FAFAFA] hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors cursor-pointer"
                   aria-label="Exit selection mode"
                 >
-                  <i className="bi bi-x-lg text-lg"></i>
+                  <ArrowLeft className="w-5 h-5" />
                 </button>
                 <span className="text-lg font-bold text-[#0A0A0A] dark:text-[#FAFAFA]">
                   {selectedChatIds.length}
@@ -1609,21 +1636,11 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
               <div className="flex items-center gap-1 relative">
                 <button
                   type="button"
-                  onClick={() => {
-                    setPinnedChatIds(prev => {
-                      const next = { ...prev };
-                      const targetState = !isAllPinned;
-                      selectedChatIds.forEach(id => { next[id] = targetState; });
-                      writeCachedJson(`avelut_pinned_chats_${userProfile.uid}`, next, userProfile.uid);
-                      addToast(targetState ? 'Chat pinned.' : 'Chat unpinned.', 'info');
-                      return next;
-                    });
-                    setSelectedChatIds([]);
-                  }}
+                  onClick={togglePinChats}
                   className="p-2 text-slate-600 dark:text-[#FAFAFA] hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors cursor-pointer"
                   title={isAllPinned ? "Unpin chat" : "Pin chat"}
                 >
-                  <i className={`bi ${isAllPinned ? 'bi-pin-angle-fill text-[#0066FF]' : 'bi-pin-angle'} text-lg`}></i>
+                  <Pin className={`w-5 h-5 ${isAllPinned ? 'text-[#3B82F6] fill-[#3B82F6]' : ''}`} />
                 </button>
                 <button
                   type="button"
@@ -1631,25 +1648,15 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                   className="p-2 text-slate-600 dark:text-[#FAFAFA] hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 rounded-full transition-colors cursor-pointer"
                   title="Delete chat"
                 >
-                  <i className="bi bi-trash text-lg"></i>
+                  <Trash2 className="w-5 h-5" />
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setMutedChatIds(prev => {
-                      const next = { ...prev };
-                      const targetState = !isAllMuted;
-                      selectedChatIds.forEach(id => { next[id] = targetState; });
-                      writeCachedJson(`avelut_muted_chats_${userProfile.uid}`, next, userProfile.uid);
-                      addToast(targetState ? 'Notifications muted.' : 'Notifications unmuted.', 'info');
-                      return next;
-                    });
-                    setSelectedChatIds([]);
-                  }}
+                  onClick={toggleMuteChats}
                   className="p-2 text-slate-600 dark:text-[#FAFAFA] hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors cursor-pointer"
                   title={isAllMuted ? "Unmute notifications" : "Mute notifications"}
                 >
-                  <i className={`bi ${isAllMuted ? 'bi-volume-up' : 'bi-volume-mute'} text-lg`}></i>
+                  {isAllMuted ? <Bell className="w-5 h-5 text-amber-500" /> : <BellOff className="w-5 h-5" />}
                 </button>
                 <div className="relative">
                   <button
@@ -1658,7 +1665,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                     className="p-2 text-slate-600 dark:text-[#FAFAFA] hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors cursor-pointer"
                     title="More options"
                   >
-                    <i className="bi bi-three-dots-vertical text-lg"></i>
+                    <MoreVertical className="w-5 h-5" />
                   </button>
                   {showSelectedMenu && (
                     <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-[#141414] border border-slate-200 dark:border-[#2A2A2A] rounded-xl shadow-xl z-50 py-1 origin-top-right">
@@ -2068,7 +2075,133 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       }
 
       return (
-        <div className="flex h-full w-full overflow-hidden bg-[#FAFAFA] dark:bg-black font-sans antialiased text-[#0A0A0A] dark:text-white">
+        <div className="flex h-full w-full overflow-hidden bg-[#FAFAFA] dark:bg-black font-sans antialiased text-[#0A0A0A] dark:text-white relative">
+          {/* Floating/Overlay selection toolbar overlaying the header */}
+          {selectedChatIds.length > 0 && (
+            <div
+              className="fixed top-0 left-0 right-0 z-[100] bg-white dark:bg-[#18181b] flex items-center justify-between px-3 sm:px-6 shadow-2xl border-b border-neutral-200 dark:border-neutral-800 animate-in fade-in slide-in-from-top-2 duration-200 select-none"
+              style={{
+                paddingTop: 'calc(var(--header-safe-top, 0px) + 6px)',
+                paddingBottom: '10px',
+                minHeight: 'calc(58px + var(--header-safe-top, 0px))',
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedChatIds([]);
+                    setShowSelectedMenu(false);
+                  }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
+                  title="Cancel selection"
+                >
+                  <ArrowLeft className="w-5 h-5" strokeWidth={2} />
+                </button>
+                <span className="font-semibold text-base sm:text-lg text-[#0A0A0A] dark:text-white tracking-tight">
+                  {selectedChatIds.length} selected
+                </span>
+              </div>
+              <div className="flex items-center gap-1 sm:gap-1.5 relative">
+                <button
+                  type="button"
+                  onClick={togglePinChats}
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
+                  title={isAllPinned ? "Unpin chat" : "Pin chat"}
+                >
+                  <Pin className={`w-5 h-5 ${isAllPinned ? 'text-[#3B82F6] fill-[#3B82F6]' : ''}`} strokeWidth={1.9} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteChatConfirmDialog(true)}
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition active:scale-95 cursor-pointer"
+                  title="Delete"
+                >
+                  <Trash2 className="w-5 h-5" strokeWidth={1.9} />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleMuteChats}
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
+                  title={isAllMuted ? "Unmute notifications" : "Mute notifications"}
+                >
+                  {isAllMuted ? <Bell className="w-5 h-5 text-amber-500" strokeWidth={1.9} /> : <BellOff className="w-5 h-5" strokeWidth={1.9} />}
+                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowSelectedMenu(prev => !prev)}
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
+                    title="More options"
+                  >
+                    <MoreVertical className="w-5 h-5" strokeWidth={1.9} />
+                  </button>
+                  {showSelectedMenu && (
+                    <div
+                      ref={selectedMenuRef}
+                      className="absolute top-12 right-0 bg-white dark:bg-[#1f1f23] border border-neutral-200 dark:border-neutral-700/80 rounded-2xl shadow-2xl overflow-hidden py-1.5 w-52 z-50 animate-in fade-in slide-in-from-top-2"
+                    >
+                      {selectedChatIds.length === 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const chat = chats.find(c => c.id === selectedChatIds[0]);
+                            if (chat?.otherUser?.uid) {
+                              onNavigate?.(`public_profile_${chat.otherUser.uid}`);
+                            }
+                            setSelectedChatIds([]);
+                            setShowSelectedMenu(false);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 flex items-center gap-2 cursor-pointer"
+                        >
+                          Chat info
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (authUser) {
+                            const updates: Record<string, any> = {};
+                            selectedChatIds.forEach(id => {
+                              updates[`user_chats/${authUser.uid}/${id}/unreadCount`] = 1;
+                            });
+                            update(dbRef(db), updates).catch(console.error);
+                          }
+                          addToast('Marked as unread.', 'info');
+                          setSelectedChatIds([]);
+                          setShowSelectedMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 flex items-center gap-2 cursor-pointer"
+                      >
+                        Mark as unread
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targets = Array.from(new Set(
+                            selectedChatIds
+                              .map(chatId => chats.find(c => c.id === chatId)?.otherUser?.uid)
+                              .filter((uid): uid is string => Boolean(uid))
+                          ));
+                          if (targets.length) {
+                            setBlockConfirmTargets({
+                              uids: targets,
+                              label: targets.length > 1 ? `${targets.length} users` : (chats.find(c => c.id === selectedChatIds[0])?.otherUser?.display_name || 'this user'),
+                            });
+                          }
+                          setShowSelectedMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 flex items-center gap-2 cursor-pointer"
+                      >
+                        Block user
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Sidebar Pane */}
           <div className={`w-full lg:w-[380px] border-r border-[#E6E6E6] dark:border-[#2A2A2A] flex flex-col ${activeChat ? 'hidden lg:flex' : 'flex'} h-full bg-white dark:bg-black relative`}>
             {/* Sidebar Header with clean search */}

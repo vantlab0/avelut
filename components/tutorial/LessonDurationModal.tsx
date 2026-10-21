@@ -190,6 +190,10 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
                     <span className="text-xs text-white/50 mt-0.5">
                       {isIncluded ? (
                         <span className="text-emerald-400 font-medium">Included</span>
+                      ) : decision?.reason === 'locked_plan' ? (
+                        <span className="text-amber-400/90 font-medium">Pro Plan Only</span>
+                      ) : decision?.reason === 'zero_credits' ? (
+                        <span className="text-rose-400/90 font-medium">Min. {decision?.creditCost || 70} credits required</span>
                       ) : (
                         <span>{decision?.creditCost} credits</span>
                       )}
@@ -200,9 +204,13 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
                 {/* Right Status / Selection */}
                 <div className="flex items-center shrink-0 pl-2">
                   {!isAllowed ? (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold">
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold ${
+                      decision?.reason === 'locked_plan'
+                        ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                        : 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+                    }`}>
                       <Lock className="w-3.5 h-3.5" />
-                      <span>Locked</span>
+                      <span>{decision?.reason === 'locked_plan' ? 'Pro Only' : 'Locked'}</span>
                     </div>
                   ) : isSelected ? (
                     <CheckCircle2 className="w-5 h-5 text-red-600" />
@@ -218,8 +226,13 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
         {/* Balance Status Footer */}
         <div className="px-5 pb-2 text-xs text-white/40 flex items-center justify-between">
           <span>Credit Balance:</span>
-          <span className="font-semibold text-white/70">
+          <span className={`font-semibold ${
+            (userProfile?.ai_credits_balance ?? 0) < 70
+              ? 'text-rose-400'
+              : 'text-white/70'
+          }`}>
             {userProfile?.ai_credits_balance ?? 0} credits
+            {(userProfile?.ai_credits_balance ?? 0) < 70 && ' (Min. 70 required)'}
           </span>
         </div>
 
@@ -235,10 +248,22 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
             }`}
           >
             {isSelectedLocked ? (
-              <>
-                <Lock className="w-4 h-4" />
-                <span>Unlock ({activeDecision?.creditCost} Credits)</span>
-              </>
+              activeDecision?.reason === 'locked_plan' ? (
+                <>
+                  <Lock className="w-4 h-4 text-amber-400" />
+                  <span>Upgrade to Pro to Unlock</span>
+                </>
+              ) : activeDecision?.reason === 'zero_credits' ? (
+                <>
+                  <Lock className="w-4 h-4 text-rose-400" />
+                  <span>Top Up Credits to Unlock</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4" />
+                  <span>Unlock ({activeDecision?.creditCost} Credits)</span>
+                </>
+              )
             ) : (
               <span>Continue</span>
             )}

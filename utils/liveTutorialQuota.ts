@@ -44,7 +44,7 @@ function isExempt(userProfile?: UserProfile | null): boolean {
   return !!(userProfile.is_admin || userProfile.use_personal_token || userProfile.subscription_status === 'personal_token');
 }
 
-function isPaidSubscriber(userProfile?: UserProfile | null): boolean {
+export function isPaidSubscriber(userProfile?: UserProfile | null): boolean {
   if (!userProfile) return false;
   if (isExempt(userProfile)) return true;
   const status = userProfile.subscription_status;
@@ -216,10 +216,46 @@ export function evaluateLiveTutorialStart(
 
   const pool = getLiveMinutesRemaining(userProfile, appSettings);
   const creditCost = getLiveDurationCreditCost(minutes, appSettings);
+  const minRequiredCredit = getLiveDurationCreditCost(15, appSettings);
   const balance = userProfile.ai_credits_balance ?? 0;
+  const isPaid = isPaidSubscriber(userProfile);
 
-  // If user has ANY included minutes remaining, allow them to start
-  if (pool.remaining > 0) {
+  // 1. Zero credits / below minimum credits lock:
+  // Lock everything if the user has 0 credits or less than minimum required credits.
+  if (balance <= 0 || balance < minRequiredCredit) {
+    return {
+      allowed: false,
+      payment: 'blocked',
+      creditCost,
+      durationMinutes: minutes,
+      poolAllowance: pool.allowance,
+      poolUsed: pool.used,
+      poolRemaining: pool.remaining,
+      reason: 'zero_credits',
+      message: balance <= 0
+        ? `You have 0 credits. A minimum of ${minRequiredCredit} credits is required to start a live tutorial. Please top up your credits.`
+        : `Minimum of ${minRequiredCredit} credits required to start a live tutorial (you currently have ${balance} credits). Please top up your credits.`,
+    };
+  }
+
+  // 2. Free users lock:
+  // Lock all durations except the 15-minute duration for free users.
+  if (!isPaid && minutes > 15) {
+    return {
+      allowed: false,
+      payment: 'blocked',
+      creditCost,
+      durationMinutes: minutes,
+      poolAllowance: pool.allowance,
+      poolUsed: pool.used,
+      poolRemaining: pool.remaining,
+      reason: 'locked_plan',
+      message: `${minutes}-minute masterclasses are exclusive to Pro subscribers. Free accounts are limited to 15-minute overviews. Upgrade to Pro to unlock longer sessions.`,
+    };
+  }
+
+  // 3. Paid subscriber with included minutes in pool AND valid balance
+  if (isPaid && pool.remaining > 0) {
     return {
       allowed: true,
       payment: 'included',
@@ -233,7 +269,7 @@ export function evaluateLiveTutorialStart(
     };
   }
 
-  // If pool is exhausted, allow pay-as-you-go with credits
+  // 4. Pay-as-you-go with credits for this specific duration
   if (balance >= creditCost) {
     return {
       allowed: true,
@@ -244,24 +280,11 @@ export function evaluateLiveTutorialStart(
       poolUsed: pool.used,
       poolRemaining: pool.remaining,
       reason: 'allowed_credits',
-      message: `Pool exhausted. Billed at ${creditCost} credits for ${minutes} minutes (${balance} credits available).`,
+      message: `Billed at ${creditCost} credits for ${minutes} minutes (${balance} credits available).`,
     };
   }
 
-  if (!isPaidSubscriber(userProfile) && pool.remaining <= 0) {
-    return {
-      allowed: false,
-      payment: 'blocked',
-      creditCost,
-      durationMinutes: minutes,
-      poolAllowance: pool.allowance,
-      poolUsed: pool.used,
-      poolRemaining: pool.remaining,
-      reason: 'locked_free',
-      message: `Free trial minutes used up. Upgrade to Pro for 180 monthly live minutes or buy credits (${creditCost} credits for ${minutes}m).`,
-    };
-  }
-
+  // 5. Insufficient credits for this specific duration
   return {
     allowed: false,
     payment: 'blocked',
@@ -271,7 +294,7 @@ export function evaluateLiveTutorialStart(
     poolUsed: pool.used,
     poolRemaining: pool.remaining,
     reason: 'insufficient_credits',
-    message: `Need at least ${creditCost} credits to start a ${minutes}-minute live tutorial (you have ${balance}). Included minutes left: ${pool.remaining}.`,
+    message: `Need at least ${creditCost} credits to start a ${minutes}-minute live tutorial (you have ${balance} credits). Please top up your credits.`,
   };
 }
 
@@ -341,6 +364,11 @@ export function hasLiveTutorialAccess(
   const pool = getLiveMinutesRemaining(userProfile, appSettings);
   const balance = userProfile.ai_credits_balance ?? 0;
   const minCredit = getLiveDurationCreditCost(15, appSettings);
+
+  // If user has 0 credits or below minimum required, deny live tutorial access completely
+  if (balance <= 0 || balance < minCredit) {
+    return { allowed: false, reason: 'zero_credits', remainingMinutes: 0 };
+  }
 
   if (pool.remaining >= 15 || balance >= minCredit || isPaidSubscriber(userProfile)) {
     return { allowed: true, reason: 'allowed', remainingMinutes: pool.remaining };
