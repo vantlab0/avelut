@@ -926,14 +926,6 @@ async function callAlibabaQwen(
     }
   }
 
-  // If Alibaba endpoint persists in errors (429 rate limits, 500 server error, invocation failure), fallback to OpenRouter
-  try {
-    console.warn('[AlibabaChat] Alibaba direct failed, attempting fallback to OpenRouter...');
-    return await callOpenRouterQwen(params, appSettings);
-  } catch (fallbackErr: any) {
-    console.error('[AlibabaChat] OpenRouter fallback failed:', fallbackErr?.message);
-  }
-
   if (isRateLimited) {
     throw new Error("Avelut's AI provider is temporarily busy. Please try again in a moment.");
   }
@@ -1035,18 +1027,10 @@ async function* callAlibabaQwenStream(
   if (callerSignal?.aborted) return;
 
   if (!response || !response.body) {
-    console.warn('[Alibaba SSE] Stream response not available, attempting callAlibabaQwen fallback...');
-    try {
-      const fallbackResult = await callAlibabaQwen(params, appSettings, options);
-      yield fallbackResult;
-      return;
-    } catch (err: any) {
-      console.warn('[Alibaba SSE] Alibaba fallback failed, attempting OpenRouter stream...', err?.message);
-      for await (const chunk of callOpenRouterQwenStream(params, appSettings)) {
-        yield chunk;
-      }
-      return;
-    }
+    console.warn('[Alibaba SSE] Stream response not available, attempting callAlibabaQwen non-streaming...');
+    const fallbackResult = await callAlibabaQwen(params, appSettings, options);
+    yield fallbackResult;
+    return;
   }
 
   const contentType = (response.headers.get('content-type') || '').toLowerCase();
