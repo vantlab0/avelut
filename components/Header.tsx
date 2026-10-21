@@ -118,7 +118,7 @@ export const Header: React.FC<HeaderProps> = ({
       style={!isFloating ? { paddingTop: 'calc(var(--header-safe-top, 0px) + 2px)' } : undefined}
     >
       {/* Left Slot: Menu Hamburger Circular Button */}
-      <div className="flex items-center gap-2 min-w-[40px] shrink-0">
+      <div className="flex items-center gap-3 sm:gap-3.5 min-w-[40px] shrink-0">
         {leftActions ? (
           leftActions
         ) : (
@@ -162,13 +162,13 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Right Slot: Combined Pill Control + Optional Update Badge */}
-      <div className="flex items-center gap-2 justify-end shrink-0 overflow-visible">
+      <div className="flex items-center gap-2.5 sm:gap-3 justify-end shrink-0 overflow-visible">
         {rightActions ? (
           rightActions
         ) : hideDefaultRightActions ? null : (
           <div className="relative pointer-events-auto overflow-visible" ref={dropdownRef}>
             {/* Combined Pill Container */}
-            <div className="h-11 sm:h-12 rounded-full bg-white dark:bg-[#18181b] shadow-sm hover:shadow border border-neutral-200/80 dark:border-neutral-800 px-1.5 flex items-center gap-0.5 shrink-0">
+            <div className="h-11 sm:h-12 rounded-full bg-white dark:bg-[#18181b] shadow-sm hover:shadow border border-neutral-200/80 dark:border-neutral-800 px-2.5 sm:px-3 flex items-center gap-2 sm:gap-2.5 shrink-0">
               {/* Neutral Calendar Icon Button */}
               <button
                 type="button"
@@ -176,7 +176,7 @@ export const Header: React.FC<HeaderProps> = ({
                   setIsMenuOpen(false);
                   onNavigate?.('timetable');
                 }}
-                className="w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
+                className="w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
                 aria-label="Study Timetable"
                 title="Study Timetable"
               >
@@ -188,7 +188,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={onNewChat}
-                  className="w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
+                  className="w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
                   aria-label="New chat"
                   title="New chat"
                 >
@@ -203,7 +203,7 @@ export const Header: React.FC<HeaderProps> = ({
                       setIsNotificationOpen((prev) => !prev);
                       onNotificationsClick?.();
                     }}
-                    className={`relative w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
+                    className={`relative w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
                       isNotificationOpen ? 'bg-neutral-100 dark:bg-neutral-800' : ''
                     }`}
                     aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
@@ -238,13 +238,13 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {/* Vertical Hairline Divider */}
-              <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
+              <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-800 mx-1 sm:mx-1.5" />
 
               {/* Three Dot Kebab Menu Button */}
               <button
                 type="button"
                 onClick={() => setIsMenuOpen((prev) => !prev)}
-                className={`w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
+                className={`w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
                   isMenuOpen ? 'bg-neutral-100 dark:bg-neutral-800' : ''
                 }`}
                 aria-label="More options"

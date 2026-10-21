@@ -78,6 +78,10 @@ export async function POST(req: Request) {
       payload.stream = true;
     }
 
+    if (body.web_search || body.enable_search) {
+      payload.enable_search = true;
+    }
+
     const requestHeaders: Record<string, string> = {
       'Authorization': `Bearer ${alibabaApiKey}`,
       'Content-Type': 'application/json',

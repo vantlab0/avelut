@@ -1226,7 +1226,8 @@ export const Chat: React.FC<ChatProps> = ({
   const lastMessageContentLength = (() => {
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage) return 0;
-    return (lastMessage.text?.length ?? 0) + (lastMessage.reasoningText?.length ?? 0);
+    const partsLen = lastMessage.parts ? JSON.stringify(lastMessage.parts).length : 0;
+    return (lastMessage.text?.length ?? 0) + (lastMessage.reasoningText?.length ?? 0) + partsLen;
   })();
   useEffect(() => {
     if (!stickToBottomRef.current) return;
@@ -1499,13 +1500,36 @@ export const Chat: React.FC<ChatProps> = ({
         timestamp: now,
       });
 
-      const updateOrAppendAiMessage = (text: string, reasoningText?: string) => {
+      const updateOrAppendAiMessage = (
+        text: string,
+        reasoningText?: string,
+        parts?: MessagePart[]
+      ) => {
         setMessages((prev) => {
           const exists = prev.some((m) => m.id === aiMsgId);
           if (exists) {
-            return prev.map((m) => (m.id === aiMsgId ? { ...m, text, reasoningText } : m));
+            return prev.map((m) =>
+              m.id === aiMsgId
+                ? {
+                    ...m,
+                    text,
+                    reasoningText,
+                    parts: parts !== undefined ? parts : m.parts,
+                  }
+                : m
+            );
           } else {
-            return [...prev, { id: aiMsgId, text, reasoningText, sender: 'bot', timestamp: Date.now() + 999999 }];
+            return [
+              ...prev,
+              {
+                id: aiMsgId,
+                text,
+                reasoningText,
+                parts,
+                sender: 'bot',
+                timestamp: Date.now() + 999999,
+              },
+            ];
           }
         });
       };
@@ -1645,8 +1669,22 @@ export const Chat: React.FC<ChatProps> = ({
         return;
       }
 
-      // Show pulsing blue dot indicator immediately for this bot message
-      updateOrAppendAiMessage('', '');
+      let browsingPart: MessagePart | null = aiCapabilities.browse ? {
+        type: 'tool-invocation',
+        toolInvocation: {
+          toolName: 'web_search',
+          state: 'input-streaming',
+          args: { query: promptText },
+          result: null,
+        },
+      } : null;
+
+      // Show pulsing blue dot or browsing widget immediately for this bot message
+      const initialParts: MessagePart[] = browsingPart ? [browsingPart] : [];
+      updateOrAppendAiMessage('', '', initialParts.length > 0 ? initialParts : undefined);
+      if (browsingPart && stickToBottomRef.current) {
+        requestAnimationFrame(() => scrollContainerToBottom(messagesScrollRef.current, 'smooth'));
+      }
 
       try {
         const responseStream = await ai.models.generateContentStream(aiParams);
@@ -1664,7 +1702,38 @@ export const Chat: React.FC<ChatProps> = ({
           if (chunkText) {
             responseText += chunkText;
           }
-          updateOrAppendAiMessage(responseText, reasoningText);
+
+          if (browsingPart) {
+            const searchInfo = (chunk as any)?.searchInfo;
+            const searchResults = searchInfo?.search_results || searchInfo?.results;
+            const extractedUrls = responseText.match(/https?:\/\/[^\s\)\],>"']+/g) || [];
+
+            const results = (searchResults && Array.isArray(searchResults) && searchResults.length > 0)
+              ? searchResults.map((r: any) => ({ title: r.title || r.name, url: r.url || r.link }))
+              : extractedUrls.map((url: string) => {
+                  let hostname = url;
+                  try { hostname = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+                  return { title: hostname, url };
+                });
+
+            if (responseText || results.length > 0) {
+              browsingPart = {
+                type: 'tool-invocation',
+                toolInvocation: {
+                  toolName: 'web_search',
+                  state: 'output-available',
+                  args: { query: promptText },
+                  result: results.length > 0 ? results : [{ title: 'Web Search', url: `https://www.google.com/search?q=${encodeURIComponent(promptText)}` }],
+                },
+              };
+            }
+          }
+
+          const currentParts: MessagePart[] = [];
+          if (browsingPart) currentParts.push(browsingPart);
+          if (responseText) currentParts.push({ type: 'text', text: responseText });
+
+          updateOrAppendAiMessage(responseText, reasoningText, currentParts.length > 0 ? currentParts : undefined);
         }
       } catch (streamErr: any) {
         if (currentAbort.signal.aborted) {
@@ -1695,7 +1764,27 @@ export const Chat: React.FC<ChatProps> = ({
             }
 
             responseText = (aiResult.data || '').trim();
-            updateOrAppendAiMessage(responseText, reasoningText);
+            if (browsingPart) {
+              const extractedUrls = responseText.match(/https?:\/\/[^\s\)\],>"']+/g) || [];
+              const results = extractedUrls.map((url: string) => {
+                let hostname = url;
+                try { hostname = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+                return { title: hostname, url };
+              });
+              browsingPart = {
+                type: 'tool-invocation',
+                toolInvocation: {
+                  toolName: 'web_search',
+                  state: 'output-available',
+                  args: { query: promptText },
+                  result: results.length > 0 ? results : [{ title: 'Web Search', url: `https://www.google.com/search?q=${encodeURIComponent(promptText)}` }],
+                },
+              };
+            }
+            const currentParts: MessagePart[] = [];
+            if (browsingPart) currentParts.push(browsingPart);
+            if (responseText) currentParts.push({ type: 'text', text: responseText });
+            updateOrAppendAiMessage(responseText, reasoningText, currentParts.length > 0 ? currentParts : undefined);
           }
         }
       }
@@ -1730,7 +1819,10 @@ export const Chat: React.FC<ChatProps> = ({
 
       if (!responseText.trim() && !currentAbort.signal.aborted) {
         responseText = 'I apologize, but I could not generate a response. Please try again.';
-        updateOrAppendAiMessage(responseText);
+        const currentParts: MessagePart[] = [];
+        if (browsingPart) currentParts.push(browsingPart);
+        currentParts.push({ type: 'text', text: responseText });
+        updateOrAppendAiMessage(responseText, reasoningText, currentParts);
       }
 
       if (responseText.trim()) {
@@ -1935,7 +2027,7 @@ export const Chat: React.FC<ChatProps> = ({
                 ) : (
                   <div className="w-full bg-transparent border-0 shadow-none p-0 min-w-0">
                     <div className="w-full min-w-0">
-                      {!msg.text ? (
+                      {(!msg.text && (!msg.parts || msg.parts.length === 0)) ? (
                         <div className="py-1">
                           <ThinkingTypingIndicator
                             label="thinking"
@@ -1945,34 +2037,38 @@ export const Chat: React.FC<ChatProps> = ({
                         </div>
                       ) : (
                         (() => {
-                          const { cleanedText, followUps } = parseFollowUpsAndContent(msg.text);
+                          const { cleanedText, followUps } = parseFollowUpsAndContent(msg.text || '');
                           return (
                             <div className="min-w-0">
                               {/* Message Parts with Tool Status Rendering */}
                               {msg.parts && msg.parts.length > 0 ? (
-                                msg.parts.map((part, pIdx) => {
-                                  if (
-                                    part.type === 'tool-invocation' &&
-                                    part.toolInvocation &&
-                                    part.toolInvocation.toolName === 'web_search'
-                                  ) {
-                                    return (
-                                      <ToolStatus
-                                        key={pIdx}
-                                        toolName={part.toolInvocation.toolName}
-                                        state={part.toolInvocation.state}
-                                        args={part.toolInvocation.args}
-                                        result={part.toolInvocation.result}
-                                      />
-                                    );
-                                  }
-                                  if (part.type === 'text' && part.text) {
-                                    return <MarkdownContent key={pIdx} content={part.text} />;
-                                  }
-                                  return null;
-                                })
+                                <div className="space-y-2">
+                                  {msg.parts.map((part, pIdx) => {
+                                    if (
+                                      part.type === 'tool-invocation' &&
+                                      part.toolInvocation &&
+                                      part.toolInvocation.toolName === 'web_search'
+                                    ) {
+                                      return (
+                                        <ToolStatus
+                                          key={pIdx}
+                                          toolName={part.toolInvocation.toolName}
+                                          state={part.toolInvocation.state}
+                                          args={part.toolInvocation.args}
+                                          result={part.toolInvocation.result}
+                                          isStreaming={isLoading}
+                                        />
+                                      );
+                                    }
+                                    if (part.type === 'text' && part.text) {
+                                      const partCleaned = parseFollowUpsAndContent(part.text).cleanedText || part.text;
+                                      return <MarkdownContent key={pIdx} content={partCleaned} />;
+                                    }
+                                    return null;
+                                  })}
+                                </div>
                               ) : (
-                                <MarkdownContent content={cleanedText || msg.text} />
+                                <MarkdownContent content={cleanedText || msg.text || ''} />
                               )}
 
                               {/* Interrupted / Aborted State UI */}

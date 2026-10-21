@@ -961,6 +961,7 @@ async function* callAlibabaQwenStream(
     temperature: params?.config?.temperature ?? 0.7,
     max_tokens: params?.config?.maxOutputTokens ?? 4096,
     web_search: webSearchEnabled,
+    enable_search: webSearchEnabled,
   };
 
   if (params?.config?.responseMimeType === 'application/json' || params?.config?.response_format?.type === 'json_object') {
@@ -1089,11 +1090,13 @@ async function* callAlibabaQwenStream(
             }
             let finishReason = parsed?.choices?.[0]?.finish_reason || null;
             const usage = parsed?.usage || parsed?.response?.usage;
+            const searchInfo = parsed?.search_info || parsed?.choices?.[0]?.search_info;
 
-            if (deltaText || reasoningText || finishReason || usage) {
+            if (deltaText || reasoningText || finishReason || usage || searchInfo) {
               yield {
                 text: () => deltaText,
                 reasoningText: () => reasoningText,
+                searchInfo,
                 candidates: [
                   {
                     content: {

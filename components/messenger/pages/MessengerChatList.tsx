@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import type { UserProfile } from '../../../types';
 import { formatLastSeen, getLastMessagePreview, formatChatTimestamp, getUnreadCount, MessageStatusIcon, isUserOnline } from '../messengerUtils';
 import { Avatar } from '../../Avatar';
 import { VerificationBadge } from '../../VerificationBadge';
 import { StreakBadge } from '../../StreakBadge';
+import { ArrowLeft, Pin, Trash2, BellOff, MoreVertical } from 'lucide-react';
 
 export interface MessengerChatListProps {
   userProfile: UserProfile;
@@ -36,6 +37,7 @@ export const MessengerChatList: React.FC<MessengerChatListProps> = ({
   setShowSelectedMenu, selectedMenuRef, togglePinChats, toggleMuteChats,
   setShowDeleteChatConfirmDialog, navigateToSubRoute, onlineUserIds
 }) => {
+  const touchStartCoordsRef = useRef<{ x: number; y: number } | null>(null);
   return (
     <div className="flex h-full w-full bg-[#0A0A0A] text-[#FAFAFA] overflow-hidden flex-col md:flex-row relative">
       <div className="flex flex-col h-full w-full relative">
@@ -67,40 +69,85 @@ export const MessengerChatList: React.FC<MessengerChatListProps> = ({
         </div>
 
         {selectedChatIds.length > 0 && (
-          <div className="absolute top-0 left-0 right-0 h-16 bg-[#1C1C1C] z-20 flex items-center justify-between px-4 shadow-xl border-b border-[#2A2A2A]">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setSelectedChatIds([])} className="p-2 -ml-2 rounded-full hover:bg-[#2A2A2A] transition text-[#FAFAFA]">
-                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2.5" fill="none"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+          <div
+            className="fixed top-0 left-0 right-0 z-[60] bg-[#18181b] flex items-center justify-between px-3 sm:px-6 shadow-2xl border-b border-neutral-800 animate-in fade-in slide-in-from-top-2 duration-200"
+            style={{
+              paddingTop: 'calc(var(--header-safe-top, 0px) + 6px)',
+              paddingBottom: '10px',
+              minHeight: 'calc(58px + var(--header-safe-top, 0px))',
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedChatIds([])}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-300 hover:text-white hover:bg-neutral-800 transition active:scale-95"
+                title="Cancel selection"
+              >
+                <ArrowLeft className="w-5 h-5" strokeWidth={2} />
               </button>
-              <span className="font-bold text-[#FAFAFA]">{selectedChatIds.length}</span>
+              <span className="font-semibold text-base sm:text-lg text-white tracking-tight">
+                {selectedChatIds.length} selected
+              </span>
             </div>
-            <div className="flex items-center gap-1 relative">
-              <button onClick={togglePinChats} className="p-2 rounded-full hover:bg-[#2A2A2A] transition text-[#FAFAFA]" title="Pin/Unpin">
-                <i className="bi bi-pin-angle text-lg"></i>
+            <div className="flex items-center gap-1 sm:gap-1.5 relative">
+              <button
+                type="button"
+                onClick={togglePinChats}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-300 hover:text-white hover:bg-neutral-800 transition active:scale-95"
+                title="Pin/Unpin"
+              >
+                <Pin className="w-5 h-5" strokeWidth={1.9} />
               </button>
-              <button onClick={() => setShowDeleteChatConfirmDialog(true)} className="p-2 rounded-full hover:bg-[#2A2A2A] transition text-[#FAFAFA]" title="Delete">
-                <i className="bi bi-trash3 text-lg"></i>
+              <button
+                type="button"
+                onClick={() => setShowDeleteChatConfirmDialog(true)}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition active:scale-95"
+                title="Delete"
+              >
+                <Trash2 className="w-5 h-5" strokeWidth={1.9} />
               </button>
-              <button onClick={toggleMuteChats} className="p-2 rounded-full hover:bg-[#2A2A2A] transition text-[#FAFAFA]" title="Mute/Unmute">
-                <i className="bi bi-bell-slash text-lg"></i>
+              <button
+                type="button"
+                onClick={toggleMuteChats}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-300 hover:text-white hover:bg-neutral-800 transition active:scale-95"
+                title="Mute/Unmute"
+              >
+                <BellOff className="w-5 h-5" strokeWidth={1.9} />
               </button>
-              <button onClick={() => setShowSelectedMenu(!showSelectedMenu)} className="p-2 rounded-full hover:bg-[#2A2A2A] transition text-[#FAFAFA]" title="More">
-                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none">
-                  <circle cx="12" cy="12" r="1"></circle>
-                  <circle cx="12" cy="5" r="1"></circle>
-                  <circle cx="12" cy="19" r="1"></circle>
-                </svg>
+              <button
+                type="button"
+                onClick={() => setShowSelectedMenu(!showSelectedMenu)}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-neutral-300 hover:text-white hover:bg-neutral-800 transition active:scale-95"
+                title="More"
+              >
+                <MoreVertical className="w-5 h-5" strokeWidth={1.9} />
               </button>
               {showSelectedMenu && (
-                <div ref={selectedMenuRef} className="absolute top-12 right-0 bg-[#1C1C1C] border border-[#2A2A2A] rounded-xl shadow-2xl overflow-hidden py-1 w-48 z-50">
-                  <button onClick={() => {
-                    const allRead = selectedChatIds.every(id => unreadCountsRef.current[id] === 0);
-                    // Dummy for marking read
-                    setShowSelectedMenu(false);
-                  }} className="w-full text-left px-4 py-3 text-sm text-[#FAFAFA] hover:bg-[#2A2A2A] transition">
+                <div
+                  ref={selectedMenuRef}
+                  className="absolute top-12 right-0 bg-[#1f1f23] border border-neutral-700/80 rounded-2xl shadow-2xl overflow-hidden py-1.5 w-52 z-50 animate-in fade-in slide-in-from-top-2"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSelectedMenu(false);
+                    }}
+                    className="w-full text-left px-4 py-3 text-sm text-neutral-200 hover:bg-neutral-800 hover:text-white transition"
+                  >
                     Mark as unread
                   </button>
-                  <button onClick={() => { setSelectedChatIds([]); setShowSelectedMenu(false); }} className="w-full text-left px-4 py-3 text-sm text-[#FAFAFA] hover:bg-[#2A2A2A] transition">Select All</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allIds = activeChats.map((c) => c.id);
+                      setSelectedChatIds(allIds);
+                      setShowSelectedMenu(false);
+                    }}
+                    className="w-full text-left px-4 py-3 text-sm text-neutral-200 hover:bg-neutral-800 hover:text-white transition"
+                  >
+                    Select All
+                  </button>
                 </div>
               )}
             </div>
@@ -137,31 +184,43 @@ export const MessengerChatList: React.FC<MessengerChatListProps> = ({
                     }
                     setActiveChat({ chatId: c.id, otherUser: c.otherUser });
                   }}
-                  onTouchStart={() => {
+                  onTouchStart={(e) => {
+                    if (e.touches && e.touches[0]) {
+                      touchStartCoordsRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    }
                     if (chatRowLongPressTimerRef.current) clearTimeout(chatRowLongPressTimerRef.current);
                     chatRowLongPressTimerRef.current = setTimeout(() => {
                       suppressNextChatOpenRef.current = true;
+                      try {
+                        if (navigator?.vibrate) navigator.vibrate(40);
+                      } catch {}
                       setSelectedChatIds(prev =>
                         prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
                       );
-                    }, 500);
+                    }, 450);
                   }}
                   onTouchEnd={() => {
                     if (chatRowLongPressTimerRef.current) {
                       clearTimeout(chatRowLongPressTimerRef.current);
                       chatRowLongPressTimerRef.current = null;
                     }
+                    touchStartCoordsRef.current = null;
                   }}
                   onTouchCancel={() => {
                     if (chatRowLongPressTimerRef.current) {
                       clearTimeout(chatRowLongPressTimerRef.current);
                       chatRowLongPressTimerRef.current = null;
                     }
+                    touchStartCoordsRef.current = null;
                   }}
-                  onTouchMove={() => {
-                    if (chatRowLongPressTimerRef.current) {
-                      clearTimeout(chatRowLongPressTimerRef.current);
-                      chatRowLongPressTimerRef.current = null;
+                  onTouchMove={(e) => {
+                    if (touchStartCoordsRef.current && chatRowLongPressTimerRef.current && e.touches && e.touches[0]) {
+                      const dx = e.touches[0].clientX - touchStartCoordsRef.current.x;
+                      const dy = e.touches[0].clientY - touchStartCoordsRef.current.y;
+                      if (Math.hypot(dx, dy) > 10) {
+                        clearTimeout(chatRowLongPressTimerRef.current);
+                        chatRowLongPressTimerRef.current = null;
+                      }
                     }
                   }}
                   onContextMenu={(event) => {
