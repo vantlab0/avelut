@@ -1,7 +1,7 @@
 import React from 'react';
 import type { UserProfile, AppSettings } from '../types';
 import { Browser } from '@capacitor/browser';
-import { isNative } from '../utils/capacitorUtils';
+import { isNative, openExternalSubscriptionPage } from '../utils/capacitorUtils';
 
 interface LimitExceededModalProps {
   isOpen: boolean;
@@ -26,9 +26,7 @@ export const LimitExceededModal: React.FC<LimitExceededModalProps> = ({
 
   const handleUpgradeAccount = async () => {
     onClose();
-    if (onNavigate) {
-      onNavigate('billing');
-    }
+    await openExternalSubscriptionPage(userProfile?.uid);
   };
 
   const handleBuyCredits = async () => {

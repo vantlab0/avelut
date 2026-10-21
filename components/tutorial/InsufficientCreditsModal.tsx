@@ -1,6 +1,7 @@
 import React from 'react';
 import type { UserProfile, AppSettings } from '../../types';
 import { CANONICAL_PRICING } from '../../utils/appSettings';
+import { openExternalSubscriptionPage } from '../../utils/capacitorUtils';
 
 export interface InsufficientCreditsModalProps {
   isOpen: boolean;
@@ -51,6 +52,8 @@ export const InsufficientCreditsModal: React.FC<InsufficientCreditsModalProps> =
   const handleUpgradeProAction = () => {
     if (onUpgradePro) {
       onUpgradePro();
+    } else {
+      openExternalSubscriptionPage(userProfile?.uid);
     }
     onClose();
   };

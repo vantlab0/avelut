@@ -1,6 +1,6 @@
 import React from 'react';
 import { Browser } from '@capacitor/browser';
-import { isNative } from '../utils/capacitorUtils';
+import { isNative, openExternalSubscriptionPage } from '../utils/capacitorUtils';
 
 export interface ChatLimitBannerProps {
   title?: string;
@@ -8,6 +8,7 @@ export interface ChatLimitBannerProps {
   actionText?: string;
   cost?: number;
   balance?: number;
+  userId?: string;
   onAction?: () => void;
   onNavigate?: (view: string) => void;
   className?: string;
@@ -17,6 +18,7 @@ export const ChatLimitBanner: React.FC<ChatLimitBannerProps> = ({
   title = 'Free tier limit reached',
   subtitle = 'Try again later or upgrade to Pro for much higher limits and premium features.',
   actionText = 'Upgrade to Pro',
+  userId,
   onAction,
   onNavigate,
   className = '',
@@ -26,9 +28,7 @@ export const ChatLimitBanner: React.FC<ChatLimitBannerProps> = ({
       onAction();
       return;
     }
-    if (onNavigate) {
-      onNavigate('billing');
-    }
+    await openExternalSubscriptionPage(userId);
   };
 
   return (

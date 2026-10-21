@@ -31,17 +31,6 @@ export class SectionErrorBoundary extends Component<Props, State> {
       errorInfo
     );
 
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('avelut_toast', {
-          detail: {
-            message: 'A minor display hiccup was detected. Keeping your session active.',
-            type: 'warning',
-            duration: 3000,
-          },
-        })
-      );
-    }
 
     if (this.props.activeItem && this.props.activeItem !== 'chat' && this.props.onNavigate) {
       this.props.onNavigate('chat');

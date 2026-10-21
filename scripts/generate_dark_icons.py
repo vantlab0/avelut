@@ -77,7 +77,6 @@ def generate_squircle_black_icons():
     def create_stat_icon(size):
         scale = 4
         canvas_size = size * scale
-        img = Image.new('RGBA', (canvas_size, canvas_size), (0, 0, 0, 0))
         
         target_logo_size = int(canvas_size * 0.80)
         aspect = cropped_logo.width / cropped_logo.height
@@ -88,12 +87,22 @@ def generate_squircle_black_icons():
             lh = target_logo_size
             lw = int(target_logo_size * aspect)
             
-        scaled_logo = cropped_logo.resize((lw, lh), Image.Resampling.LANCZOS)
+        alpha_cropped = cropped_logo.split()[3]
+        scaled_alpha = alpha_cropped.resize((lw, lh), Image.Resampling.LANCZOS)
+
+        scaled_logo = Image.new('RGBA', (lw, lh), (255, 255, 255, 0))
+        scaled_logo.putalpha(scaled_alpha)
+
+        img = Image.new('RGBA', (canvas_size, canvas_size), (0, 0, 0, 0))
         offset_x = (canvas_size - lw) // 2
         offset_y = (canvas_size - lh) // 2
         img.paste(scaled_logo, (offset_x, offset_y), scaled_logo)
         
-        return img.resize((size, size), Image.Resampling.LANCZOS)
+        resized_img = img.resize((size, size), Image.Resampling.LANCZOS)
+        _, _, _, final_alpha = resized_img.split()
+        pure_white_stat = Image.new('RGBA', (size, size), (255, 255, 255, 255))
+        pure_white_stat.putalpha(final_alpha)
+        return pure_white_stat
 
     # 3. Update all mipmap folders
     mipmap_configs = {
