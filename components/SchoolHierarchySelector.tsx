@@ -1,32 +1,40 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabaseDataService } from '../services/supabaseDataService';
 import { HARDCODED_UNIVERSITY_OPTIONS } from '../constants/universities';
-import { useAppSettings } from '../hooks/useAppSettings';
-import { createAvelutAI, getResponseText } from '../utils/inference';
-
-const sanitizeId = (name: string) => 
-  name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-
-interface Option {
-  id: string;
-  name: string;
-  short_name?: string;
-}
+import {
+  AcademicOption,
+  STANDARD_FACULTIES,
+  STANDARD_DEPARTMENTS,
+  deduplicateAcademicList,
+  normalizeAcademicName,
+  sanitizeAcademicId,
+  formatAcademicTitle
+} from '../constants/academicHierarchy';
 
 interface CustomSearchableSelectProps {
   label: string;
   stepNumber: number;
-  options: Option[];
+  options: AcademicOption[];
   value: string;
-  onChange: (opt: Option) => void;
+  onChange: (opt: AcademicOption) => void;
   placeholder: string;
   disabled?: boolean;
+  allowAddNew?: boolean;
   onAddNew?: (name: string) => Promise<void>;
   emptyText?: string;
 }
 
 const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({ 
-  label, stepNumber, options, value, onChange, placeholder, disabled, onAddNew, emptyText = "No matching options found."
+  label,
+  stepNumber,
+  options,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  allowAddNew = false,
+  onAddNew,
+  emptyText = "No matching options found."
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -66,11 +74,12 @@ const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({
     const q = query.toLowerCase().trim();
     return options.filter(opt =>
       opt.name.toLowerCase().includes(q) ||
-      (opt.short_name && opt.short_name.toLowerCase().includes(q))
+      (opt.short_name && opt.short_name.toLowerCase().includes(q)) ||
+      (opt.aliases && opt.aliases.some(alias => alias.toLowerCase().includes(q)))
     );
   }, [options, query, selectedOption]);
 
-  const handleSelect = (opt: Option) => {
+  const handleSelect = (opt: AcademicOption) => {
     onChange(opt);
     setQuery(opt.name);
     setIsOpen(false);
@@ -97,7 +106,9 @@ const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({
   };
 
   const handleAddNew = async () => {
-    if (onAddNew && query.trim()) {
+    if (!allowAddNew || !query.trim()) return;
+
+    if (onAddNew) {
       setIsAddingNew(true);
       try {
         await onAddNew(query.trim());
@@ -105,10 +116,9 @@ const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({
       } finally {
         setIsAddingNew(false);
       }
-    } else if (query.trim()) {
-      // Free-text fallback if no onAddNew handler supplied
-      const freeTextOpt: Option = {
-        id: sanitizeId(query.trim()),
+    } else {
+      const freeTextOpt: AcademicOption = {
+        id: sanitizeAcademicId(query.trim()),
         name: query.trim()
       };
       handleSelect(freeTextOpt);
@@ -116,8 +126,9 @@ const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({
   };
 
   const showAddNew = Boolean(
+    allowAddNew &&
     query.trim() &&
-    !filteredOptions.some(opt => opt.name.toLowerCase() === query.trim().toLowerCase())
+    !filteredOptions.some(opt => normalizeAcademicName(opt.name) === normalizeAcademicName(query.trim()))
   );
 
   return (
@@ -223,7 +234,7 @@ const CustomSearchableSelect: React.FC<CustomSearchableSelectProps> = ({
   );
 };
 
-interface SchoolHierarchySelectorProps {
+export interface SchoolHierarchySelectorProps {
   schoolId: string;
   setSchoolId: (val: string) => void;
   collegeId: string;
@@ -237,11 +248,10 @@ export const SchoolHierarchySelector: React.FC<SchoolHierarchySelectorProps> = (
   schoolId, setSchoolId, collegeId, setCollegeId, departmentId, setDepartmentId, disabled
 }) => {
   const [dbSchools, setDbSchools] = useState<Array<{ id: string; name: string; short_name?: string }>>([]);
-  const [colleges, setColleges] = useState<Array<{ id: string; name: string; school_id?: string }>>([]);
-  const [departments, setDepartments] = useState<Array<{ id: string; name: string; college_id?: string }>>([]);
-  const { settings: appSettings } = useAppSettings();
+  const [dbColleges, setDbColleges] = useState<Array<{ id: string; name: string; school_id?: string }>>([]);
+  const [dbDepartments, setDbDepartments] = useState<Array<{ id: string; name: string; college_id?: string; school_id?: string }>>([]);
 
-  // 1. Fetch live custom/stored schools from Supabase
+  // 1. Fetch live stored schools from Supabase
   useEffect(() => {
     let isMounted = true;
     void supabaseDataService.fetchSchools().then(res => {
@@ -252,20 +262,13 @@ export const SchoolHierarchySelector: React.FC<SchoolHierarchySelectorProps> = (
     return () => { isMounted = false; };
   }, []);
 
-  // Combined schools list: Hardcoded NUC List + Supabase DB entries
+  // Combined schools list: Hardcoded universities + Supabase DB schools (strictly deduplicated, zero AI)
   const schoolOptions = useMemo(() => {
-    const map = new Map<string, Option>();
-    // Pre-populate with hardcoded list
-    HARDCODED_UNIVERSITY_OPTIONS.forEach(opt => {
-      map.set(opt.id, opt);
-    });
-    // Add any DB schools that might not be in hardcoded list
-    dbSchools.forEach(s => {
-      if (!map.has(s.id)) {
-        map.set(s.id, { id: s.id, name: s.name, short_name: s.short_name });
-      }
-    });
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    const combined: AcademicOption[] = [
+      ...HARDCODED_UNIVERSITY_OPTIONS,
+      ...dbSchools.map(s => ({ id: s.id, name: s.name, short_name: s.short_name }))
+    ];
+    return deduplicateAcademicList(combined);
   }, [dbSchools]);
 
   // 2. Fetch live colleges when schoolId changes
@@ -273,134 +276,109 @@ export const SchoolHierarchySelector: React.FC<SchoolHierarchySelectorProps> = (
     let isMounted = true;
     if (schoolId) {
       void supabaseDataService.fetchColleges(schoolId).then(res => {
-        if (isMounted) setColleges(res);
+        if (isMounted) setDbColleges(res);
       });
     } else {
-      setColleges([]);
+      setDbColleges([]);
     }
     return () => { isMounted = false; };
   }, [schoolId]);
+
+  // Combined colleges list: Standard faculties + Supabase DB colleges (strictly deduplicated, zero AI)
+  const collegesOptions = useMemo(() => {
+    const combined: AcademicOption[] = [
+      ...STANDARD_FACULTIES,
+      ...dbColleges.map(c => ({ id: c.id, name: c.name }))
+    ];
+    return deduplicateAcademicList(combined);
+  }, [dbColleges]);
 
   // 3. Fetch live departments when collegeId or schoolId changes
   useEffect(() => {
     let isMounted = true;
     if (schoolId) {
       void supabaseDataService.fetchDepartments(schoolId, collegeId || undefined).then(res => {
-        if (isMounted) setDepartments(res);
+        if (isMounted) setDbDepartments(res);
       });
     } else {
-      setDepartments([]);
+      setDbDepartments([]);
     }
     return () => { isMounted = false; };
   }, [schoolId, collegeId]);
 
-  // Smart AI Duplicate Prevention for Faculties & Departments
-  const deduplicateAndStandardize = async (
-    inputName: string, 
-    type: 'College/Faculty' | 'Department', 
-    existingList: Option[]
-  ): Promise<{ id: string; name: string; isDuplicate: boolean }> => {
-    const cleanInput = inputName.trim().toLowerCase().replace(/\s+/g, ' ');
-    const strippedInput = cleanInput
-      .replace(/^(faculty of|college of|school of|department of)\s+/i, '')
-      .trim();
-    
-    for (const item of existingList) {
-      const itemName = item.name.toLowerCase().replace(/\s+/g, ' ');
-      const strippedItemName = itemName
-        .replace(/^(faculty of|college of|school of|department of)\s+/i, '')
-        .trim();
-
-      if (
-        itemName === cleanInput ||
-        strippedItemName === strippedInput ||
-        strippedItemName.includes(strippedInput) ||
-        strippedInput.includes(strippedItemName)
-      ) {
-        return { id: item.id, name: item.name, isDuplicate: true };
-      }
-    }
-
-    const school = schoolOptions.find(s => s.id === schoolId);
-    const schoolName = school?.name || 'the university';
-
-    try {
-      const ai = createAvelutAI(appSettings, null);
-      if (!ai) {
-        const fallbackName = type === 'College/Faculty' && !inputName.toLowerCase().startsWith('faculty') 
-          ? `Faculty of ${inputName}` 
-          : inputName;
-        return { id: sanitizeId(fallbackName), name: fallbackName, isDuplicate: false };
-      }
-
-      const existingNamesStr = existingList.map(e => `"${e.name}" (id: "${e.id}")`).join(', ');
-      const prompt = `You are an academic database deduplication engine for ${schoolName}.
-Existing ${type}s: [${existingNamesStr}].
-User entered: "${inputName}".
-Task:
-1. Check if "${inputName}" is a duplicate, synonym, or abbreviation of any existing item in the list above (e.g. "CS" or "Comp Sci" vs "Computer Science", "Pet Eng" vs "Petroleum Engineering").
-2. If it is a duplicate, return: {"isDuplicate": true, "matchedId": "<existing_id>", "canonicalName": "<existing_name>"}
-3. If it is genuinely a new ${type}, standardize its name (e.g. "Faculty of Engineering", "Department of Chemical Engineering") and return: {"isDuplicate": false, "canonicalName": "<Standardized Name>"}
-Return ONLY valid JSON.`;
-
-      const response = await ai.models.generateContent({
-        model: 'qwen/qwen3.7-flash',
-        contents: prompt,
-        config: { maxOutputTokens: 250 }
-      });
-
-      const rawJson = getResponseText(response).replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(rawJson);
-
-      if (parsed.isDuplicate && parsed.matchedId) {
-        return { id: parsed.matchedId, name: parsed.canonicalName, isDuplicate: true };
-      }
-
-      const canonicalName = parsed.canonicalName || inputName;
-      return { id: sanitizeId(canonicalName), name: canonicalName, isDuplicate: false };
-    } catch (err) {
-      console.warn('[SchoolSelector] Deduplication AI fallback:', err);
-      const fallbackName = type === 'College/Faculty' && !inputName.toLowerCase().startsWith('faculty') && !inputName.toLowerCase().startsWith('college')
-        ? `Faculty of ${inputName}` 
-        : inputName;
-      return { id: sanitizeId(fallbackName), name: fallbackName, isDuplicate: false };
-    }
-  };
-
-  const handleAddCollege = async (name: string) => {
-    if (!schoolId) return;
-    const res = await deduplicateAndStandardize(name, 'College/Faculty', collegesOptions);
-    if (!res.isDuplicate) {
-      await supabaseDataService.upsertCollege({ id: res.id, name: res.name, school_id: schoolId });
-      setColleges(prev => [...prev, { id: res.id, name: res.name, school_id: schoolId }]);
-    }
-    setCollegeId(res.id);
-  };
-
-  const handleAddDepartment = async (name: string) => {
-    if (!schoolId) return;
-    const res = await deduplicateAndStandardize(name, 'Department', departmentOptions);
-    if (!res.isDuplicate) {
-      await supabaseDataService.upsertDepartment({
-        id: res.id,
-        name: res.name,
-        school_id: schoolId,
-        college_id: collegeId || undefined
-      });
-      setDepartments(prev => [...prev, { id: res.id, name: res.name, college_id: collegeId }]);
-    }
-    setDepartmentId(res.id);
-  };
-  
-  const collegesOptions = useMemo(() => {
-    return colleges.map(c => ({ id: c.id, name: c.name }));
-  }, [colleges]);
-
+  // Combined departments list: Standard departments + Supabase DB departments (strictly deduplicated, zero AI)
   const departmentOptions = useMemo(() => {
-    return departments.map(d => ({ id: d.id, name: d.name }));
-  }, [departments]);
+    let baseList = STANDARD_DEPARTMENTS;
 
-  const handleOptionSelected = async (level: 'school'|'college'|'department', opt: Option) => {
+    // When a college/faculty is selected, prioritize or filter matching departments
+    if (collegeId) {
+      const selectedCollege = collegesOptions.find(c => c.id === collegeId);
+      const normCollege = selectedCollege ? normalizeAcademicName(selectedCollege.name) : '';
+
+      const facultyDepts = STANDARD_DEPARTMENTS.filter(d => {
+        if (d.college_id === collegeId) return true;
+        if (d.college_id) {
+          const stdFac = STANDARD_FACULTIES.find(f => f.id === d.college_id);
+          if (stdFac && normalizeAcademicName(stdFac.name) === normCollege) return true;
+        }
+        return false;
+      });
+
+      if (facultyDepts.length > 0) {
+        baseList = facultyDepts;
+      }
+    }
+
+    const combined: AcademicOption[] = [
+      ...baseList,
+      ...dbDepartments.map(d => ({ id: d.id, name: d.name, college_id: d.college_id }))
+    ];
+
+    return deduplicateAcademicList(combined);
+  }, [collegeId, collegesOptions, dbDepartments]);
+
+  const handleAddCollege = async (rawName: string) => {
+    if (!schoolId || !rawName.trim()) return;
+    const formattedName = formatAcademicTitle(rawName, 'faculty');
+    const norm = normalizeAcademicName(formattedName);
+
+    // If duplicate already exists, select it directly
+    const existing = collegesOptions.find(c => normalizeAcademicName(c.name) === norm);
+    if (existing) {
+      setCollegeId(existing.id);
+      return;
+    }
+
+    const newId = sanitizeAcademicId(formattedName);
+    await supabaseDataService.upsertCollege({ id: newId, name: formattedName, school_id: schoolId });
+    setDbColleges(prev => [...prev, { id: newId, name: formattedName, school_id: schoolId }]);
+    setCollegeId(newId);
+  };
+
+  const handleAddDepartment = async (rawName: string) => {
+    if (!schoolId || !rawName.trim()) return;
+    const formattedName = formatAcademicTitle(rawName, 'department');
+    const norm = normalizeAcademicName(formattedName);
+
+    // If duplicate already exists, select it directly
+    const existing = departmentOptions.find(d => normalizeAcademicName(d.name) === norm);
+    if (existing) {
+      setDepartmentId(existing.id);
+      return;
+    }
+
+    const newId = sanitizeAcademicId(formattedName);
+    await supabaseDataService.upsertDepartment({
+      id: newId,
+      name: formattedName,
+      school_id: schoolId,
+      college_id: collegeId || undefined
+    });
+    setDbDepartments(prev => [...prev, { id: newId, name: formattedName, college_id: collegeId, school_id: schoolId }]);
+    setDepartmentId(newId);
+  };
+
+  const handleOptionSelected = async (level: 'school'|'college'|'department', opt: AcademicOption) => {
     const id = opt.id;
     const name = opt.name;
 
@@ -414,19 +392,19 @@ Return ONLY valid JSON.`;
     } else if (level === 'college') {
       setCollegeId(id);
       if (schoolId) {
-        const isLocal = colleges.some(c => c.id === id);
+        const isLocal = dbColleges.some(c => c.id === id);
         if (!isLocal) {
           await supabaseDataService.upsertCollege({ id, name, school_id: schoolId });
-          setColleges(prev => [...prev, { id, name, school_id: schoolId }]);
+          setDbColleges(prev => [...prev, { id, name, school_id: schoolId }]);
         }
       }
     } else if (level === 'department') {
       setDepartmentId(id);
       if (schoolId) {
-        const isLocal = departments.some(d => d.id === id);
+        const isLocal = dbDepartments.some(d => d.id === id);
         if (!isLocal) {
           await supabaseDataService.upsertDepartment({ id, name, school_id: schoolId, college_id: collegeId });
-          setDepartments(prev => [...prev, { id, name, college_id: collegeId }]);
+          setDbDepartments(prev => [...prev, { id, name, college_id: collegeId, school_id: schoolId }]);
         }
       }
     }
@@ -434,37 +412,45 @@ Return ONLY valid JSON.`;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-left">
+      {/* 1. School Selector: strictly hardcoded/available list, no AI, no duplicate additions */}
       <CustomSearchableSelect 
         stepNumber={1}
         label="University / Institution"
         options={schoolOptions}
         value={schoolId}
         onChange={(opt) => handleOptionSelected('school', opt)}
-        placeholder="Select or search university..."
+        placeholder="Type to search university..."
         disabled={disabled}
-        emptyText="No university found"
+        allowAddNew={false}
+        emptyText="No university found. Please choose from available universities."
       />
 
+      {/* 2. College / Faculty Selector: standard faculties list + inline search */}
       <CustomSearchableSelect 
         stepNumber={2}
         label="Faculty / College"
         options={collegesOptions}
         value={collegeId}
         onChange={(opt) => handleOptionSelected('college', opt)}
-        placeholder="Select faculty..."
+        placeholder="Select or search faculty..."
         disabled={disabled || !schoolId}
+        allowAddNew={true}
         onAddNew={handleAddCollege}
+        emptyText="No faculty found."
       />
 
+      {/* 3. Department Selector: standard departments list + inline search */}
       <CustomSearchableSelect 
         stepNumber={3}
         label="Department"
         options={departmentOptions}
         value={departmentId}
         onChange={(opt) => handleOptionSelected('department', opt)}
-        placeholder="Select department..."
+        placeholder="Select or search department..."
         disabled={disabled || !collegeId}
+        allowAddNew={true}
         onAddNew={handleAddDepartment}
+        emptyText="No department found."
       />
     </div>
   );

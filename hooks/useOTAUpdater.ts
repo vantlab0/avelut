@@ -262,6 +262,7 @@ export function checkSupabaseOTAUpdate(silent = true): Promise<void> {
 }
 
 function initOTAEngine() {
+    if (!Capacitor.isNativePlatform()) return;
     if (isInitialized) return;
     isInitialized = true;
 

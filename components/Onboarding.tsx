@@ -13,6 +13,21 @@ export const Onboarding: React.FC<OnboardingProps> = ({ user, onOnboardingComple
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedLevel, setSelectedLevel] = useState<string>('');
   
+  const handleSetSchool = (val: string) => {
+    setSelectedSchool(val);
+    if (!val || val !== selectedSchool) {
+      setSelectedCollege('');
+      setSelectedDepartment('');
+    }
+  };
+
+  const handleSetCollege = (val: string) => {
+    setSelectedCollege(val);
+    if (!val || val !== selectedCollege) {
+      setSelectedDepartment('');
+    }
+  };
+
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -95,9 +110,9 @@ export const Onboarding: React.FC<OnboardingProps> = ({ user, onOnboardingComple
           <div>
             <SchoolHierarchySelector 
               schoolId={selectedSchool}
-              setSchoolId={setSelectedSchool}
+              setSchoolId={handleSetSchool}
               collegeId={selectedCollege}
-              setCollegeId={setSelectedCollege}
+              setCollegeId={handleSetCollege}
               departmentId={selectedDepartment}
               setDepartmentId={setSelectedDepartment}
             />

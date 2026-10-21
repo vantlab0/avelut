@@ -1,7 +1,13 @@
 import React from 'react';
+import { Capacitor } from '@capacitor/core';
 import { useOTAUpdater } from '../hooks/useOTAUpdater';
 
 export const AppUpdateBadge: React.FC<{ className?: string }> = ({ className = '' }) => {
+    // Only display update status and restart pill on native mobile app
+    if (!Capacitor.isNativePlatform()) {
+        return null;
+    }
+
     const { updateStatus, newVersion, downloadProgress, restartToUpdate } = useOTAUpdater();
 
     // Do not show banner when app is up to date

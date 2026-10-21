@@ -114,15 +114,17 @@ export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProf
               Use credits for Live Voice Tutorials (15m: 70 credits, 30m: 130 credits, 60m: 270 credits), flashcards (₦50/card), or subscribe to Weekly/Monthly plans for unlimited access.
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 w-full md:w-auto">
-            <button
-              onClick={() => handleInstantPaystackTopup(70)}
-              disabled={isProcessingPaystack}
-              className="px-6 py-3 bg-[#0066FF] hover:bg-[#002D62] text-white rounded-2xl text-xs font-bold transition-all w-full md:w-auto shadow-2xs cursor-pointer active:scale-95 text-center disabled:opacity-50"
-            >
-              {isProcessingPaystack ? 'Opening Paystack...' : 'Instant Refill (₦70 Pass)'}
-            </button>
-          </div>
+          {!isNative() && (
+            <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 w-full md:w-auto">
+              <button
+                onClick={() => handleInstantPaystackTopup(70)}
+                disabled={isProcessingPaystack}
+                className="px-6 py-3 bg-[#0066FF] hover:bg-[#002D62] text-white rounded-2xl text-xs font-bold transition-all w-full md:w-auto shadow-2xs cursor-pointer active:scale-95 text-center disabled:opacity-50"
+              >
+                {isProcessingPaystack ? 'Opening Paystack...' : 'Instant Refill (₦70 Pass)'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -138,8 +140,8 @@ export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProf
             });
           }}
         />
-      ) : (
-        /* In-App Paystack Top-Up Card (Zero Redirect) */
+      ) : !isNative() ? (
+        /* In-App Paystack Top-Up Card (Zero Redirect - Web Only) */
         <div className="bg-white dark:bg-[#0A0A0A] border border-[#E3E9F1] dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
@@ -202,7 +204,7 @@ export const BillingSettingsScreen: React.FC<BillingSettingsProps> = ({ userProf
             </button>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Recent Transactions */}
       <div className="bg-white dark:bg-black p-6 sm:p-8 rounded-3xl border border-slate-200 dark:border-white/10 shadow-sm flex flex-col gap-6">
