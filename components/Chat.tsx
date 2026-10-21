@@ -517,7 +517,7 @@ export const GrokChatComposer: React.FC<{
       }}
       onPaste={handlePaste}
     >
-      <div className="relative flex flex-col bg-white dark:bg-[#212124] rounded-[28px] border border-neutral-200 dark:border-white/10 transition-all focus-within:ring-1 focus-within:ring-black/10 dark:focus-within:ring-white/10 shadow-md">
+      <div className="relative flex flex-col bg-white dark:bg-[#212124] rounded-[28px] border border-[#E5E5E5] dark:border-white/10 transition-all focus-within:ring-1 focus-within:ring-black/10 dark:focus-within:ring-white/10 shadow-xs">
         
         {/* Attached Images Preview Row */}
         {attachedImages.length > 0 && (
@@ -557,7 +557,7 @@ export const GrokChatComposer: React.FC<{
             }}
             placeholder="Ask anything or paste images..."
             rows={1}
-            className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 text-[15px] sm:text-base resize-none max-h-36 py-0 leading-relaxed [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-[#171717] dark:text-white placeholder-[#8E8E93] dark:placeholder-neutral-500 text-[15px] sm:text-base resize-none max-h-36 py-0 leading-relaxed [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           />
         </div>
 
@@ -571,8 +571,8 @@ export const GrokChatComposer: React.FC<{
                 onClick={handleAttachClick}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                   showAttachMenu
-                    ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-900 dark:text-white'
-                    : 'text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60'
+                    ? 'bg-neutral-200 dark:bg-neutral-800 text-[#171717] dark:text-white'
+                    : 'text-neutral-500 hover:text-[#171717] dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60'
                 }`}
                 title="Attach file"
                 aria-label="Attach file"
@@ -762,12 +762,12 @@ export const GrokChatComposer: React.FC<{
               }}
               className={`h-9 sm:h-10 px-3.5 sm:px-4 rounded-full flex items-center justify-center gap-1.5 shrink-0 transition-all duration-150 active:scale-95 text-xs sm:text-sm font-medium select-none cursor-pointer ${
                 isLoading
-                  ? 'bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black shadow-sm'
+                  ? 'bg-[#171717] hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black shadow-xs'
                   : voiceStatus === 'listening'
-                  ? 'bg-rose-500 hover:bg-rose-600 text-white animate-pulse shadow-sm shadow-rose-500/25'
+                  ? 'bg-rose-500 hover:bg-rose-600 text-white animate-pulse shadow-xs shadow-rose-500/25'
                   : hasText
-                  ? 'bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-black shadow-sm'
-                  : 'bg-neutral-100 hover:bg-neutral-200/80 text-neutral-800 dark:bg-neutral-800/80 dark:hover:bg-neutral-800 dark:text-neutral-200 border border-neutral-200/60 dark:border-white/5'
+                  ? 'bg-[#171717] hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-black shadow-xs'
+                  : 'bg-[#F2F2F2] hover:bg-[#E8E8E8] text-[#171717] border border-[#E5E5E5] dark:bg-neutral-800/80 dark:hover:bg-neutral-800 dark:text-neutral-200 dark:border-white/5'
               }`}
               title={isLoading ? 'Stop generating' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
               aria-label={isLoading ? 'Stop generating' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
@@ -793,7 +793,7 @@ export const GrokChatComposer: React.FC<{
                 </>
               ) : (
                 <>
-                  <Mic className="w-4 h-4 text-neutral-700 dark:text-neutral-300" strokeWidth={1.9} />
+                  <Mic className="w-4 h-4 text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
                   <span>Voice</span>
                 </>
               )}

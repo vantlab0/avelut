@@ -112,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
         isFloating
           ? className
           : `sticky top-0 flex-shrink-0 px-3 sm:px-6 md:px-8 pt-1 pb-2 ${
-              className || 'bg-white/70 dark:bg-black/60 backdrop-blur-xl border-b border-black/5 dark:border-white/8'
+              className || 'bg-white/80 dark:bg-black/60 backdrop-blur-xl border-b border-[#E5E5E5] dark:border-white/8'
             }`
       }`}
       style={!isFloating ? { paddingTop: 'calc(var(--header-safe-top, 0px) + 2px)' } : undefined}
@@ -125,11 +125,11 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onMenuClick}
-            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white dark:bg-[#18181b] shadow-sm hover:shadow border border-neutral-200/80 dark:border-neutral-800 flex items-center justify-center text-neutral-800 dark:text-neutral-100 hover:text-black dark:hover:text-white transition-all active:scale-95 cursor-pointer relative shrink-0 pointer-events-auto"
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white dark:bg-[#18181b] shadow-xs hover:shadow-sm border border-[#E5E5E5] dark:border-neutral-800 flex items-center justify-center text-[#171717] dark:text-neutral-100 hover:text-black dark:hover:text-white transition-all active:scale-95 cursor-pointer relative shrink-0 pointer-events-auto"
             aria-label="Toggle menu"
             title="Menu"
           >
-            <Menu className="w-[22px] h-[22px] text-neutral-800 dark:text-neutral-100" strokeWidth={1.9} />
+            <Menu className="w-[22px] h-[22px] text-[#171717] dark:text-neutral-100" strokeWidth={1.9} />
             {(unreadCount > 0 || unreadMessagesCount > 0) && (
               <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
@@ -168,7 +168,7 @@ export const Header: React.FC<HeaderProps> = ({
         ) : hideDefaultRightActions ? null : (
           <div className="relative pointer-events-auto overflow-visible" ref={dropdownRef}>
             {/* Combined Pill Container */}
-            <div className="h-11 sm:h-12 rounded-full bg-white dark:bg-[#18181b] shadow-sm hover:shadow border border-neutral-200/80 dark:border-neutral-800 px-2.5 sm:px-3 flex items-center gap-2 sm:gap-2.5 shrink-0">
+            <div className="h-11 sm:h-12 rounded-full bg-white dark:bg-[#18181b] shadow-xs hover:shadow-sm border border-[#E5E5E5] dark:border-neutral-800 px-2.5 sm:px-3 flex items-center gap-2 sm:gap-2.5 shrink-0">
               {/* Neutral Calendar Icon Button */}
               <button
                 type="button"
@@ -176,11 +176,11 @@ export const Header: React.FC<HeaderProps> = ({
                   setIsMenuOpen(false);
                   onNavigate?.('timetable');
                 }}
-                className="w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
+                className="w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
                 aria-label="Study Timetable"
                 title="Study Timetable"
               >
-                <Calendar className="w-[20px] h-[20px]" strokeWidth={1.9} />
+                <Calendar className="w-[20px] h-[20px] text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
               </button>
 
               {/* Primary Action Button: Compose for AI Chat, Bell for Other Pages */}
@@ -188,11 +188,11 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={onNewChat}
-                  className="w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
+                  className="w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
                   aria-label="New chat"
                   title="New chat"
                 >
-                  <SquarePen className="w-[20px] h-[20px]" strokeWidth={1.9} />
+                  <SquarePen className="w-[20px] h-[20px] text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
                 </button>
               ) : (
                 <div className="relative">
@@ -203,13 +203,13 @@ export const Header: React.FC<HeaderProps> = ({
                       setIsNotificationOpen((prev) => !prev);
                       onNotificationsClick?.();
                     }}
-                    className={`relative w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
+                    className={`relative w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
                       isNotificationOpen ? 'bg-neutral-100 dark:bg-neutral-800' : ''
                     }`}
                     aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
                     title="Notifications"
                   >
-                    <Bell className="w-[20px] h-[20px]" strokeWidth={1.9} />
+                    <Bell className="w-[20px] h-[20px] text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
                     {unreadCount > 0 && (
                       <span className="absolute top-1 right-1 flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0066FF] opacity-75" />
@@ -238,20 +238,20 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {/* Vertical Hairline Divider */}
-              <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-800 mx-1 sm:mx-1.5" />
+              <div className="w-px h-5 bg-[#E5E5E5] dark:bg-neutral-800 mx-1 sm:mx-1.5" />
 
               {/* Three Dot Kebab Menu Button */}
               <button
                 type="button"
                 onClick={() => setIsMenuOpen((prev) => !prev)}
-                className={`w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
+                className={`w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
                   isMenuOpen ? 'bg-neutral-100 dark:bg-neutral-800' : ''
                 }`}
                 aria-label="More options"
                 title="More options"
                 aria-expanded={isMenuOpen}
               >
-                <MoreVertical className="w-[20px] h-[20px]" strokeWidth={1.9} />
+                <MoreVertical className="w-[20px] h-[20px] text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
               </button>
             </div>
 
