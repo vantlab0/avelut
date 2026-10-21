@@ -9,7 +9,7 @@ import {
   WebSearchLoopError,
 } from '../lib/server/web-search-loop';
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function OPTIONS() {
   return new Response(null, {
@@ -136,7 +136,7 @@ export async function POST(req: Request) {
               temperature: body.temperature ?? 0.35,
               maxTokens: Math.min(body.max_tokens ?? (hasDocument ? 16384 : 4096), hasDocument ? 16384 : 8192),
               signal: req.signal,
-              timeoutMs: hasDocument ? 90000 : 50000,
+              timeoutMs: hasDocument ? 55000 : 45000,
               // One search round is enough for a grounded answer and keeps the
               // total request inside both the client and platform time limits.
               maxIterations: 1,
@@ -196,7 +196,7 @@ export async function POST(req: Request) {
         try {
           const controller = new AbortController();
           // Fast 8s timeout for immediate fallback if unreachable or restricted
-          const timer = setTimeout(() => controller.abort(), hasDocument ? 280000 : 8000);
+          const timer = setTimeout(() => controller.abort(), hasDocument ? 55000 : 8000);
 
           const payload: any = {
             model: currentModel,

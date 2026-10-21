@@ -7,7 +7,7 @@ import {
   isWebSearchConfigured,
 } from '../lib/server/web-search';
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function OPTIONS() {
   return new Response(null, {

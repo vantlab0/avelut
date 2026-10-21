@@ -1,5 +1,11 @@
 {
   "installCommand": "pnpm install --no-frozen-lockfile",
+  "functions": {
+    "api/*.ts": {
+      "maxDuration": 60,
+      "includeFiles": "lib/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/paystack-initialize",

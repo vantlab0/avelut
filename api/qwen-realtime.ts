@@ -31,7 +31,7 @@ export const config = {
   runtime: 'nodejs',
 };
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 // ── DashScope upstream ────────────────────────────────────────────────────────
 // Keep in sync with QWEN_REALTIME_MODEL in QwenRealtimeTeacherService.ts
