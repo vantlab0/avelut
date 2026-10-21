@@ -1,6 +1,3 @@
-import { searchWeb, type WebSearchResult } from '../lib/server/web-search';
-import { isRealTimeSearchNeeded, cleanSearchQuery } from '../lib/web-search-detector';
-
 export const maxDuration = 60;
 
 export async function OPTIONS() {
@@ -20,6 +17,129 @@ const DASHSCOPE_BASE_URLS = [
 ];
 
 export const DEFAULT_MODEL = 'qwen3.5-omni-flash';
+
+interface WebSearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+  source: string;
+  publishedAt?: string;
+}
+
+function isRealTimeSearchNeeded(text: string): boolean {
+  if (!text || typeof text !== 'string') return false;
+  const t = text.trim().toLowerCase();
+  if (t.length < 3) return false;
+
+  const isAlgorithmConcept =
+    /\b(binary|linear|depth\s*first|breadth\s*first|tree|graph|heuristic|grid|interpolation|exponential|a\*|dijkstra)\s*search\b/i.test(t) ||
+    /\bsearch\s*(algorithm|complexity|tree|pattern|implementation|code)\b/i.test(t);
+
+  const hasExplicitWebSearch =
+    /\b(search\s+(the\s+)?(web|internet|net|online)|browse\s+(the\s+)?(web|internet|net)|check\s*online|web\s*search|google\s+this|google\s+it)\b/i.test(t) ||
+    (!isAlgorithmConcept && /^(please\s+)?(search|look\s*up|browse|google)\b/i.test(t));
+  if (hasExplicitWebSearch) return true;
+
+  if (/\b(news|headline|headlines|breaking|what\s+happened|whats\s+happening|developing\s+story)\b/i.test(t)) {
+    return true;
+  }
+
+  if (/\b(today|yesterday|tomorrow|tonight|this\s+(week|weekend|month|year)|latest|current|currently|recent|recently|right\s+now|nowadays|at\s+the\s+moment)\b/i.test(t)) {
+    return true;
+  }
+
+  if (/\b(weather|forecast|temperature|humidity)\b/i.test(t)) return true;
+  if (/\b(stock|stocks|share\s*price|crypto|bitcoin|btc|eth|ethereum|solana|exchange\s*rate|dollar\s*rate|naira\s*rate|forex)\b/i.test(t)) return true;
+  if (/\b(match\s*score|game\s*score|standings|premier\s*league|champions\s*league|world\s*cup|ballon\s*d'or|nba|nfl)\b/i.test(t)) return true;
+  if (/\b(election|poll\s*numbers|voting\s*results|who\s+won|who\s+is\s+the\s+current)\b/i.test(t)) return true;
+  if (/\b(release\s*date|air\s*date|box\s*office|in\s+cinemas)\b/i.test(t)) return true;
+
+  if (/\b(2025|2026|2027|2028|2029|2030)\b/.test(t)) return true;
+
+  return false;
+}
+
+function cleanSearchQuery(text: string): string {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .replace(/^(can\s+you\s+)?(please\s+)?(search\s+(the\s+)?(web|internet|net|online)\s+(for\s+)?|browse\s+(the\s+)?(web|internet|net)\s+(for\s+)?|look\s*up\s+|google\s+)/i, '')
+    .trim() || text;
+}
+
+async function searchWeb(query: string, options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<WebSearchResult[]> {
+  const isNews = /\b(news|headline|headlines|today|latest|breaking|update)\b/i.test(query);
+  const results: WebSearchResult[] = [];
+  const maxResults = 5;
+
+  // 1. Google News RSS for live news queries
+  if (isNews) {
+    try {
+      const newsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+      const res = await fetch(newsUrl, { signal: options.signal });
+      if (res.ok) {
+        const xml = await res.text();
+        const itemRegex = /<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<link>([\s\S]*?)<\/link>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>/g;
+        let match;
+        while ((match = itemRegex.exec(xml)) && results.length < maxResults) {
+          const rawTitle = match[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/&amp;/g, '&').replace(/&#39;/g, "'").trim();
+          const rawUrl = match[2].trim();
+          results.push({
+            title: rawTitle,
+            url: rawUrl,
+            snippet: `Published ${match[3].trim()}: ${rawTitle}`,
+            source: 'Google News',
+            publishedAt: match[3].trim(),
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[alibaba-chat] Google News note:', (e as Error)?.message);
+    }
+  }
+
+  // 2. DuckDuckGo HTML search for general web queries
+  if (results.length < maxResults) {
+    try {
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+      const res = await fetch(ddgUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        },
+        signal: options.signal,
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const itemRegex = /<h2 class="result__title">[\s\S]*?<a class="result__url"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a class="result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
+        let match;
+        while ((match = itemRegex.exec(html)) && results.length < maxResults) {
+          let destUrl = match[1];
+          if (destUrl.includes('uddg=')) {
+            try {
+              const u = new URL(destUrl, 'https://duckduckgo.com');
+              destUrl = decodeURIComponent(u.searchParams.get('uddg') || destUrl);
+            } catch {}
+          }
+          const title = match[2].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;/g, "'").trim();
+          const snippet = match[3].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;/g, "'").trim();
+          let source = 'web';
+          try { source = new URL(destUrl).hostname.replace(/^www\./, ''); } catch {}
+          if (!results.some(r => r.url === destUrl)) {
+            results.push({
+              title,
+              url: destUrl,
+              snippet,
+              source,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[alibaba-chat] DuckDuckGo note:', (e as Error)?.message);
+    }
+  }
+
+  return results;
+}
 
 export async function POST(req: Request) {
   try {
@@ -82,8 +202,7 @@ export async function POST(req: Request) {
 
       if (needsSearch && queryToSearch && queryToSearch.trim().length >= 2) {
         try {
-          const searchResponse = await searchWeb(queryToSearch, { signal: controller.signal, timeoutMs: 8000 });
-          searchResults = searchResponse.results || [];
+          searchResults = await searchWeb(queryToSearch, { signal: controller.signal, timeoutMs: 8000 });
           if (searchResults.length > 0) {
             const searchGrounding = [
               `[REAL-TIME LIVE WEB SEARCH RESULTS FOR: "${queryToSearch}"]`,
