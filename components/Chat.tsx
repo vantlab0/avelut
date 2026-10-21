@@ -18,6 +18,8 @@ import {
   deleteLocalConversation,
   generateLocalId,
   healCorruptedMessagesInSqlite,
+  deleteLocalMessage,
+  updateLocalMessageText,
 } from '../services/chatStorageService';
 import { isAiMessage, normalizeConversationMessages } from '../utils/chatMessageNormalizer';
 import { getCachedAIResponse, setCachedAIResponse } from '../services/aiCacheService';
@@ -53,6 +55,8 @@ import {
   MoreVertical,
   RotateCw,
   AlertCircle,
+  Pencil,
+  WifiOff,
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
@@ -849,6 +853,9 @@ export const Chat: React.FC<ChatProps> = ({
   const [isSwitchingChat, setIsSwitchingChat] = useState(false);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [moreMenuMsgId, setMoreMenuMsgId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageText, setEditingMessageText] = useState<string>('');
+  const [activeUserBubbleMenuId, setActiveUserBubbleMenuId] = useState<string | null>(null);
   const [aiCapabilities, setAiCapabilities] = useState<AiCapabilities>(() => getStoredCapabilities());
 
   const handleToggleCapability = useCallback((key: keyof AiCapabilities) => {
@@ -898,9 +905,11 @@ export const Chat: React.FC<ChatProps> = ({
     setMessages((prev) => {
       if (prev.length === 0) return prev;
       const lastMsg = prev[prev.length - 1];
-      if (lastMsg && lastMsg.sender === 'bot') {
+      if (lastMsg && (lastMsg.sender === 'bot' || isAiMessage(lastMsg))) {
+        const hasText = !!lastMsg.text?.trim();
+        const finalText = hasText ? lastMsg.text : 'Response aborted by user.';
         return prev.map((m, idx) =>
-          idx === prev.length - 1 ? { ...m, status: 'interrupted' as const } : m
+          idx === prev.length - 1 ? { ...m, status: 'interrupted' as const, text: finalText } : m
         );
       }
       return prev;
@@ -1351,7 +1360,47 @@ export const Chat: React.FC<ChatProps> = ({
     return () => window.removeEventListener('paste', handleWindowPaste);
   }, [addOptimizedImage]);
 
-  const handleSendMessage = async (customText?: string) => {
+  const handleSaveEdit = async (msgId: string, newText: string) => {
+    const trimmed = newText.trim();
+    if (!trimmed || isLoading) return;
+    setEditingMessageId(null);
+    setActiveUserBubbleMenuId(null);
+
+    const targetIdx = messages.findIndex((m) => m.id === msgId);
+    if (targetIdx === -1) return;
+
+    // Delete/clear subsequent messages from targetIdx + 1 onward
+    const subsequentMsgs = messages.slice(targetIdx + 1);
+    for (const sm of subsequentMsgs) {
+      void deleteLocalMessage(sm.id);
+    }
+
+    // Update the edited message text in SQLite
+    void updateLocalMessageText(msgId, trimmed);
+
+    // Form truncated history up to targetIdx
+    const updatedUserMsg: Message = { ...messages[targetIdx], text: trimmed };
+    const truncatedHistory = [...messages.slice(0, targetIdx), updatedUserMsg];
+
+    setMessages(truncatedHistory);
+    if (activeConversationId) {
+      chatMessagesMemoryCache.set(activeConversationId, truncatedHistory);
+    }
+
+    // Trigger fresh AI response generation for the edited prompt
+    await handleSendMessage(trimmed, {
+      editingUserMsgId: msgId,
+      customHistory: truncatedHistory.slice(0, targetIdx),
+    });
+  };
+
+  const handleSendMessage = async (
+    customText?: string,
+    options?: {
+      editingUserMsgId?: string;
+      customHistory?: Message[];
+    }
+  ) => {
     stopVoiceRecognition();
     void hideKeyboard();
     if (activeRequestIdRef.current || isLoading) {
@@ -1396,7 +1445,8 @@ export const Chat: React.FC<ChatProps> = ({
     console.log(`[Chat] request started requestId=${requestId} imageCount=${currentImages.length} payloadMB=${payloadMB}`);
 
     const now = Date.now();
-    const userMsgId = generateLocalId('user_msg');
+    const isEditing = !!options?.editingUserMsgId;
+    const userMsgId = options?.editingUserMsgId || generateLocalId('user_msg');
     const aiMsgId = generateLocalId('ai_msg');
 
     const userMsgAttachments = currentImages.map((img) => ({
@@ -1422,7 +1472,14 @@ export const Chat: React.FC<ChatProps> = ({
       timestamp: now + 999999,
     };
 
-    setMessages((prev) => [...prev.filter((m) => m.id !== aiMsgId && m.id !== userMsgId), optimisticUserMsg, optimisticAiMsg]);
+    if (isEditing) {
+      setMessages((prev) => [
+        ...prev.map((m) => (m.id === userMsgId ? { ...m, text: displayInput } : m)),
+        optimisticAiMsg,
+      ]);
+    } else {
+      setMessages((prev) => [...prev.filter((m) => m.id !== aiMsgId && m.id !== userMsgId), optimisticUserMsg, optimisticAiMsg]);
+    }
     stickToBottomRef.current = true;
     const currentAbort = new AbortController();
     abortControllerRef.current = currentAbort;
@@ -1481,17 +1538,19 @@ export const Chat: React.FC<ChatProps> = ({
         })();
       };
 
-      // Save user message to local SQLite asynchronously (no cloud writes for speed & privacy)
-      void saveLocalMessage({
-        id: userMsgId,
-        conversation_id: currentConvoId,
-        user_id: userProfile.uid,
-        sender: 'user',
-        text: displayInput,
-        attachments_json: userMsgAttachments.length > 0 ? JSON.stringify(userMsgAttachments) : null,
-        image_url: currentImages[0] || undefined,
-        timestamp: now,
-      });
+      if (!isEditing) {
+        // Save user message to local SQLite asynchronously (no cloud writes for speed & privacy)
+        void saveLocalMessage({
+          id: userMsgId,
+          conversation_id: currentConvoId,
+          user_id: userProfile.uid,
+          sender: 'user',
+          text: displayInput,
+          attachments_json: userMsgAttachments.length > 0 ? JSON.stringify(userMsgAttachments) : null,
+          image_url: currentImages[0] || undefined,
+          timestamp: now,
+        });
+      }
 
       const updateOrAppendAiMessage = (
         text: string,
@@ -1611,7 +1670,8 @@ export const Chat: React.FC<ChatProps> = ({
       });
       userParts.push({ text: promptText });
 
-      const historyContents = messages
+      const baseMessagesForHistory = options?.customHistory !== undefined ? options.customHistory : messages;
+      const historyContents = baseMessagesForHistory
         .filter((m) => (m.text && m.text.trim()) || m.image_url || (m.attachments && m.attachments.length > 0))
         // Keep last 6 messages for context — smaller window = faster API calls
         .slice(-6)
@@ -1796,8 +1856,22 @@ export const Chat: React.FC<ChatProps> = ({
       }
 
       if (currentAbort.signal.aborted && !responseText.trim()) {
-        // User aborted before any text was received
-        setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
+        responseText = 'Response aborted by user.';
+        const currentParts: MessagePart[] = [{ type: 'text', text: responseText }];
+        updateOrAppendAiMessage(responseText, reasoningText, currentParts);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiMsgId ? { ...m, status: 'interrupted' as const, text: responseText, parts: currentParts } : m
+          )
+        );
+        void saveLocalMessage({
+          id: aiMsgId,
+          conversation_id: currentConvoId,
+          user_id: userProfile.uid,
+          sender: 'assistant',
+          text: responseText,
+          timestamp: Date.now(),
+        });
         return;
       }
 
@@ -1839,29 +1913,60 @@ export const Chat: React.FC<ChatProps> = ({
     } catch (err: any) {
       if (currentAbort.signal.aborted || err?.name === 'AbortError') {
         console.log('[Chat] Generation stopped by user.');
+        const finalText = responseText.trim() ? responseText : 'Response aborted by user.';
+        const currentParts: MessagePart[] = [{ type: 'text', text: finalText }];
+        updateOrAppendAiMessage(finalText, reasoningText, currentParts);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiMsgId ? { ...m, status: 'interrupted' as const, text: finalText, parts: currentParts } : m
+          )
+        );
+        void saveLocalMessage({
+          id: aiMsgId,
+          conversation_id: currentConvoId,
+          user_id: userProfile.uid,
+          sender: 'assistant',
+          text: finalText,
+          timestamp: Date.now(),
+        });
         return;
       }
       console.error('[Chat] Error in chat:', err);
-      // Clean up empty bot placeholder if streaming failed
-      setMessages((prev) => prev.filter((m) => m.id !== aiMsgId || m.text.trim().length > 0));
-
-      // Restore attached images if sending failed so user can easily retry
-      if (currentImages.length > 0) {
-        setAttachedImages((prev) => (prev.length === 0 ? currentImages : prev));
-      }
 
       const rawErrMsg = err?.message || String(err || '');
-      if (
+      const isNetworkOffline =
         rawErrMsg.includes('NETWORK_OFFLINE') ||
         rawErrMsg.includes('Network connection lost') ||
         rawErrMsg.includes('Failed to fetch') ||
-        (typeof navigator !== 'undefined' && !navigator.onLine)
-      ) {
+        (typeof navigator !== 'undefined' && !navigator.onLine);
+
+      if (isNetworkOffline) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiMsgId
+              ? {
+                  ...m,
+                  status: 'network_error' as const,
+                  text: '',
+                }
+              : m
+          )
+        );
         addToast('Network connection lost. Please check your internet connection and try again.', 'error');
-      } else if (rawErrMsg.includes("temporarily busy") || rawErrMsg.includes("429") || rawErrMsg.includes("RATE_LIMIT") || rawErrMsg.includes("overloaded")) {
-        addToast("Avelut's AI provider is temporarily busy. Please try again in a moment.", "error");
       } else {
-        addToast(rawErrMsg || 'An error occurred while sending your message.', 'error');
+        // Clean up empty bot placeholder if streaming failed
+        setMessages((prev) => prev.filter((m) => m.id !== aiMsgId || (m.text && m.text.trim().length > 0)));
+
+        // Restore attached images if sending failed so user can easily retry
+        if (currentImages.length > 0) {
+          setAttachedImages((prev) => (prev.length === 0 ? currentImages : prev));
+        }
+
+        if (rawErrMsg.includes("temporarily busy") || rawErrMsg.includes("429") || rawErrMsg.includes("RATE_LIMIT") || rawErrMsg.includes("overloaded")) {
+          addToast("Avelut's AI provider is temporarily busy. Please try again in a moment.", "error");
+        } else {
+          addToast(rawErrMsg || 'An error occurred while sending your message.', 'error');
+        }
       }
     } finally {
       activeRequestIdRef.current = null;
@@ -2011,18 +2116,126 @@ export const Chat: React.FC<ChatProps> = ({
                   className={`flex ${isUser ? 'justify-end' : 'justify-start'} gpu-accelerated animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out`}
                 >
                   {isUser ? (
-                    <div className="max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
+                    <div className="group relative max-w-[85%] sm:max-w-[75%] flex flex-col items-end">
                       {msg.attachments && msg.attachments.length > 0 ? (
                         <ImageGridRenderer images={msg.attachments.map((a) => a.dataUrl)} />
                       ) : msg.image_url ? (
                         <ImageGridRenderer images={[msg.image_url]} />
                       ) : null}
-                      {msg.text ? <CollapsibleUserMessage text={msg.text} /> : null}
+
+                      {editingMessageId === msg.id ? (
+                        <div className="w-full min-w-[260px] sm:min-w-[340px] max-w-full bg-[#f0f0f0] dark:bg-[#2f2f2f] rounded-[22px] p-3.5 text-neutral-900 dark:text-white shadow-sm border border-neutral-300 dark:border-white/10 animate-in fade-in zoom-in-95 duration-150">
+                          <textarea
+                            value={editingMessageText}
+                            onChange={(e) => setEditingMessageText(e.target.value)}
+                            className="w-full bg-transparent resize-none outline-none text-[15px] sm:text-[16px] leading-relaxed [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-h-[72px]"
+                            rows={Math.min(8, Math.max(2, editingMessageText.split('\n').length))}
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                void handleSaveEdit(msg.id, editingMessageText);
+                              } else if (e.key === 'Escape') {
+                                setEditingMessageId(null);
+                              }
+                            }}
+                          />
+                          <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-neutral-200/60 dark:border-white/5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingMessageId(null)}
+                              className="px-3 py-1 rounded-full text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200/60 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!editingMessageText.trim() || isLoading}
+                              onClick={() => void handleSaveEdit(msg.id, editingMessageText)}
+                              className="px-3.5 py-1 rounded-full text-xs font-medium bg-black dark:bg-white text-white dark:text-black hover:opacity-90 disabled:opacity-40 transition-all shadow-sm active:scale-95 cursor-pointer"
+                            >
+                              Save & Submit
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div
+                            onClick={() => {
+                              setActiveUserBubbleMenuId((prev) => (prev === msg.id ? null : msg.id));
+                            }}
+                            className="cursor-pointer"
+                          >
+                            {msg.text ? <CollapsibleUserMessage text={msg.text} /> : null}
+                          </div>
+
+                          {/* Action icons below sent user prompt: Pen (Edit) and Copy */}
+                          <div
+                            className={`flex items-center justify-end gap-1.5 mt-1 pr-1 text-neutral-400 dark:text-neutral-500 transition-opacity duration-200 ${
+                              activeUserBubbleMenuId === msg.id
+                                ? 'opacity-100'
+                                : 'opacity-0 sm:group-hover:opacity-100'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingMessageId(msg.id);
+                                setEditingMessageText(msg.text || '');
+                              }}
+                              className="p-1 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                              title="Edit prompt"
+                              aria-label="Edit prompt"
+                            >
+                              <Pencil className="w-3.5 h-3.5" strokeWidth={1.8} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyMessage(msg.text || '');
+                              }}
+                              className="p-1 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                              title="Copy prompt"
+                              aria-label="Copy prompt"
+                            >
+                              <Copy className="w-3.5 h-3.5" strokeWidth={1.8} />
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ) : (
                   <div className="w-full bg-transparent border-0 shadow-none p-0 min-w-0">
                     <div className="w-full min-w-0">
-                      {(!msg.text && (!msg.parts || msg.parts.length === 0)) ? (
+                      {msg.status === 'network_error' ? (
+                        <div className="w-full max-w-md rounded-2xl border border-red-200/80 dark:border-red-900/40 bg-red-50/70 dark:bg-red-950/20 p-4 text-red-900 dark:text-red-200 flex flex-col gap-3 shadow-xs">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center shrink-0 text-red-600 dark:text-red-400">
+                              <WifiOff className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-neutral-900 dark:text-white">
+                                Network connection lost
+                              </div>
+                              <div className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+                                Please check your internet connection and try again.
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex justify-end pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleRegenerateMessage(index)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-red-600 hover:bg-red-700 text-white shadow-sm transition-all active:scale-95 cursor-pointer"
+                            >
+                              <RefreshCcw className="w-3.5 h-3.5" />
+                              <span>Retry</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (!msg.text && (!msg.parts || msg.parts.length === 0)) ? (
                         <div className="py-1">
                           <ThinkingTypingIndicator
                             label="thinking"

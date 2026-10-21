@@ -113,7 +113,7 @@ export interface Message {
   conversation_id?: string;
   reasoningText?: string;
   parts?: MessagePart[];
-  status?: 'streaming' | 'ready' | 'interrupted';
+  status?: 'streaming' | 'ready' | 'interrupted' | 'network_error';
 }
 
 // Types for the new Exam System

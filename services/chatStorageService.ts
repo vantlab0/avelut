@@ -210,6 +210,28 @@ export async function deleteLocalConversation(conversationId: string, userId?: s
 }
 
 /**
+ * Permanently or soft delete a specific message locally in SQLite.
+ */
+export async function deleteLocalMessage(messageId: string): Promise<void> {
+  if (!messageId) return;
+  await runStatement(
+    `UPDATE messages SET is_deleted = 1 WHERE id = ?`,
+    [messageId]
+  );
+}
+
+/**
+ * Update the text of an existing message in SQLite.
+ */
+export async function updateLocalMessageText(messageId: string, newText: string): Promise<void> {
+  if (!messageId) return;
+  await runStatement(
+    `UPDATE messages SET text = ? WHERE id = ?`,
+    [newText, messageId]
+  );
+}
+
+/**
  * Save arbitrary application state / user progress / preferences to SQLite.
  */
 export async function saveLocalAppState<T>(
