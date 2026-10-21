@@ -41,9 +41,6 @@ export async function POST(req: Request) {
 
     // Normalize messages and detect vision / PDF-document requests
     const messages = body.messages || [];
-    const hasImage = messages.some((m: any) =>
-      Array.isArray(m.content) && m.content.some((c: any) => c.type === 'image_url')
-    );
     const hasDocument = messages.some((m: any) =>
       Array.isArray(m.content) && m.content.some((c: any) =>
         c.type === 'file' || c.file_url || c.file_data || c.file
@@ -60,121 +57,98 @@ export async function POST(req: Request) {
       .replace(/^meta-llama\//i, '');
 
     const isQwenModel = rawModel.toLowerCase().startsWith('qwen');
-    const primaryDashscopeModel = isQwenModel ? rawModel : DEFAULT_MODEL;
+    const model = isQwenModel ? rawModel : DEFAULT_MODEL;
 
-    // PDF understanding only works on qwen3.8-max / qwen3.8-flash / qwen3.8-27b
-    const candidateModels = hasDocument
-      ? Array.from(new Set([
-          primaryDashscopeModel.includes('max') ? 'qwen3.8-max' : 'qwen3.8-flash',
-          'qwen3.8-flash',
-          'qwen3.8-max',
-        ]))
-      : Array.from(new Set([
-          primaryDashscopeModel,
-          DEFAULT_MODEL,
-          'qwen3.8-omni-flash',
-          'qwen3.8-flash',
-          'qwen3.7-flash',
-        ]));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), hasDocument ? 55000 : 25000);
 
-    // Attempt DashScope / Model Studio MaaS endpoints
-    let lastUpstreamError = '';
-    let lastUpstreamStatus = 502;
-    let attemptedModel = primaryDashscopeModel;
-
-    if (alibabaApiKey) {
-      const targetBases = DASHSCOPE_BASE_URLS;
-
-      modelLoop: for (const currentModel of candidateModels) {
-        attemptedModel = currentModel;
-        for (const baseUrl of targetBases) {
-          try {
-            const controller = new AbortController();
-            // Fast 8s timeout for immediate response, or 55s for PDF document understanding
-            const timer = setTimeout(() => controller.abort(), hasDocument ? 55000 : 8000);
-
-            const payload: any = {
-              model: currentModel,
-              messages,
-              modalities: ['text'],
-              enable_thinking: false,
-              include_reasoning: false,
-              temperature: body.temperature ?? 0.35,
-              max_tokens: Math.min(body.max_tokens ?? (hasDocument ? 16384 : 2500), hasDocument ? 16384 : 4096),
-            };
-            if (body.response_format && body.response_format.type === 'json_object') {
-              payload.response_format = { type: 'json_object' };
-              payload.stream = false; // Strictly enforce non-streaming for JSON mode
-            } else if (body.stream) {
-              payload.stream = true;
-            }
-
-            const requestHeaders: Record<string, string> = {
-              Authorization: `Bearer ${alibabaApiKey}`,
-              'Content-Type': 'application/json',
-            };
-            if (workspaceId) {
-              requestHeaders['X-DashScope-WorkSpace'] = workspaceId;
-            }
-
-            const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-              method: 'POST',
-              headers: requestHeaders,
-              body: JSON.stringify(payload),
-              signal: controller.signal,
-            });
-            clearTimeout(timer);
-
-            if (response.ok) {
-              if (payload.stream && response.body) {
-                return new Response(response.body, {
-                  status: 200,
-                  headers: {
-                    'Content-Type': 'text/event-stream; charset=utf-8',
-                    'Cache-Control': 'no-cache, no-transform',
-                    Connection: 'keep-alive',
-                    'Access-Control-Allow-Origin': '*',
-                    'X-Accel-Buffering': 'no',
-                  },
-                });
-              }
-              const data = await response.json();
-              const extractedText = data?.choices?.[0]?.message?.content || '';
-              return new Response(extractedText, {
-                status: 200,
-                headers: {
-                  'Content-Type': 'text/plain',
-                  'Access-Control-Allow-Origin': '*',
-                },
-              });
-            } else {
-              const errText = await response.text().catch(() => '');
-              lastUpstreamError = errText;
-              lastUpstreamStatus = response.status;
-              console.warn(`[Alibaba Chat Proxy] Upstream ${baseUrl} (${currentModel}) HTTP ${response.status}:`, errText);
-
-              // If auth or access restriction occurs, stop trying this base or try next candidate
-              if (response.status === 401 || response.status === 403 || errText.includes('access_denied') || errText.includes('API-Key restrictions')) {
-                break modelLoop;
-              }
-
-              // If model does not exist on DashScope, try next candidate
-              if (response.status === 400 || response.status === 404 || errText.includes('model_not_found') || errText.includes('Model not exist')) {
-                continue modelLoop;
-              }
-            }
-          } catch (fetchErr: any) {
-            lastUpstreamError = fetchErr?.message || '';
-            console.warn(`[Alibaba Chat Proxy] Upstream fetch to ${baseUrl} failed:`, fetchErr?.message);
-          }
-        }
-      }
+    const payload: any = {
+      model,
+      messages,
+      modalities: ['text'],
+      enable_thinking: false,
+      include_reasoning: false,
+      temperature: body.temperature ?? 0.35,
+      max_tokens: Math.min(body.max_tokens ?? (hasDocument ? 16384 : 2500), hasDocument ? 16384 : 4096),
+    };
+    if (body.response_format && body.response_format.type === 'json_object') {
+      payload.response_format = { type: 'json_object' };
+      payload.stream = false;
+    } else if (body.stream) {
+      payload.stream = true;
     }
 
+    const requestHeaders: Record<string, string> = {
+      'Authorization': `Bearer ${alibabaApiKey}`,
+      'Content-Type': 'application/json',
+    };
+    if (workspaceId) {
+      requestHeaders['X-DashScope-WorkSpace'] = workspaceId;
+    }
+
+    let lastError = '';
+    let lastStatus = 502;
+
+    for (const baseUrl of DASHSCOPE_BASE_URLS) {
+      try {
+        const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+          method: 'POST',
+          headers: requestHeaders,
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+
+        if (response.ok) {
+          clearTimeout(timer);
+          if (payload.stream && response.body) {
+            return new Response(response.body, {
+              status: 200,
+              headers: {
+                'Content-Type': 'text/event-stream; charset=utf-8',
+                'Cache-Control': 'no-cache, no-transform',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*',
+                'X-Accel-Buffering': 'no',
+              },
+            });
+          }
+          const data = await response.json();
+          const extractedText = data?.choices?.[0]?.message?.content || '';
+          return new Response(extractedText, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/plain',
+              'Access-Control-Allow-Origin': '*',
+            },
+          });
+        } else {
+          lastError = await response.text().catch(() => '');
+          lastStatus = response.status;
+          console.warn(`[Alibaba Chat Proxy] Upstream ${baseUrl} (${model}) HTTP ${response.status}:`, lastError);
+
+          // For auth or rate limit errors, fail immediately without retrying other base
+          if (response.status === 401 || response.status === 403 || response.status === 429) {
+            clearTimeout(timer);
+            return new Response(lastError, {
+              status: response.status,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+              },
+            });
+          }
+        }
+      } catch (fetchErr: any) {
+        lastError = fetchErr?.message || '';
+        console.warn(`[Alibaba Chat Proxy] Upstream fetch to ${baseUrl} failed:`, fetchErr?.message);
+      }
+    }
+    clearTimeout(timer);
+
     return new Response(
-      JSON.stringify({ error: `AI generation temporarily unavailable: ${lastUpstreamError || 'Connection error'}` }),
+      JSON.stringify({ error: `Alibaba DashScope (${model}) unavailable: ${lastError || 'Connection error'}` }),
       {
-        status: 503,
+        status: lastStatus || 503,
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
@@ -182,8 +156,9 @@ export async function POST(req: Request) {
       }
     );
   } catch (error: any) {
+    console.error('[Alibaba Chat Proxy] Unhandled error:', error?.message || error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal AI Chat Proxy Error' }),
+      JSON.stringify({ error: error?.message || 'Internal AI Chat Proxy Error' }),
       {
         status: 500,
         headers: {

@@ -778,9 +778,7 @@ async function callAlibabaQwen(
   const { messages, hasImage, hasDocument } = paramsToChatMessages(params);
   const primaryModel = normalizeAlibabaDashScopeModel(params?.model || appSettings?.alibaba_model || 'qwen3.5-omni-flash', hasImage, hasDocument);
   const webSearchEnabled = params?.config?.webSearch === true;
-  const candidateModels = hasDocument
-    ? Array.from(new Set([primaryModel, 'qwen3.8-flash', 'qwen3.8-max']))
-    : Array.from(new Set([primaryModel, 'qwen3.5-omni-flash', 'qwen3.8-omni-flash', 'qwen3.8-flash', 'qwen3.7-flash']));
+  const candidateModels = [primaryModel];
 
   const isNative = typeof window !== 'undefined' && (
     (window as any).Capacitor?.isNativePlatform?.() ||
@@ -970,6 +968,7 @@ async function* callAlibabaQwenStream(
   }
 
   let response: Response | null = null;
+  let lastStreamError = '';
 
   const callerSignal = options?.signal || params?.signal || params?.config?.signal;
   if (callerSignal?.aborted) return;
@@ -1017,9 +1016,11 @@ async function* callAlibabaQwenStream(
         break;
       } else {
         const errText = await res.text().catch(() => '');
+        lastStreamError = `HTTP ${res.status}: ${errText}`;
         console.warn(`[Alibaba SSE] Endpoint ${endpoint} returned HTTP ${res.status}:`, errText);
       }
     } catch (err: any) {
+      lastStreamError = err?.message || 'Network error';
       console.warn(`[Alibaba SSE] Endpoint ${endpoint} fetch error:`, err?.message);
     }
   }
@@ -1027,10 +1028,7 @@ async function* callAlibabaQwenStream(
   if (callerSignal?.aborted) return;
 
   if (!response || !response.body) {
-    console.warn('[Alibaba SSE] Stream response not available, attempting callAlibabaQwen non-streaming...');
-    const fallbackResult = await callAlibabaQwen(params, appSettings, options);
-    yield fallbackResult;
-    return;
+    throw new Error(`[Alibaba SSE] Stream response not available: ${lastStreamError || 'No available endpoint'}`);
   }
 
   const contentType = (response.headers.get('content-type') || '').toLowerCase();
