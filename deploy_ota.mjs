@@ -66,9 +66,12 @@ function uploadFileToSupabaseStorage(supabaseUrl, key, bucket, objectPath, fileP
 async function deployOTA() {
   try {
     const supabaseUrl = process.env.SUPABASE_URL || "https://eywpksapztzbnthlgfhd.supabase.co";
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.VITE_SUPABASE_ANON_KEY;
     if (!supabaseKey) {
-      throw new Error("Set SUPABASE_SERVICE_ROLE_KEY before running the OTA deploy script.");
+      throw new Error("Set SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY before running the OTA deploy script.");
     }
 
     console.log(`[OTA] Connecting to Supabase: ${supabaseUrl}`);
@@ -79,9 +82,9 @@ async function deployOTA() {
       console.log("[OTA] --skip-build specified. Using existing ./dist build.");
     } else {
       console.log("[OTA] Building web project bundle...");
-      const npmCmd = process.platform === "win32" ? "npm.cmd run build" : "npm run build";
+      const buildCmd = process.platform === "win32" ? "pnpm.cmd run build" : "pnpm run build";
       try {
-        execSync(npmCmd, { stdio: "inherit" });
+        execSync(buildCmd, { stdio: "inherit" });
       } catch (err) {
         console.log("[OTA] Web build finished (react-snap postbuild handled). Checking for dist...");
         if (!fs.existsSync("./dist")) {
