@@ -313,22 +313,6 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     }
   }
 
-  // Trigger the Edge Function manually via fetch for push notification
-  try {
-    const pushUrl = `${supabaseUrl}/functions/v1/push-on-message`;
-    await fetch(pushUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-        'apikey': supabaseAnonKey,
-      },
-      body: JSON.stringify({ record: messageRecord }),
-    });
-  } catch (pushErr) {
-    console.warn('[supabaseRealtimeDb] Push notification failed:', pushErr);
-  }
-
   return message;
 }
 

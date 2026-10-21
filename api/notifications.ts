@@ -178,7 +178,7 @@ export async function POST(req: Request) {
             priority: 'high',
             notification: {
               channel_id: 'default',
-              icon: 'ic_launcher',
+              icon: 'ic_stat_name',
               sound: 'default',
               default_vibrate_timings: true,
               click_action: 'FCM_PLUGIN_ACTIVITY',
