@@ -7,6 +7,7 @@ import {
   fetchLiveMinutePoolFromServer,
   type LiveDurationMinutes,
 } from '../../utils/liveTutorialQuota';
+import { openExternalSubscriptionPage } from '../../utils/capacitorUtils';
 
 export type LessonDurationMode = 15 | 30 | 60;
 
@@ -101,10 +102,14 @@ export const LessonDurationModal: React.FC<LessonDurationModalProps> = ({
 
   const handleStart = () => {
     if (isSelectedLocked) {
+      if (activeDecision?.reason === 'locked_plan') {
+        openExternalSubscriptionPage(userProfile?.uid);
+        onClose();
+        return;
+      }
       if (onBuyCredits) {
         onBuyCredits();
       } else {
-        // Fallback: close and notify
         onClose();
       }
       return;

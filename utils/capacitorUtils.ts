@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style as StatusBarStyle } from '@capacitor/status-bar';
 import { Keyboard } from '@capacitor/keyboard';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { Browser } from '@capacitor/browser';
 
 /**
  * Returns true when the app is running as a native Capacitor app (Android/iOS).
@@ -125,6 +126,29 @@ export const showKeyboard = async (): Promise<void> => {
     await Keyboard.show();
   } catch (err) {
     // Silently ignore if not supported in current environment
+  }
+};
+
+/**
+ * Opens the external subscription page in the device browser with user ID parameter.
+ */
+export const openExternalSubscriptionPage = async (userId?: string): Promise<void> => {
+  const baseUrl = 'https://www.avelut.xyz/plans';
+  const url = userId && userId.trim()
+    ? `${baseUrl}?uid=${encodeURIComponent(userId.trim())}`
+    : baseUrl;
+
+  if (isNative()) {
+    try {
+      await Browser.open({ url });
+      return;
+    } catch (browserErr) {
+      console.warn('[Subscription] Capacitor Browser open failed, falling back to window.open:', browserErr);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank');
   }
 };
 

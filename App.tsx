@@ -930,6 +930,71 @@ const App: React.FC = () => {
         }
     }, []);
     const [pendingMessengerChatId, setPendingMessengerChatId] = useState<string | null>(null);
+    const [pendingDeepLink, setPendingDeepLink] = useState<{
+        route?: string;
+        chatId?: string;
+        courseId?: string;
+        topicId?: string;
+        tutorialId?: string;
+        sessionId?: string;
+        actionId?: string;
+        replyText?: string;
+    } | null>(null);
+
+    useEffect(() => {
+        if (!user || isAuthChecking || isLoading || isProfileLoading || !pendingDeepLink) return;
+
+        const { route, chatId, courseId, topicId, tutorialId, sessionId, actionId, replyText } = pendingDeepLink;
+        setPendingDeepLink(null);
+
+        if ((actionId === 'reply_action' || actionId === 'reply') && replyText && chatId) {
+            (async () => {
+                try {
+                    const messagesRef = dbRef(db, `messages/${chatId}`);
+                    const newMsgRef = push(messagesRef);
+                    await set(newMsgRef, {
+                        senderId: user.uid,
+                        text: replyText,
+                        timestamp: Date.now(),
+                        isRead: false
+                    });
+                    addToast('Reply sent ✓', 'success');
+                } catch (e) {
+                    console.error('Failed to send inline reply:', e);
+                    addToast('Failed to send reply', 'error');
+                }
+            })();
+            setActiveItem('messenger');
+            setPendingMessengerChatId(chatId);
+            return;
+        }
+
+        if ((actionId === 'mark_read' || actionId === 'mark_as_read') && chatId) {
+            markChatAsRead(chatId, user.uid).catch(console.warn);
+            addToast('Marked as read ✓', 'success');
+            return;
+        }
+
+        if (chatId || actionId === 'open_chat' || actionId === 'messenger' || route === 'messenger') {
+            setActiveItem('messenger');
+            if (chatId) setPendingMessengerChatId(chatId);
+            return;
+        }
+
+        if (actionId === 'open_study_guide' || actionId === 'study_guide' || route === 'study_guide' || courseId || topicId) {
+            setActiveItem('study_guide');
+            return;
+        }
+
+        if (actionId === 'open_tutorial' || actionId === 'tutorial' || actionId === 'timetable' || route === 'timetable' || tutorialId || sessionId) {
+            setActiveItem('timetable');
+            return;
+        }
+
+        if (route && ['chat', 'study_guide', 'study_partners', 'messenger', 'notifications', 'leaderboard', 'timetable', 'billing'].includes(route)) {
+            setActiveItem(route);
+        }
+    }, [user, isAuthChecking, isLoading, isProfileLoading, pendingDeepLink]);
 
     const currentPageLabel = activeItem === 'messenger'
         ? 'Messenger'
@@ -1071,9 +1136,21 @@ const App: React.FC = () => {
                 return;
             }
             if (isCustomScheme && url.host === 'action') {
-                const actionId = url.searchParams.get('id');
-                const replyText = url.searchParams.get('replyText');
-                const chatId = url.searchParams.get('chatId');
+                const actionId = url.searchParams.get('id') || url.searchParams.get('actionId') || undefined;
+                const replyText = url.searchParams.get('replyText') || undefined;
+                const chatId = url.searchParams.get('chatId') || undefined;
+                const courseId = url.searchParams.get('courseId') || undefined;
+                const topicId = url.searchParams.get('topicId') || undefined;
+                const tutorialId = url.searchParams.get('tutorialId') || undefined;
+                const sessionId = url.searchParams.get('sessionId') || undefined;
+                const route = url.searchParams.get('route') || undefined;
+
+                const deepLinkObj = { route, chatId, courseId, topicId, tutorialId, sessionId, actionId, replyText };
+
+                if (!user || isAuthChecking || isLoading || isProfileLoading) {
+                    setPendingDeepLink(deepLinkObj);
+                    return;
+                }
 
                 if (actionId === 'reply_action' && replyText && chatId && user) {
                      try {

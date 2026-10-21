@@ -16,7 +16,7 @@ import { AppUpdateBadge } from './AppUpdateBadge';
 import { useOTAUpdater } from '../hooks/useOTAUpdater';
 import { NotificationDropdown } from './NotificationDropdown';
 import type { UserProfile, Notification as NotificationType } from '../types';
-import { isNative } from '../utils/capacitorUtils';
+import { isNative, openExternalSubscriptionPage } from '../utils/capacitorUtils';
 
 export interface HeaderProps {
   activeItem?: string;
@@ -292,7 +292,7 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   onClick={() => {
                     setIsMenuOpen(false);
-                    onNavigate?.('billing');
+                    openExternalSubscriptionPage(userProfile?.uid);
                   }}
                   className="w-full flex items-center justify-between px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition cursor-pointer text-left"
                 >
