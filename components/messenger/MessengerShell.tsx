@@ -1450,31 +1450,6 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
             )
           );
 
-          // Dispatch push notification to recipient immediately
-          const recipientUid = activeChat?.otherUser?.uid;
-          if (recipientUid) {
-            const apiBase = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()
-              ? 'https://www.avelut.xyz'
-              : '';
-            const senderName = userProfile?.displayName || userProfile?.name || userProfile?.username || authUser.displayName || 'Avelut User';
-            const pushText = type === 'voice' ? 'Sent a voice message' : type === 'image' ? 'Sent an image' : type === 'file' ? 'Sent a file' : (text || 'Sent a message');
-
-            fetch(`${apiBase}/api/notifications`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'send',
-                targetUserId: recipientUid,
-                title: senderName,
-                message: pushText,
-                customData: {
-                  route: 'messenger',
-                  chatId,
-                  senderId: authUser.uid,
-                },
-              }),
-            }).catch(err => console.warn('[Messenger] Direct push dispatch error:', err));
-          }
         } catch (error: any) {
           if (optimisticId) {
             setMessages(prev => prev.filter(message => message.id !== optimisticId));

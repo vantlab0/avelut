@@ -122,7 +122,7 @@ describe('supabaseRealtimeDb - markChatAsRead', () => {
   });
 });
 
-describe('supabaseRealtimeDb - persistMessage direct insert & push trigger', () => {
+describe('supabaseRealtimeDb - persistMessage direct insert', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = vi.fn().mockResolvedValue({
@@ -131,7 +131,7 @@ describe('supabaseRealtimeDb - persistMessage direct insert & push trigger', () 
     } as any);
   });
 
-  it('directly inserts message into messages table and triggers push-on-message edge function', async () => {
+  it('directly inserts message into messages table without manual client push trigger', async () => {
     const msgRef = ref(null, 'messages/chat-123/msg-456');
     const msgValue = {
       senderId: 'user-1',
@@ -155,25 +155,7 @@ describe('supabaseRealtimeDb - persistMessage direct insert & push trigger', () 
       created_at: expect.any(String),
     });
 
-    // Verify manual Edge Function trigger call via fetch
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    const [fetchUrl, fetchOptions] = (global.fetch as any).mock.calls[0];
-    expect(fetchUrl).toBe('https://eywpksapztzbnthlgfhd.supabase.co/functions/v1/push-on-message');
-    expect(fetchOptions.method).toBe('POST');
-    expect(fetchOptions.headers).toEqual({ 'Content-Type': 'application/json' });
-
-    const parsedBody = JSON.parse(fetchOptions.body);
-    expect(parsedBody).toEqual({
-      record: {
-        id: 'msg-456',
-        chat_id: 'chat-123',
-        sender_id: 'user-1',
-        text: 'Hello, world!',
-        media_url: null,
-        media_type: 'text',
-        reply_to: null,
-        created_at: expect.any(String),
-      },
-    });
+    // Verify database webhook handles delivery and manual fetch is not called
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });
