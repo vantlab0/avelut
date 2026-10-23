@@ -20,7 +20,9 @@ if (typeof Node !== 'undefined' && Node.prototype) {
 }
 
 // Global app constants
-(window as any).__app_id = (window as any).__app_id || 'avelut-app';
+if (typeof window !== 'undefined') {
+  (window as any).__app_id = (window as any).__app_id || 'avelut-app';
+}
 
 // PWA deferred prompt handler
 if (typeof window !== 'undefined') {

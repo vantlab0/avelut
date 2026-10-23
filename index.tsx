@@ -23,13 +23,28 @@ const isOtaChunkFailure = (value?: string | null, stack?: string | null) => {
   );
 };
 
-const triggerToast = (message: string, type: 'info' | 'warning' | 'error' = 'info', duration = 3000) => {
+const recentToastTimestamps = new Map<string, number>();
+const TOAST_THROTTLE_MS = 10000;
+
+export const triggerToast = (message: string, type: 'info' | 'warning' | 'error' = 'info', duration = 3000) => {
   if (typeof window === 'undefined') return;
+  const now = Date.now();
+  const key = `${type}:${message}`;
+  const lastTime = recentToastTimestamps.get(key) || 0;
+  if (now - lastTime < TOAST_THROTTLE_MS) {
+    return;
+  }
+  recentToastTimestamps.set(key, now);
+
   window.dispatchEvent(
     new CustomEvent('avelut_toast', {
       detail: { message, type, duration },
     })
   );
+};
+
+export const clearToastThrottleCache = () => {
+  recentToastTimestamps.clear();
 };
 
 const reloadAppAfterChunkIssue = (reason: string) => {
@@ -52,7 +67,28 @@ const reloadAppAfterChunkIssue = (reason: string) => {
   }, OTA_RELOAD_DELAY_MS);
 };
 
-const handleNonFatalError = (label: string, reason?: unknown) => {
+const formatErrorForLog = (reason?: unknown): string => {
+  if (!reason) return 'Unknown error';
+  if (typeof reason === 'string') return reason;
+  if (reason instanceof Error) return `${reason.name}: ${reason.message}`;
+  if (typeof reason === 'object' && 'message' in (reason as Record<string, unknown>)) {
+    return String((reason as Record<string, unknown>).message);
+  }
+  try {
+    return JSON.stringify(reason);
+  } catch {
+    return String(reason);
+  }
+};
+
+const isExplicitlyRecoverableNetworkIssue = (reason?: unknown): boolean => {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return true;
+  }
+  return false;
+};
+
+export const handleNonFatalError = (label: string, reason?: unknown) => {
   const errorText = typeof reason === 'string'
     ? reason
     : reason && typeof (reason as any).message === 'string'
@@ -65,8 +101,17 @@ const handleNonFatalError = (label: string, reason?: unknown) => {
     return;
   }
 
-  triggerToast('A temporary issue was detected. Your session is still active.', 'warning', 2500);
+  // Log useful diagnostic details to console without exposing sensitive information
+  console.warn(`[global-error] Non-fatal runtime issue caught (${label}):`, formatErrorForLog(reason));
+
+  // Do not display generic warning toasts for every unhandled error.
+  // Restrict toasts to explicitly identified, recoverable network/offline conditions.
+  if (isExplicitlyRecoverableNetworkIssue(reason)) {
+    triggerToast('Network connection lost. Your session is still active.', 'warning', 2500);
+  }
 };
+
+export { isOtaChunkFailure, reloadAppAfterChunkIssue };
 
 // Immediately notify native layer that JavaScript loaded successfully.
 if (Capacitor.isNativePlatform()) {
@@ -81,75 +126,75 @@ import App from './App';
 import { ToastProvider } from './hooks/useToast';
 import { RootErrorBoundary } from './components/RootErrorBoundary';
 
-window.addEventListener('vite:preloadError', () => {
-  reloadAppAfterChunkIssue('vite preload error');
-});
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', () => {
+    reloadAppAfterChunkIssue('vite preload error');
+  });
 
-window.addEventListener('unhandledrejection', (event) => {
-  const reason = event.reason;
-  const message = reason && typeof reason === 'object' && 'message' in reason ? String((reason as any).message) : String(reason || '');
-  const stack = reason && typeof reason === 'object' && 'stack' in reason ? String((reason as any).stack) : '';
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    const message = reason && typeof reason === 'object' && 'message' in reason ? String((reason as any).message) : String(reason || '');
+    const stack = reason && typeof reason === 'object' && 'stack' in reason ? String((reason as any).stack) : '';
 
-  if (isOtaChunkFailure(message, stack)) {
-    event.preventDefault();
-    event.stopPropagation();
-    reloadAppAfterChunkIssue('chunk / module load failure');
-    return;
-  }
+    if (isOtaChunkFailure(message, stack)) {
+      event.preventDefault();
+      event.stopPropagation();
+      reloadAppAfterChunkIssue('chunk / module load failure');
+      return;
+    }
 
-  handleNonFatalError('unhandled rejection', reason);
-});
+    handleNonFatalError('unhandled rejection', reason);
+  });
 
-window.addEventListener('error', (event) => {
-  const message = event.message || '';
-  const stack = event.error && typeof event.error === 'object' && 'stack' in event.error ? String((event.error as any).stack) : '';
+  window.addEventListener('error', (event) => {
+    const message = event.message || '';
+    const stack = event.error && typeof event.error === 'object' && 'stack' in event.error ? String((event.error as any).stack) : '';
 
-  if (
-    event.message &&
-    (
-      event.message.includes('reportAllChanges') ||
-      (event.message.includes('startTime') && (event.filename?.includes('VM') || !event.filename))
-    )
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-    return;
-  }
+    if (
+      event.message &&
+      (
+        event.message.includes('reportAllChanges') ||
+        (event.message.includes('startTime') && (event.filename?.includes('VM') || !event.filename))
+      )
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
 
-  if (isOtaChunkFailure(message, stack) || (event.error && (event.error as any).name === 'ChunkLoadError')) {
-    event.preventDefault();
-    event.stopPropagation();
-    reloadAppAfterChunkIssue('chunk / script error');
-    return;
-  }
+    if (isOtaChunkFailure(message, stack) || (event.error && (event.error as any).name === 'ChunkLoadError')) {
+      event.preventDefault();
+      event.stopPropagation();
+      reloadAppAfterChunkIssue('chunk / script error');
+      return;
+    }
 
-  handleNonFatalError('global runtime error', event.error || message);
-}, true);
+    handleNonFatalError('global runtime error', event.error || message);
+  }, true);
+}
 
 import { HelmetProvider } from 'react-helmet-async';
 import { ThemeProvider } from './contexts/ThemeContext';
 
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error('Could not find root element to mount to');
+const rootElement = typeof document !== 'undefined' ? document.getElementById('root') : null;
+if (rootElement) {
+  const appContent = (
+    <React.StrictMode>
+      <RootErrorBoundary>
+        <HelmetProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </ThemeProvider>
+        </HelmetProvider>
+      </RootErrorBoundary>
+    </React.StrictMode>
+  );
+
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(appContent);
 }
-
-const appContent = (
-  <React.StrictMode>
-    <RootErrorBoundary>
-      <HelmetProvider>
-        <ThemeProvider>
-          <ToastProvider>
-            <App />
-          </ToastProvider>
-        </ThemeProvider>
-      </HelmetProvider>
-    </RootErrorBoundary>
-  </React.StrictMode>
-);
-
-const root = ReactDOM.createRoot(rootElement);
-root.render(appContent);
 
 if (Capacitor.isNativePlatform()) {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
