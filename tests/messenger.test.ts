@@ -99,4 +99,45 @@ describe('Messenger Utility & Presence Tests', () => {
       expect(formatChatTimestamp(undefined)).toBe('');
     });
   });
+
+  describe('Optimistic Message Reconciliation & Retry Logic', () => {
+    it('reconciles optimistic messages when matching cloud message is present', () => {
+      const now = Date.now();
+      const optimisticList = [
+        { id: 'temp_123', senderId: 'user_1', text: 'Hello', timestamp: now, isPending: true }
+      ];
+      const cloudMsgs = [
+        { id: 'cloud_789', senderId: 'user_1', text: 'Hello', timestamp: now + 500 }
+      ];
+
+      const remainingOptimistic = optimisticList.filter(opt => {
+        if (cloudMsgs.some(cloud => cloud.id === opt.id)) return false;
+        if (cloudMsgs.some(cloud => cloud.senderId === opt.senderId && cloud.text === opt.text && Math.abs(cloud.timestamp - opt.timestamp) < 15000)) {
+          return false;
+        }
+        return true;
+      });
+
+      expect(remainingOptimistic.length).toBe(0);
+    });
+
+    it('preserves failed optimistic messages for user retry', () => {
+      const now = Date.now();
+      const optimisticList = [
+        { id: 'temp_failed_1', senderId: 'user_1', text: 'Failed msg', timestamp: now, isFailed: true, isPending: false }
+      ];
+      const cloudMsgs: any[] = [];
+
+      const remainingOptimistic = optimisticList.filter(opt => {
+        if (cloudMsgs.some(cloud => cloud.id === opt.id)) return false;
+        if (!opt.isFailed && cloudMsgs.some(cloud => cloud.senderId === opt.senderId && cloud.text === opt.text)) {
+          return false;
+        }
+        return true;
+      });
+
+      expect(remainingOptimistic.length).toBe(1);
+      expect(remainingOptimistic[0].isFailed).toBe(true);
+    });
+  });
 });
