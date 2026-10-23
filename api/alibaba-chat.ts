@@ -186,8 +186,10 @@ export async function POST(req: Request) {
     const timer = setTimeout(() => controller.abort(), hasDocument ? 55000 : 25000);
 
     // Real web search grounding when browse/search is requested
+    const isSearchRequested = body.web_search === true || body.enable_search === true || body.web_search === 'true' || body.enable_search === 'true';
     let searchResults: WebSearchResult[] = [];
-    if (body.web_search || body.enable_search) {
+
+    if (isSearchRequested) {
       const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
       let userQuery = '';
       if (typeof lastUserMsg?.content === 'string') {
@@ -196,11 +198,9 @@ export async function POST(req: Request) {
         userQuery = lastUserMsg.content.map((c: any) => c.text || '').join(' ');
       }
 
-      // Check if this query actually requires web search (making it adaptive / optional)
-      const needsSearch = isRealTimeSearchNeeded(userQuery);
-      const queryToSearch = cleanSearchQuery(userQuery);
+      const queryToSearch = cleanSearchQuery(userQuery) || userQuery;
 
-      if (needsSearch && queryToSearch && queryToSearch.trim().length >= 2) {
+      if (queryToSearch && queryToSearch.trim().length >= 2) {
         try {
           searchResults = await searchWeb(queryToSearch, { signal: controller.signal, timeoutMs: 8000 });
           if (searchResults.length > 0) {
@@ -235,6 +235,8 @@ export async function POST(req: Request) {
       include_reasoning: false,
       temperature: body.temperature ?? 0.35,
       max_tokens: Math.min(body.max_tokens ?? (hasDocument ? 16384 : 2500), hasDocument ? 16384 : 4096),
+      enable_search: isSearchRequested,
+      ...(isSearchRequested ? { search_options: { enable_citation: true, enable_source: true } } : {}),
     };
     if (body.response_format && body.response_format.type === 'json_object') {
       payload.response_format = { type: 'json_object' };

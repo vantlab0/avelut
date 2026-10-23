@@ -1696,7 +1696,7 @@ export const Chat: React.FC<ChatProps> = ({
         parts: userParts,
       });
 
-      const shouldSearch = aiCapabilities.browse && isRealTimeSearchNeeded(promptText);
+      const shouldSearch = aiCapabilities.browse;
       const searchQuery = shouldSearch ? cleanSearchQuery(promptText) : '';
 
       const aiParams = {

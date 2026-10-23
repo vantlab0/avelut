@@ -805,6 +805,8 @@ async function callAlibabaQwen(
       max_tokens: params?.config?.maxOutputTokens ?? (hasDocument ? 16384 : 4096),
       include_reasoning: false,
       web_search: webSearchEnabled,
+      enable_search: webSearchEnabled,
+      ...(webSearchEnabled ? { search_options: { enable_citation: true, enable_source: true } } : {}),
     };
 
     if (params?.config?.responseMimeType === 'application/json' || params?.config?.response_format?.type === 'json_object') {
@@ -962,6 +964,7 @@ async function* callAlibabaQwenStream(
     max_tokens: params?.config?.maxOutputTokens ?? 4096,
     web_search: webSearchEnabled,
     enable_search: webSearchEnabled,
+    ...(webSearchEnabled ? { search_options: { enable_citation: true, enable_source: true } } : {}),
   };
 
   if (params?.config?.responseMimeType === 'application/json' || params?.config?.response_format?.type === 'json_object') {
