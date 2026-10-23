@@ -31,6 +31,10 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       const currentUid = userProfile?.uid || auth.currentUser?.uid || '';
       const [authUser, setAuthUser] = useState<AuthUser | null>(auth.currentUser);
       const [activeChat, setActiveChat] = useState<{ chatId: string, otherUser: UserProfile } | null>(null);
+      const activeChatRef = useRef(activeChat);
+      useEffect(() => {
+        activeChatRef.current = activeChat;
+      }, [activeChat]);
       const [chats, setChats] = useState<any[]>(() => ensureArray(readCachedJson<any[]>(getMessengerCacheKey(currentUid || 'anon', 'chats'), [])));
       const [allUsers, setAllUsers] = useState<UserProfile[]>(() => ensureArray<UserProfile>(readCachedJson<UserProfile[]>(getMessengerCacheKey(currentUid || 'anon', 'all_users'), [])));
       const [messages, setMessages] = useState<any[]>(() => ensureArray(readCachedJson<any[]>(getMessengerCacheKey(currentUid || 'anon', 'messages_default'), [])));
@@ -846,9 +850,11 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         if (cached.length > 0) {
           setTimeout(() => scrollToBottom('instant' as ScrollBehavior), 30);
         }
-        const messagesRef = dbRef(db, `messages/${activeChat.chatId}`);
+        const subscribedChatId = activeChat.chatId;
+        const messagesRef = dbRef(db, `messages/${subscribedChatId}`);
         const messagesQuery = query(messagesRef, limitToLast(50));
         const unsubscribeMessages = onValue(messagesQuery, (snap) => {
+          if (activeChatRef.current?.chatId !== subscribedChatId) return;
           const cloudMsgs = Object.entries(snap.val() || {}).map(([id, msg]: any) => ({ id, ...msg })).sort((a, b) => a.timestamp - b.timestamp);
           setMessages(prev => {
             const safePrev = ensureArray(prev);
@@ -862,7 +868,13 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
             return cloudMsgs;
           });
 
-          setOptimisticMessages(prev => ensureArray(prev).filter(opt => !cloudMsgs.some(cloud => cloud.id === opt.id)));
+          setOptimisticMessages(prev => ensureArray(prev).filter(opt => {
+            if (cloudMsgs.some(cloud => cloud.id === opt.id)) return false;
+            if (!opt.isFailed && cloudMsgs.some(cloud => cloud.senderId === opt.senderId && cloud.text === opt.text && Math.abs((cloud.timestamp || 0) - (opt.timestamp || 0)) < 15000)) {
+              return false;
+            }
+            return true;
+          }));
 
           const lastCloudMessage = cloudMsgs[cloudMsgs.length - 1];
           const shouldStick = stickToBottomRef.current || lastCloudMessage?.senderId === authUser?.uid;
@@ -870,7 +882,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
             setTimeout(() => scrollToBottom(cached.length === 0 ? ('instant' as ScrollBehavior) : 'smooth'), 40);
           }
           if (authUser) {
-            void markChatAsRead(activeChat.chatId, authUser.uid)
+            void markChatAsRead(subscribedChatId, authUser.uid)
               .catch(console.error);
           }
         });
@@ -1406,13 +1418,80 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         }
       };
 
-      const sendMsg = async (text: string, type = 'text', extraData: Record<string, any> = {}) => {
+      const retryFailedMessage = async (msg: any) => {
+        if (!activeChat || !authUser) return;
+        if (msg.blob) {
+          await retryFailedUpload(msg);
+        } else {
+          await sendMsg(msg.text, msg.type || 'text', {}, msg.id);
+        }
+      };
+
+      const sendMsg = async (text: string, type = 'text', extraData: Record<string, any> = {}, retryTempId?: string) => {
         if ((!text.trim() && type === 'text') || !activeChat || !authUser) {
           addToast('Open a chat first, then send a message.', 'info');
           return;
         }
 
-        let optimisticId: string | null = null;
+        const clientTimestamp = Date.now();
+        const tempId = retryTempId || `temp_msg_${clientTimestamp}_${Math.random().toString(36).slice(2)}`;
+
+        const optimisticMsg: any = {
+          id: tempId,
+          senderId: authUser.uid,
+          text,
+          type,
+          timestamp: clientTimestamp,
+          status: 'sending',
+          isPending: true,
+          isFailed: false,
+          isRead: false,
+          ...extraData,
+        };
+
+        if (replyingTo && !retryTempId) {
+          optimisticMsg.replyTo = {
+            id: replyingTo.id,
+            text: replyingTo.type === 'text' ? replyingTo.text : `[${replyingTo.type}]`,
+            senderId: replyingTo.senderId,
+            senderName: replyingTo.senderId === authUser.uid ? 'You' : activeChat.otherUser.display_name
+          };
+          setReplyingTo(null);
+        }
+
+        if (retryTempId) {
+          setOptimisticMessages(prev => prev.map(m => m.id === retryTempId ? { ...m, isPending: true, isFailed: false, status: 'sending' } : m));
+        } else {
+          setOptimisticMessages(prev => [...prev.filter(m => m.id !== tempId), optimisticMsg]);
+        }
+
+        // Synchronously update local chats list preview & last message
+        setChats(prev => {
+          const safePrev = ensureArray(prev);
+          return safePrev.map(c => {
+            if (c.id === activeChat.chatId) {
+              return {
+                ...c,
+                timestamp: clientTimestamp,
+                last_message: {
+                  text,
+                  senderId: authUser.uid,
+                  isRead: false,
+                  timestamp: clientTimestamp,
+                },
+                last_message_text: text,
+                last_message_at: clientTimestamp,
+                last_message_sender_id: authUser.uid,
+              };
+            }
+            return c;
+          });
+        });
+
+        stickToBottomRef.current = true;
+        playBubbleSound();
+        requestAnimationFrame(() => scrollToBottom('auto'));
+
         try {
           const chatId = await ensureDirectChat(activeChat.otherUser.uid);
           if (chatId !== activeChat.chatId) {
@@ -1420,42 +1499,17 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           }
 
           const msgRef = push(dbRef(db, `messages/${chatId}`));
-          const clientTimestamp = Date.now();
-          optimisticId = msgRef.key || `${clientTimestamp}`;
           const data: any = { senderId: authUser.uid, text, type, timestamp: serverTimestamp(), ...extraData };
-
-          if (replyingTo) {
-            data.replyTo = {
-              id: replyingTo.id,
-              text: replyingTo.type === 'text' ? replyingTo.text : `[${replyingTo.type}]`,
-              senderId: replyingTo.senderId,
-              senderName: replyingTo.senderId === authUser.uid ? 'You' : activeChat.otherUser.display_name
-            };
-            setReplyingTo(null);
+          if (optimisticMsg.replyTo) {
+            data.replyTo = optimisticMsg.replyTo;
           }
 
-          setMessages(prev => [
-            ...prev,
-            { id: optimisticId, ...data, timestamp: clientTimestamp, status: 'sending', isPending: true, isRead: false }
-          ]);
-          stickToBottomRef.current = true;
-          playBubbleSound();
-          requestAnimationFrame(() => scrollToBottom('auto'));
           await set(msgRef, data);
-          setMessages(prev =>
-            prev.map(msg =>
-              msg.id === optimisticId
-                ? { ...msg, status: 'sent', isPending: false, isRead: false }
-                : msg
-            )
-          );
-
+          setOptimisticMessages(prev => prev.filter(m => m.id !== tempId));
         } catch (error: any) {
-          if (optimisticId) {
-            setMessages(prev => prev.filter(message => message.id !== optimisticId));
-          }
           console.error('Failed to send message:', error);
-          addToast(error?.message || 'Message failed to send.', 'error');
+          setOptimisticMessages(prev => prev.map(m => m.id === tempId ? { ...m, isPending: false, isFailed: true, status: 'failed' } : m));
+          addToast(error?.message || 'Message failed to send. Tap to retry.', 'error');
         }
       };
 
@@ -2602,14 +2656,14 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                                 {msg.isFailed && (
                                   <button
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); void retryFailedUpload(msg); }}
-                                    className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-rose-500 hover:text-rose-400 bg-black/10 dark:bg-white/10 rounded-full px-2 py-0.5"
+                                    onClick={(e) => { e.stopPropagation(); void retryFailedMessage(msg); }}
+                                    className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-rose-500 hover:text-rose-400 bg-black/10 dark:bg-white/10 rounded-full px-2 py-0.5 cursor-pointer"
                                   >
                                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                       <path d="M16 3h5l-1.8 3.7 1.8 3.3H16"></path>
                                       <path d="M3 12l3.5 7V18h4V3h-1.5"></path>
                                     </svg>
-                                    Upload failed — tap to retry
+                                    Message failed — tap to retry
                                   </button>
                                 )}
 
