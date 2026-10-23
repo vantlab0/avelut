@@ -450,17 +450,28 @@ export const GrokChatComposer: React.FC<{
     } catch {}
   }, []);
 
-  // Auto-focus textarea on mount so users can immediately start typing
+  // Auto-focus textarea and open native soft keyboard on new chat creation
   useEffect(() => {
     if (autoFocus) {
       const timer = setTimeout(() => {
         if (textareaRef.current) {
           textareaRef.current.focus({ preventScroll: true });
+          void showKeyboard();
         }
       }, 150);
       return () => clearTimeout(timer);
     }
   }, [autoFocus]);
+
+  // Clean up keyboard and focus when unmounting / navigating away
+  useEffect(() => {
+    return () => {
+      if (textareaRef.current) {
+        textareaRef.current.blur();
+      }
+      void hideKeyboard();
+    };
+  }, []);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -510,11 +521,7 @@ export const GrokChatComposer: React.FC<{
 
   return (
     <div
-      className="w-full max-w-3xl mx-auto px-3 sm:px-4 pt-2 relative z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md shrink-0"
-      style={{
-        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom), var(--keyboard-height, 0px))',
-        transition: 'padding-bottom 0.15s ease',
-      }}
+      className="chat-composer-container w-full max-w-3xl mx-auto px-3 sm:px-4 pt-2 relative z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md shrink-0"
       onPaste={handlePaste}
     >
       <div className="relative flex flex-col bg-white dark:bg-[#212124] rounded-[28px] border border-[#E5E5E5] dark:border-white/10 transition-all focus-within:ring-1 focus-within:ring-black/10 dark:focus-within:ring-white/10 shadow-xs">
@@ -2580,7 +2587,7 @@ export const Chat: React.FC<ChatProps> = ({
         onToggleCapability={handleToggleCapability}
         onSend={() => handleSendMessage()}
         onStop={handleStopGenerating}
-        autoFocus={true}
+        autoFocus={activeConversationId === null}
       />
 
       {isCameraOpen && (
