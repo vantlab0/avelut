@@ -760,22 +760,20 @@ export const GrokChatComposer: React.FC<{
                   onToggleVoice();
                 }
               }}
-              className={`h-9 sm:h-10 px-3.5 sm:px-4 rounded-full flex items-center justify-center gap-1.5 shrink-0 transition-all duration-150 active:scale-95 text-xs sm:text-sm font-medium select-none cursor-pointer ${
+              className={`h-9 sm:h-10 px-3.5 sm:px-4 rounded-full flex items-center justify-center gap-1.5 shrink-0 transition-all duration-150 active:scale-95 text-xs sm:text-sm font-medium select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-400 disabled:opacity-50 disabled:cursor-not-allowed ${
                 isLoading
-                  ? 'bg-[#171717] hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black shadow-xs'
+                  ? 'bg-black hover:bg-neutral-800 active:bg-neutral-900 text-white dark:bg-black dark:hover:bg-neutral-900 dark:text-white border border-transparent dark:border-neutral-700 shadow-xs'
                   : voiceStatus === 'listening'
                   ? 'bg-rose-500 hover:bg-rose-600 text-white animate-pulse shadow-xs shadow-rose-500/25'
-                  : hasText
-                  ? 'bg-[#171717] hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-black shadow-xs'
-                  : 'bg-[#F2F2F2] hover:bg-[#E8E8E8] text-[#171717] border border-[#E5E5E5] dark:bg-neutral-800/80 dark:hover:bg-neutral-800 dark:text-neutral-200 dark:border-white/5'
+                  : 'bg-black hover:bg-neutral-800 active:bg-neutral-900 text-white dark:bg-black dark:hover:bg-neutral-900 dark:text-white border border-transparent dark:border-neutral-700 shadow-xs'
               }`}
               title={isLoading ? 'Stop generating' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
               aria-label={isLoading ? 'Stop generating' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
             >
               {isLoading ? (
                 <>
-                  <Square className="w-3 h-3 fill-current" />
-                  <span>Stop</span>
+                  <Square className="w-3 h-3 fill-current text-white" />
+                  <span className="text-white">Stop</span>
                 </>
               ) : voiceStatus === 'listening' ? (
                 <>
@@ -784,17 +782,17 @@ export const GrokChatComposer: React.FC<{
                     <span className="w-0.5 h-4 bg-white rounded-full animate-pulse [animation-delay:150ms]" />
                     <span className="w-0.5 h-2 bg-white rounded-full animate-pulse [animation-delay:300ms]" />
                   </span>
-                  <span>Listening...</span>
+                  <span className="text-white">Listening...</span>
                 </>
               ) : hasText ? (
                 <>
-                  <span>Send</span>
-                  <ArrowUp className="w-3.5 h-3.5" strokeWidth={2.2} />
+                  <span className="text-white">Send</span>
+                  <ArrowUp className="w-3.5 h-3.5 text-white" strokeWidth={2.2} />
                 </>
               ) : (
                 <>
-                  <Mic className="w-4 h-4 text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
-                  <span>Voice</span>
+                  <Mic className="w-4 h-4 text-white" strokeWidth={1.9} />
+                  <span className="text-white">Voice</span>
                 </>
               )}
             </button>
