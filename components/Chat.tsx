@@ -1360,23 +1360,32 @@ export const Chat: React.FC<ChatProps> = ({
 
   const handleSaveEdit = async (msgId: string, newText: string) => {
     const trimmed = newText.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed) return;
+
+    // 1. Abort any active in-flight AI generation before processing edit
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    activeRequestIdRef.current = null;
+    setIsLoading(false);
+
     setEditingMessageId(null);
     setActiveUserBubbleMenuId(null);
 
     const targetIdx = messages.findIndex((m) => m.id === msgId);
     if (targetIdx === -1) return;
 
-    // Delete/clear subsequent messages from targetIdx + 1 onward
+    // 2. Delete all subsequent messages from targetIdx + 1 onward in SQLite
     const subsequentMsgs = messages.slice(targetIdx + 1);
     for (const sm of subsequentMsgs) {
       void deleteLocalMessage(sm.id);
     }
 
-    // Update the edited message text in SQLite
+    // 3. Update the edited message text in SQLite
     void updateLocalMessageText(msgId, trimmed);
 
-    // Form truncated history up to targetIdx
+    // 4. Form truncated history up to targetIdx
     const updatedUserMsg: Message = { ...messages[targetIdx], text: trimmed };
     const truncatedHistory = [...messages.slice(0, targetIdx), updatedUserMsg];
 
@@ -1385,7 +1394,7 @@ export const Chat: React.FC<ChatProps> = ({
       chatMessagesMemoryCache.set(activeConversationId, truncatedHistory);
     }
 
-    // Trigger fresh AI response generation for the edited prompt
+    // 5. Trigger fresh AI response generation for the edited prompt using truncated history
     await handleSendMessage(trimmed, {
       editingUserMsgId: msgId,
       customHistory: truncatedHistory.slice(0, targetIdx),
@@ -1471,10 +1480,21 @@ export const Chat: React.FC<ChatProps> = ({
     };
 
     if (isEditing) {
-      setMessages((prev) => [
-        ...prev.map((m) => (m.id === userMsgId ? { ...m, text: displayInput } : m)),
-        optimisticAiMsg,
-      ]);
+      const priorHistory = options?.customHistory || [];
+      const updatedUserMsg: Message = {
+        ...(messages.find((m) => m.id === userMsgId) || optimisticUserMsg),
+        id: userMsgId,
+        text: displayInput,
+        attachments: userMsgAttachments.length > 0 ? userMsgAttachments : (messages.find((m) => m.id === userMsgId)?.attachments),
+        image_url: currentImages[0] || (messages.find((m) => m.id === userMsgId)?.image_url),
+        sender: 'user',
+        timestamp: now,
+      };
+      const activeBranch = [...priorHistory, updatedUserMsg, optimisticAiMsg];
+      setMessages(activeBranch);
+      if (activeConversationId) {
+        chatMessagesMemoryCache.set(activeConversationId, [...priorHistory, updatedUserMsg]);
+      }
     } else {
       setMessages((prev) => [...prev.filter((m) => m.id !== aiMsgId && m.id !== userMsgId), optimisticUserMsg, optimisticAiMsg]);
     }
@@ -1694,7 +1714,7 @@ export const Chat: React.FC<ChatProps> = ({
         parts: userParts,
       });
 
-      const shouldSearch = aiCapabilities.browse && isRealTimeSearchNeeded(promptText);
+      const shouldSearch = aiCapabilities.browse;
       const searchQuery = shouldSearch ? cleanSearchQuery(promptText) : '';
 
       const aiParams = {

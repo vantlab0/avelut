@@ -70,8 +70,8 @@ export function getSearchApiKey(env: SearchEnv = process.env): string | null {
   return key ? key : null;
 }
 
-export function isWebSearchConfigured(_env: SearchEnv = process.env): boolean {
-  return true;
+export function isWebSearchConfigured(env: SearchEnv = process.env): boolean {
+  return getSearchApiKey(env) !== null;
 }
 
 export interface SearchWebOptions {
@@ -184,44 +184,39 @@ export async function searchWeb(
     options.signal.addEventListener('abort', onExternalAbort, { once: true });
   }
 
-  if (apiKey) {
-    try {
-      const response = await fetchImpl('https://api.tavily.com/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          query,
-          max_results: maxResults,
-          search_depth: 'basic',
-          include_answer: false,
-          include_raw_content: false,
-        }),
-        signal: controller.signal,
-      });
-
-      if (response.ok) {
-        const payload = await response.json();
-        const parsed = parseTavilyResults(query, payload, maxResults);
-        if (parsed.results && parsed.results.length > 0) {
-          clearTimeout(timer);
-          options.signal?.removeEventListener('abort', onExternalAbort);
-          return parsed;
-        }
-      }
-    } catch (tavilyErr) {
-      console.warn('[web_search] Tavily request failed, using public fallback:', (tavilyErr as Error)?.message);
-    }
+  if (!apiKey) {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', onExternalAbort);
+    throw new WebSearchError('WEB_SEARCH_NOT_CONFIGURED', 'Web search is not configured on this deployment.', 503);
   }
 
   try {
-    const publicResults = await searchWebPublic(query, maxResults, controller.signal, fetchImpl);
-    return {
-      query,
-      results: publicResults,
-    };
+    const response = await fetchImpl('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        query,
+        max_results: maxResults,
+        search_depth: 'basic',
+        include_answer: false,
+        include_raw_content: false,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new WebSearchError(
+        'WEB_SEARCH_UPSTREAM_ERROR',
+        `Web search upstream request failed with status ${response.status}`,
+        response.status
+      );
+    }
+
+    const payload = await response.json();
+    return parseTavilyResults(query, payload, maxResults);
   } catch (error) {
     if (error instanceof WebSearchError) throw error;
     if ((error as { name?: string })?.name === 'AbortError') {
