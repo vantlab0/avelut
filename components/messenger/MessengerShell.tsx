@@ -855,17 +855,21 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
         const messagesQuery = query(messagesRef, limitToLast(50));
         const unsubscribeMessages = onValue(messagesQuery, (snap) => {
           if (activeChatRef.current?.chatId !== subscribedChatId) return;
-          const cloudMsgs = Object.entries(snap.val() || {}).map(([id, msg]: any) => ({ id, ...msg })).sort((a, b) => a.timestamp - b.timestamp);
+          const snapVal = snap.val();
+          const cloudMsgs = snapVal && typeof snapVal === 'object'
+            ? Object.entries(snapVal).map(([id, msg]: any) => ({ id, ...msg })).sort((a, b) => a.timestamp - b.timestamp)
+            : [];
+
           setMessages(prev => {
             const safePrev = ensureArray(prev);
-            if (safePrev.length > 0) {
+            if (safePrev.length > 0 && cloudMsgs.length > 0) {
               const lastPrev = safePrev[safePrev.length - 1];
               const lastNew = cloudMsgs[cloudMsgs.length - 1];
               if (lastNew && lastNew.id !== lastPrev.id && lastNew.senderId !== authUser?.uid && lastNew.timestamp > lastPrev.timestamp) {
                 playReceiveSound();
               }
             }
-            return cloudMsgs;
+            return cloudMsgs.length > 0 ? cloudMsgs : (snap.exists() ? [] : safePrev);
           });
 
           setOptimisticMessages(prev => ensureArray(prev).filter(opt => {
@@ -887,12 +891,12 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
           }
         });
         return unsubscribeMessages;
-      }, [activeChat, authUser, userProfile.uid, scrollToBottom]);
+      }, [activeChat, authUser, currentUid, scrollToBottom]);
 
       useEffect(() => {
-        if (!authUser || !activeChat) return;
-        writeCachedJson(getMessengerCacheKey(userProfile.uid, `messages_${activeChat.chatId}`), ensureArray(messages));
-      }, [activeChat, authUser, messages, userProfile.uid]);
+        if (!authUser || !activeChat || !currentUid) return;
+        writeCachedJson(getMessengerCacheKey(currentUid, `messages_${activeChat.chatId}`), ensureArray(messages));
+      }, [activeChat, authUser, messages, currentUid]);
 
       const combinedMessageStream = useMemo(() => {
         const msgs = ensureArray(messages);

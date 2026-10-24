@@ -65,6 +65,18 @@ function uploadFileToSupabaseStorage(supabaseUrl, key, bucket, objectPath, fileP
 
 async function deployOTA() {
   try {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY && fs.existsSync('.env')) {
+      const envContent = fs.readFileSync('.env', 'utf8');
+      envContent.split(/\r?\n/).forEach(line => {
+        const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
+        if (match) {
+          const k = match[1].trim();
+          const v = match[2].trim().replace(/^['"]|['"]$/g, '');
+          if (!process.env[k]) process.env[k] = v;
+        }
+      });
+    }
+
     const supabaseUrl = process.env.SUPABASE_URL || "https://eywpksapztzbnthlgfhd.supabase.co";
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseKey) {

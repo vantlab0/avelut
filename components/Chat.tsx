@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { createAvelutAI, getResponseText, getResponseReasoningText, accumulateUsageMetadata, type AiUsageMetadata } from '../utils/inference';
 import { isNearBottom, scrollContainerToBottom } from '../utils/scrollUtils';
 import { compressBase64Image } from '../utils/mediaUpload';
-import type { UserProfile, Message, ChatConversation } from '../types';
+import type { UserProfile, Message, ChatConversation, MessagePart } from '../types';
 import { useToast } from '../hooks/useToast';
 import { checkAICredits, deductAICredits, getFeatureCost, getFeatureModel } from '../utils/usage';
 import { LimitExceededModal } from './LimitExceededModal';
@@ -1611,18 +1611,24 @@ export const Chat: React.FC<ChatProps> = ({
         });
       };
 
+      const isSearchNeeded = isRealTimeSearchNeeded(promptText);
+      const shouldSearch = Boolean(aiCapabilities.browse && isSearchNeeded);
+      const searchQuery = shouldSearch ? cleanSearchQuery(promptText) : '';
+
       const baseSystemInstruction = [
         'You are Avelut, an intelligent, helpful, and versatile AI assistant and study companion.',
         '',
         'CURRENT USER CAPABILITY TOGGLES:',
-        `- Browse: ${aiCapabilities.browse ? 'ON' : 'OFF'}`,
+        `- Browse: ${aiCapabilities.browse ? 'ON' : 'OFF'}${shouldSearch ? ' (ACTIVE: live search needed for this prompt)' : ''}`,
         `- Flashcards: ${aiCapabilities.flashcards ? 'ON' : 'OFF'}`,
         `- Quiz: ${aiCapabilities.quiz ? 'ON' : 'OFF'}`,
         `- Illustrations: ${aiCapabilities.illustrations ? 'ON' : 'OFF'}`,
         '',
         'STRICT RULES:',
         aiCapabilities.browse
-          ? '- Browse is ON: You have internet browsing capability available for real-time web searches. When questions involve current events, today\'s news, live data, or recent facts (2024-2026), live web search results will be retrieved for you. Use them to answer accurately and cite source URLs. For timeless topics, science, math, code, concepts, and general conversation, answer directly from your knowledge base with clear, elite clarity.'
+          ? (shouldSearch
+              ? '- Browse is ON and active for this prompt: Live web search is being performed because this query requests current, live, or updated information. Ground your response using the search results and cite sources accurately.'
+              : '- Browse is ON: No internet browsing is needed for this query. Answer directly and concisely from your internal knowledge base without searching or claiming to search.')
           : '- Browse is OFF: NEVER browse the web, never search, and never cite live web results. Answer only from knowledge + conversation.',
         aiCapabilities.flashcards
           ? '- Flashcards is ON: You may generate flashcards when the user asks or when it clearly helps learning.'
@@ -1637,7 +1643,9 @@ export const Chat: React.FC<ChatProps> = ({
         '',
         'Guidelines:',
         aiCapabilities.browse
-          ? '- Web search capability is active. If grounding search results are provided in your context, base your answer on them and cite the sources.'
+          ? (shouldSearch
+              ? '- Web search was triggered for this prompt because it requests up-to-date, live, or real-time internet information. Ground your response using search results and cite source URLs.'
+              : '- Rely directly on your vast internal knowledge. Do not reference search engines or attempt to browse the internet since this request does not require live/current data.')
           : '- Web browsing is disabled by the user toggle.',
         '- Treat users naturally, warmly, and directly as a helpful general-purpose assistant. When greeted with casual greetings like "hello", "hi", "hey", or "good morning", respond concisely and friendly without assuming any specialized topic, course, or engineering major.',
         '- For substantive questions, study topics, homework, or tasks, provide elite, clear, structured explanations.',
@@ -1721,9 +1729,6 @@ export const Chat: React.FC<ChatProps> = ({
         parts: userParts,
       });
 
-      const shouldSearch = aiCapabilities.browse;
-      const searchQuery = shouldSearch ? cleanSearchQuery(promptText) : '';
-
       const aiParams = {
         model: aiModel,
         contents: historyContents,
@@ -1781,8 +1786,24 @@ export const Chat: React.FC<ChatProps> = ({
             responseText += chunkText;
           }
 
+          const searchInfo = (chunk as any)?.searchInfo;
+          if (!browsingPart && searchInfo) {
+            const searchResults = searchInfo?.search_results || searchInfo?.results;
+            const results = (searchResults && Array.isArray(searchResults) && searchResults.length > 0)
+              ? searchResults.map((r: any) => ({ title: r.title || r.name, url: r.url || r.link }))
+              : [];
+            browsingPart = {
+              type: 'tool-invocation',
+              toolInvocation: {
+                toolName: 'web_search',
+                state: 'output-available',
+                args: { query: searchQuery || promptText },
+                result: results,
+              },
+            };
+          }
+
           if (browsingPart) {
-            const searchInfo = (chunk as any)?.searchInfo;
             const searchResults = searchInfo?.search_results || searchInfo?.results;
             const extractedUrls = responseText.match(/https?:\/\/[^\s\)\],>"']+/g) || [];
 
@@ -1938,22 +1959,6 @@ export const Chat: React.FC<ChatProps> = ({
     } catch (err: any) {
       if (currentAbort.signal.aborted || err?.name === 'AbortError') {
         console.log('[Chat] Generation stopped by user.');
-        const finalText = responseText.trim() ? responseText : 'Response aborted by user.';
-        const currentParts: MessagePart[] = [{ type: 'text', text: finalText }];
-        updateOrAppendAiMessage(finalText, reasoningText, currentParts);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === aiMsgId ? { ...m, status: 'interrupted' as const, text: finalText, parts: currentParts } : m
-          )
-        );
-        void saveLocalMessage({
-          id: aiMsgId,
-          conversation_id: currentConvoId,
-          user_id: userProfile.uid,
-          sender: 'assistant',
-          text: finalText,
-          timestamp: Date.now(),
-        });
         return;
       }
       console.error('[Chat] Error in chat:', err);

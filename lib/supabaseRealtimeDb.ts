@@ -245,6 +245,7 @@ async function persistMessage(chatId: string, messageId: string, value: Record<s
     media_type: mediaType,
     reply_to: replyTo,
     created_at: createdAt,
+    is_deleted: false,
   };
 
   let sentViaRpc = false;
@@ -757,18 +758,31 @@ async function loadPath(path: string): Promise<any> {
 
   if ((parts[0] === 'messages' || parts[0] === 'private_messages') && parts.length === 2) {
     const chatId = parts[1];
+    // Fetch the latest 200 messages descending so recent messages always appear
     const { data, error } = await supabase
       .from('messages')
       .select('*')
       .eq('chat_id', chatId)
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: true })
+      .or('is_deleted.eq.false,is_deleted.is.null')
+      .order('created_at', { ascending: false })
       .limit(200);
-    if (error) throw error;
+    if (error) {
+      console.warn('[supabaseRealtimeDb] loadPath messages error:', error);
+      const cached = getLocalCache(path);
+      if (cached) return cached;
+      throw error;
+    }
 
-    const rowsById = new Map((data || []).map((row: any) => [row.id, row]));
+    // Sort ascending by created_at for natural chronological reading order
+    const sorted = (data || []).sort((a: any, b: any) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return ta - tb;
+    });
+
+    const rowsById = new Map(sorted.map((row: any) => [row.id, row]));
     const map: Record<string, any> = {};
-    (data || []).forEach((row: any) => {
+    sorted.forEach((row: any) => {
       const repliedTo = row.reply_to ? rowsById.get(row.reply_to) : null;
       const isRead = row.is_read || false;
       map[row.id] = {
@@ -786,12 +800,13 @@ async function loadPath(path: string): Promise<any> {
               senderName: 'Message',
             }
           : null,
-        isDeleted: row.is_deleted,
+        isDeleted: row.is_deleted || false,
         isRead,
         status: isRead ? 'read' : 'sent',
         timestamp: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
       };
     });
+    setLocalCache(path, map);
     return map;
   }
 
@@ -1213,7 +1228,23 @@ export function onValue(
   if (!listeners.has(path)) listeners.set(path, new Set());
   listeners.get(path)!.add(callback);
 
-  loadPath(path).then((v) => notify(path, v));
+  // Emit immediate cache if available so UI doesn't flicker or show empty state
+  const initialCache = pathDataCache.get(path) ?? getLocalCache(path);
+  if (initialCache !== null && initialCache !== undefined) {
+    try {
+      callback(makeSnap(initialCache));
+    } catch (e) {
+      console.warn('[supabaseRealtimeDb] initial cache callback error:', e);
+    }
+  }
+
+  loadPath(path)
+    .then((v) => notify(path, v))
+    .catch((err) => {
+      console.warn(`[supabaseRealtimeDb] loadPath error for ${path}:`, err);
+      const fallback = getLocalCache(path);
+      if (fallback !== null && fallback !== undefined) notify(path, fallback);
+    });
 
   if ((parts[0] === 'messages' || parts[0] === 'private_messages') && parts.length === 2) {
     const chatId = parts[1];

@@ -1,4 +1,4 @@
-import { auth, db, signOut, get, off, onAuthStateChanged, onDisconnect, onValue, push, ref as dbRef, serverTimestamp, set, type AuthUser, update, updateProfile, supabase } from '@/lib/backend';
+import { auth, db, signOut, get, off, onAuthStateChanged, onDisconnect, onValue, push, ref as dbRef, serverTimestamp, set, type AuthUser, update, updateProfile, supabase, markChatAsRead } from '@/lib/backend';
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
 import { readCachedJson, writeCachedJson, clearCachedKey, initCacheFromSqlite } from './utils/cache';
 import { DEFAULT_USAGE_SETTINGS } from './utils/appSettings';
