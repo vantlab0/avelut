@@ -891,13 +891,54 @@ async function callAlibabaQwen(
           }
 
           let data: any = null;
-          let extractedText = rawText;
-          try {
-            data = JSON.parse(rawText);
-            if (data?.choices?.[0]?.message?.content !== undefined) {
-              extractedText = data.choices[0].message.content;
+          let extractedText = '';
+
+          if (rawText.startsWith('data:') || rawText.includes('\ndata:')) {
+            const lines = rawText.split('\n');
+            const chunks: string[] = [];
+            for (const line of lines) {
+              const trimmedLine = line.trim();
+              if (trimmedLine.startsWith('data:')) {
+                const contentStr = trimmedLine.slice(5).trim();
+                if (contentStr === '[DONE]') continue;
+                try {
+                  const chunkObj = JSON.parse(contentStr);
+                  const content =
+                    chunkObj?.choices?.[0]?.delta?.content ??
+                    chunkObj?.choices?.[0]?.message?.content ??
+                    chunkObj?.output?.text ??
+                    '';
+                  if (content) {
+                    chunks.push(content);
+                  }
+                } catch (_) {}
+              }
             }
-          } catch (_) {}
+            extractedText = chunks.length > 0 ? chunks.join('') : rawText;
+          } else {
+            try {
+              data = JSON.parse(rawText);
+              if (data?.choices?.[0]?.message?.content !== undefined) {
+                extractedText = data.choices[0].message.content;
+              } else if (data?.choices?.[0]?.delta?.content !== undefined) {
+                extractedText = data.choices[0].delta.content;
+              } else if (data?.output?.text !== undefined) {
+                extractedText = data.output.text;
+              } else {
+                extractedText = rawText;
+              }
+            } catch (_) {
+              extractedText = rawText;
+            }
+          }
+
+          if (
+            extractedText.includes('data: {') ||
+            extractedText.includes('chatcmpl-') ||
+            extractedText.includes('object:"chat.completion.chunk"')
+          ) {
+            extractedText = '';
+          }
 
           return {
             text: () => extractedText,

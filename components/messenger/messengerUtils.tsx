@@ -141,6 +141,17 @@ export const getLastMessagePreview = (chat: any): string => {
 export const getLastMessageSenderId = (chat: any): string =>
   chat?.last_message?.senderId || chat?.last_message?.sender_id || '';
 
+export const isUnresolvedName = (name?: string | null): boolean => {
+  if (!name || !name.trim()) return true;
+  const lower = name.trim().toLowerCase();
+  return (
+    lower === 'unknown user' ||
+    lower === 'chat mates' ||
+    lower === 'chat mate' ||
+    lower === 'user'
+  );
+};
+
 export const createFallbackChatUser = (uid = ''): UserProfile => ({
   uid,
   display_name: 'Chat Mates',

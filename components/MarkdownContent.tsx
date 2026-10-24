@@ -80,8 +80,7 @@ const components: Components = {
       if (rawLanguage.startsWith('action:') || rawLanguage === 'cbt' || rawLanguage === 'flashcards') {
         return <ActionCard type={rawLanguage as any} rawPayload={cleanVal} />;
       }
-      const isSvgBlock = rawLanguage === 'svg' || (cleanVal.includes('<svg') && cleanVal.includes('</svg>'));
-      const language = isSvgBlock ? 'svg' : rawLanguage;
+      const language = rawLanguage === 'svg' ? 'svg' : rawLanguage;
       return <CodeBlock language={language} value={cleanVal} />;
     }
     return <code className="bg-neutral-100 dark:bg-neutral-800 text-[#2563EB] dark:text-[#60A5FA] font-mono px-1.5 py-0.5 rounded text-[13px] font-medium">{children}</code>;

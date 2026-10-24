@@ -60,9 +60,14 @@ const normalizeLanguage = (lang?: string): string => {
 export const CodeBlock: React.FC<CodeBlockProps> = ({ language = 'code', value }) => {
   const [copied, setCopied] = useState(false);
   const normalizedLang = normalizeLanguage(language);
-  const svgMatch = value.match(/<svg[\s\S]*?<\/svg>/i);
-  const isSvg = normalizedLang === 'svg' || !!svgMatch;
-  const svgContent = svgMatch ? svgMatch[0] : value;
+  const trimmedValue = value.trim();
+  const isExplicitSvg = normalizedLang === 'svg';
+  const isPureSvgDoc =
+    (!language || normalizedLang === 'text' || normalizedLang === 'code') &&
+    /^<svg[\s\S]*<\/svg>$/i.test(trimmedValue);
+  const isSvg = isExplicitSvg || isPureSvgDoc;
+  const svgMatch = isSvg ? value.match(/<svg[\s\S]*?<\/svg>/i) : null;
+  const svgContent = isSvg ? (svgMatch ? svgMatch[0] : value) : value;
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>(isSvg ? 'preview' : 'code');
 
   useEffect(() => {
