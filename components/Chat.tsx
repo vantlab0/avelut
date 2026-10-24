@@ -32,7 +32,6 @@ import { MarkdownContent } from './MarkdownContent';
 import { ThinkingTypingIndicator } from './ThinkingTypingIndicator';
 import { ChatLimitBanner } from './ChatLimitBanner';
 import { ToolStatus } from './chat/ToolStatus';
-import { isRealTimeSearchNeeded, cleanSearchQuery } from '../lib/web-search-detector';
 import {
   RefreshCcw,
   ThumbsUp,
@@ -1611,24 +1610,18 @@ export const Chat: React.FC<ChatProps> = ({
         });
       };
 
-      const isSearchNeeded = isRealTimeSearchNeeded(promptText);
-      const shouldSearch = Boolean(aiCapabilities.browse && isSearchNeeded);
-      const searchQuery = shouldSearch ? cleanSearchQuery(promptText) : '';
-
       const baseSystemInstruction = [
         'You are Avelut, an intelligent, helpful, and versatile AI assistant and study companion.',
         '',
         'CURRENT USER CAPABILITY TOGGLES:',
-        `- Browse: ${aiCapabilities.browse ? 'ON' : 'OFF'}${shouldSearch ? ' (ACTIVE: live search needed for this prompt)' : ''}`,
+        `- Browse: ${aiCapabilities.browse ? 'ON' : 'OFF'}`,
         `- Flashcards: ${aiCapabilities.flashcards ? 'ON' : 'OFF'}`,
         `- Quiz: ${aiCapabilities.quiz ? 'ON' : 'OFF'}`,
         `- Illustrations: ${aiCapabilities.illustrations ? 'ON' : 'OFF'}`,
         '',
         'STRICT RULES:',
         aiCapabilities.browse
-          ? (shouldSearch
-              ? '- Browse is ON and active for this prompt: Live web search is being performed because this query requests current, live, or updated information. Ground your response using the search results and cite sources accurately.'
-              : '- Browse is ON: No internet browsing is needed for this query. Answer directly and concisely from your internal knowledge base without searching or claiming to search.')
+          ? '- Browse is ON: You have access to real-time web search. You autonomously decide whether to search the web: if the user asks for breaking news, current events, live prices, recent facts, or information beyond your training cutoff, invoke web search. For timeless topics, science, math, code, concepts, and general conversation, DO NOT search—answer directly from your extensive knowledge base.'
           : '- Browse is OFF: NEVER browse the web, never search, and never cite live web results. Answer only from knowledge + conversation.',
         aiCapabilities.flashcards
           ? '- Flashcards is ON: You may generate flashcards when the user asks or when it clearly helps learning.'
@@ -1643,9 +1636,7 @@ export const Chat: React.FC<ChatProps> = ({
         '',
         'Guidelines:',
         aiCapabilities.browse
-          ? (shouldSearch
-              ? '- Web search was triggered for this prompt because it requests up-to-date, live, or real-time internet information. Ground your response using search results and cite source URLs.'
-              : '- Rely directly on your vast internal knowledge. Do not reference search engines or attempt to browse the internet since this request does not require live/current data.')
+          ? '- Web search capability is available. Autonomously decide whether search is truly needed: only search when the user prompt requires live, recent, or updated internet information; otherwise, answer directly from your internal knowledge.'
           : '- Web browsing is disabled by the user toggle.',
         '- Treat users naturally, warmly, and directly as a helpful general-purpose assistant. When greeted with casual greetings like "hello", "hi", "hey", or "good morning", respond concisely and friendly without assuming any specialized topic, course, or engineering major.',
         '- For substantive questions, study topics, homework, or tasks, provide elite, clear, structured explanations.',
@@ -1737,7 +1728,7 @@ export const Chat: React.FC<ChatProps> = ({
           systemInstruction: fullSystemInstruction,
           temperature: selectedMode === 'fast' ? 0.3 : 0.5,
           signal: currentAbort.signal,
-          webSearch: shouldSearch,
+          webSearch: aiCapabilities.browse,
         },
       };
 
@@ -1752,22 +1743,10 @@ export const Chat: React.FC<ChatProps> = ({
         return;
       }
 
-      let browsingPart: MessagePart | null = shouldSearch ? {
-        type: 'tool-invocation',
-        toolInvocation: {
-          toolName: 'web_search',
-          state: 'input-streaming',
-          args: { query: searchQuery || promptText },
-          result: null,
-        },
-      } : null;
+      let browsingPart: MessagePart | null = null;
 
-      // Show pulsing blue dot or browsing widget immediately for this bot message
-      const initialParts: MessagePart[] = browsingPart ? [browsingPart] : [];
-      updateOrAppendAiMessage('', '', initialParts.length > 0 ? initialParts : undefined);
-      if (browsingPart && stickToBottomRef.current) {
-        requestAnimationFrame(() => scrollContainerToBottom(messagesScrollRef.current, 'smooth'));
-      }
+      // Show pulsing blue dot immediately for this bot message without premature browsing widget
+      updateOrAppendAiMessage('', '', undefined);
 
       try {
         const responseStream = await ai.models.generateContentStream(aiParams);
@@ -1797,7 +1776,7 @@ export const Chat: React.FC<ChatProps> = ({
               toolInvocation: {
                 toolName: 'web_search',
                 state: 'output-available',
-                args: { query: searchQuery || promptText },
+                args: { query: promptText },
                 result: results,
               },
             };
@@ -1821,7 +1800,7 @@ export const Chat: React.FC<ChatProps> = ({
                 toolInvocation: {
                   toolName: 'web_search',
                   state: 'output-available',
-                  args: { query: searchQuery || promptText },
+                  args: { query: promptText },
                   result: results,
                 },
               };
