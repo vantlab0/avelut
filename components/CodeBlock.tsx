@@ -62,9 +62,17 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language = 'code', value }
   const normalizedLang = normalizeLanguage(language);
   const trimmedValue = value.trim();
   const isExplicitSvg = normalizedLang === 'svg';
+  const isNonSvgProgrammingLang = [
+    'javascript', 'typescript', 'python', 'html', 'css', 'c', 'cpp', 'csharp',
+    'java', 'rust', 'go', 'php', 'sql', 'json', 'yaml', 'markdown', 'jsx',
+    'tsx', 'kotlin', 'swift', 'ruby', 'dart', 'bash'
+  ].includes(normalizedLang);
+
   const isPureSvgDoc =
-    (!language || normalizedLang === 'text' || normalizedLang === 'code') &&
-    /^<svg[\s\S]*<\/svg>$/i.test(trimmedValue);
+    !isNonSvgProgrammingLang &&
+    (!language || normalizedLang === 'text' || normalizedLang === 'code' || normalizedLang === 'xml') &&
+    (/^<svg[\s\S]*<\/svg>$/i.test(trimmedValue) || /^<\?xml[\s\S]*?<svg[\s\S]*<\/svg>$/i.test(trimmedValue));
+
   const isSvg = isExplicitSvg || isPureSvgDoc;
   const svgMatch = isSvg ? value.match(/<svg[\s\S]*?<\/svg>/i) : null;
   const svgContent = isSvg ? (svgMatch ? svgMatch[0] : value) : value;

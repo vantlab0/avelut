@@ -14,6 +14,29 @@ export const Type = {
 } as const;
 
 /**
+ * Detects if a response string is the app's SPA fallback index.html document.
+ * Only returns true if the content is an unfenced full-page HTML document containing app shell markers.
+ */
+export const isAppIndexHtmlPayload = (str: string): boolean => {
+  if (!str) return false;
+  const trimmed = str.trim();
+  if (trimmed.startsWith('```') || trimmed.includes('```html') || trimmed.includes('```xml')) {
+    return false;
+  }
+  const t = trimmed.toLowerCase();
+  const isFullPageHtml = t.startsWith('<!doctype') || t.startsWith('<html');
+  const hasRootMarker = t.includes('id="root"') || t.includes("id='root'");
+  const hasAppShellMarker =
+    t.includes('src="/index.tsx"') ||
+    t.includes('id="app-launch-skeleton"') ||
+    t.includes('com.avelut.app') ||
+    t.includes('avelut_deep_link_auto_triggered') ||
+    t.includes('apple-mobile-web-app-title');
+
+  return isFullPageHtml && hasRootMarker && hasAppShellMarker;
+};
+
+/**
  * Strips mathematical LaTeX/KaTeX symbols and complex code blocks from text
  * for compaction unless the user specifically requested math or code.
  */
@@ -874,7 +897,7 @@ async function callAlibabaQwen(
 
           if (!response.ok) {
             const errorText = await response.text();
-            if (errorText.toLowerCase().includes('<!doctype') || errorText.toLowerCase().includes('<html') || errorText.toLowerCase().includes('id="root"')) {
+            if (isAppIndexHtmlPayload(errorText)) {
               throw new Error('NETWORK_OFFLINE: Network connection lost. Please check your internet connection and try again.');
             }
             if (response.status >= 500 || errorText.includes('FUNCTION_INVOCATION_FAILED')) {
@@ -885,8 +908,7 @@ async function callAlibabaQwen(
           }
 
           const rawText = await response.text();
-          const trimmedLower = rawText.trim().toLowerCase();
-          if (trimmedLower.startsWith('<!doctype') || trimmedLower.startsWith('<html') || trimmedLower.includes('<head>') || trimmedLower.includes('id="root"')) {
+          if (isAppIndexHtmlPayload(rawText)) {
             throw new Error('NETWORK_OFFLINE: Network connection lost. Please check your internet connection and try again.');
           }
 
@@ -1081,8 +1103,7 @@ async function* callAlibabaQwenStream(
   const contentType = (response.headers.get('content-type') || '').toLowerCase();
   if (!contentType.includes('text/event-stream')) {
     const text = await response.text();
-    const trimmed = text.trim().toLowerCase();
-    if (trimmed.startsWith('<!doctype') || trimmed.startsWith('<html') || trimmed.includes('<head>') || trimmed.includes('id="root"')) {
+    if (isAppIndexHtmlPayload(text)) {
       throw new Error('NETWORK_OFFLINE: Network connection lost. Please check your internet connection and try again.');
     }
     yield {

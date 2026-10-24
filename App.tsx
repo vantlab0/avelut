@@ -380,6 +380,9 @@ const App: React.FC = () => {
 
     const [currentPath, setCurrentPath] = useState(getWindowPathname());
     const [user, setUser] = useState<AuthUser | null>(() => {
+        if (typeof window !== 'undefined' && window.location.search.includes('mock=true')) {
+            return { uid: 'mock_user_123', email: 'test@avelut.xyz', displayName: 'Test Student' } as AuthUser;
+        }
         if (auth.currentUser) return auth.currentUser;
         if (typeof window !== 'undefined') {
             const lastUid = window.localStorage?.getItem('avelut_last_uid');
@@ -408,6 +411,23 @@ const App: React.FC = () => {
 
 
     const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+        if (typeof window !== 'undefined' && window.location.search.includes('mock=true')) {
+            return {
+                uid: 'mock_user_123',
+                display_name: 'Test Student',
+                email: 'test@avelut.xyz',
+                school_id: 'sch_1',
+                college_id: 'col_1',
+                department_id: 'dept_math',
+                level: '100',
+                subscription_status: 'free',
+                ai_credits_balance: 100,
+                is_activated: true,
+                notifications_enabled: false,
+                current_streak: 1,
+                last_activity_date: Date.now()
+            } as UserProfile;
+        }
         if (typeof window !== 'undefined') {
             const lastUid = window.localStorage?.getItem('avelut_last_uid') || auth.currentUser?.uid;
             if (lastUid) {
