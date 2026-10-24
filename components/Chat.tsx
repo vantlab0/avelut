@@ -1,6 +1,6 @@
 import { db, get, off, onValue, push, ref as dbRef, remove, serverTimestamp, set, update } from '@/lib/backend';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { createAvelutAI, getResponseText, getResponseReasoningText, accumulateUsageMetadata, type AiUsageMetadata } from '../utils/inference';
+import { createAvelutAI, getResponseText, getResponseReasoningText, accumulateUsageMetadata, isAppIndexHtmlPayload, type AiUsageMetadata } from '../utils/inference';
 import { isNearBottom, scrollContainerToBottom } from '../utils/scrollUtils';
 import { compressBase64Image } from '../utils/mediaUpload';
 import type { UserProfile, Message, ChatConversation, MessagePart } from '../types';
@@ -695,7 +695,7 @@ export const GrokChatComposer: React.FC<{
               {/* Redesigned Attachment/Tools Popup */}
               {showAttachMenu && (
                 <div 
-                  className="absolute bottom-full left-0 mb-2.5 w-60 sm:w-64 max-w-[calc(100vw-2rem)] bg-white dark:bg-[#18181b] rounded-[20px] shadow-xl shadow-black/8 dark:shadow-black/40 border border-neutral-200/80 dark:border-white/10 p-1.5 z-50 animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-150 ease-out select-none"
+                  className="absolute bottom-full left-0 mb-2 w-52 sm:w-56 max-w-[calc(100vw-2rem)] bg-white dark:bg-[#18181b] rounded-[22px] shadow-xl shadow-black/8 dark:shadow-black/40 border border-neutral-200/80 dark:border-white/10 p-1 z-50 animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-150 ease-out select-none"
                   style={{ transformOrigin: 'bottom left' }}
                 >
                   {/* TOP SECTION: File Attachment Actions */}
@@ -707,10 +707,10 @@ export const GrokChatComposer: React.FC<{
                         setShowAttachMenu(false);
                         onOpenCamera();
                       }}
-                      className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer text-left group"
+                      className="w-full flex items-center gap-2.5 px-2.5 py-1.5 min-h-[38px] rounded-xl text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer text-left group"
                     >
-                      <Camera className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors shrink-0" strokeWidth={1.9} />
-                      <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Camera</span>
+                      <Camera className="w-4 h-4 text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors shrink-0" strokeWidth={1.9} />
+                      <span className="text-[13px] font-medium text-neutral-900 dark:text-neutral-100">Camera</span>
                     </button>
 
                     {/* 2. Gallery */}
@@ -720,10 +720,10 @@ export const GrokChatComposer: React.FC<{
                         setShowAttachMenu(false);
                         onOpenGallery();
                       }}
-                      className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer text-left group"
+                      className="w-full flex items-center gap-2.5 px-2.5 py-1.5 min-h-[38px] rounded-xl text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer text-left group"
                     >
-                      <Image className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors shrink-0" strokeWidth={1.9} />
-                      <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Gallery</span>
+                      <Image className="w-4 h-4 text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors shrink-0" strokeWidth={1.9} />
+                      <span className="text-[13px] font-medium text-neutral-900 dark:text-neutral-100">Gallery</span>
                     </button>
 
                     {/* 3. Files */}
@@ -733,10 +733,10 @@ export const GrokChatComposer: React.FC<{
                         setShowAttachMenu(false);
                         onOpenFile();
                       }}
-                      className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer text-left group"
+                      className="w-full flex items-center gap-2.5 px-2.5 py-1.5 min-h-[38px] rounded-xl text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer text-left group"
                     >
-                      <FileText className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors shrink-0" strokeWidth={1.9} />
-                      <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Files</span>
+                      <FileText className="w-4 h-4 text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors shrink-0" strokeWidth={1.9} />
+                      <span className="text-[13px] font-medium text-neutral-900 dark:text-neutral-100">Files</span>
                     </button>
                   </div>
 
@@ -746,10 +746,10 @@ export const GrokChatComposer: React.FC<{
                   {/* BOTTOM SECTION: AI Capability Toggles */}
                   <div className="space-y-0.5">
                     {/* 4. Browse */}
-                    <div className="flex items-center justify-between px-3 py-1.5 min-h-[44px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Globe className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
-                        <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Browse</span>
+                    <div className="flex items-center justify-between px-2.5 py-1 min-h-[38px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Globe className="w-4 h-4 text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
+                        <span className="text-[13px] font-medium text-neutral-900 dark:text-neutral-100">Browse</span>
                       </div>
                       <button
                         type="button"
@@ -757,24 +757,24 @@ export const GrokChatComposer: React.FC<{
                         aria-checked={capabilities.browse}
                         aria-label={`Browse ${capabilities.browse ? 'enabled' : 'disabled'}`}
                         onClick={() => onToggleCapability('browse')}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                           capabilities.browse ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'
                         }`}
                       >
                         <span
                           aria-hidden="true"
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
-                            capabilities.browse ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
+                          className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
+                            capabilities.browse ? 'translate-x-3.5 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
                           }`}
                         />
                       </button>
                     </div>
 
                     {/* 5. Flashcards */}
-                    <div className="flex items-center justify-between px-3 py-1.5 min-h-[44px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Layers className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
-                        <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Flashcards</span>
+                    <div className="flex items-center justify-between px-2.5 py-1 min-h-[38px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Layers className="w-4 h-4 text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
+                        <span className="text-[13px] font-medium text-neutral-900 dark:text-neutral-100">Flashcards</span>
                       </div>
                       <button
                         type="button"
@@ -782,24 +782,24 @@ export const GrokChatComposer: React.FC<{
                         aria-checked={capabilities.flashcards}
                         aria-label={`Flashcards ${capabilities.flashcards ? 'enabled' : 'disabled'}`}
                         onClick={() => onToggleCapability('flashcards')}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                           capabilities.flashcards ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'
                         }`}
                       >
                         <span
                           aria-hidden="true"
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
-                            capabilities.flashcards ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
+                          className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
+                            capabilities.flashcards ? 'translate-x-3.5 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
                           }`}
                         />
                       </button>
                     </div>
 
                     {/* 6. Quiz */}
-                    <div className="flex items-center justify-between px-3 py-1.5 min-h-[44px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <CheckSquare className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
-                        <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Quiz</span>
+                    <div className="flex items-center justify-between px-2.5 py-1 min-h-[38px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <CheckSquare className="w-4 h-4 text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
+                        <span className="text-[13px] font-medium text-neutral-900 dark:text-neutral-100">Quiz</span>
                       </div>
                       <button
                         type="button"
@@ -807,24 +807,24 @@ export const GrokChatComposer: React.FC<{
                         aria-checked={capabilities.quiz}
                         aria-label={`Quiz ${capabilities.quiz ? 'enabled' : 'disabled'}`}
                         onClick={() => onToggleCapability('quiz')}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                           capabilities.quiz ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'
                         }`}
                       >
                         <span
                           aria-hidden="true"
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
-                            capabilities.quiz ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
+                          className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
+                            capabilities.quiz ? 'translate-x-3.5 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
                           }`}
                         />
                       </button>
                     </div>
 
                     {/* 7. Illustrations */}
-                    <div className="flex items-center justify-between px-3 py-1.5 min-h-[44px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Palette className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
-                        <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Illustrations</span>
+                    <div className="flex items-center justify-between px-2.5 py-1 min-h-[38px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Palette className="w-4 h-4 text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
+                        <span className="text-[13px] font-medium text-neutral-900 dark:text-neutral-100">Illustrations</span>
                       </div>
                       <button
                         type="button"
@@ -832,14 +832,14 @@ export const GrokChatComposer: React.FC<{
                         aria-checked={capabilities.illustrations}
                         aria-label={`Illustrations ${capabilities.illustrations ? 'enabled' : 'disabled'}`}
                         onClick={() => onToggleCapability('illustrations')}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                           capabilities.illustrations ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'
                         }`}
                       >
                         <span
                           aria-hidden="true"
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
-                            capabilities.illustrations ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
+                          className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
+                            capabilities.illustrations ? 'translate-x-3.5 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
                           }`}
                         />
                       </button>
@@ -869,20 +869,20 @@ export const GrokChatComposer: React.FC<{
                   onToggleVoice();
                 }
               }}
-              className={`h-9 sm:h-10 px-3.5 sm:px-4 rounded-full flex items-center justify-center gap-1.5 shrink-0 transition-all duration-150 active:scale-95 text-xs sm:text-sm font-medium select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-400 disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`h-10 sm:h-11 px-4 sm:px-5 rounded-full flex items-center justify-center gap-1.5 shrink-0 transition-all duration-150 active:scale-95 text-xs sm:text-sm font-semibold select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-400 disabled:opacity-50 disabled:cursor-not-allowed ${
                 isLoading
-                  ? 'bg-black hover:bg-neutral-800 active:bg-neutral-900 text-white dark:bg-black dark:hover:bg-neutral-900 dark:text-white border border-transparent dark:border-neutral-700 shadow-xs'
+                  ? 'bg-black hover:bg-neutral-800 active:bg-neutral-900 text-white dark:bg-white dark:hover:bg-neutral-200 dark:active:bg-neutral-300 dark:text-black border border-transparent shadow-xs'
                   : voiceStatus === 'listening'
                   ? 'bg-rose-500 hover:bg-rose-600 text-white animate-pulse shadow-xs shadow-rose-500/25'
-                  : 'bg-black hover:bg-neutral-800 active:bg-neutral-900 text-white dark:bg-black dark:hover:bg-neutral-900 dark:text-white border border-transparent dark:border-neutral-700 shadow-xs'
+                  : 'bg-black hover:bg-neutral-800 active:bg-neutral-900 text-white dark:bg-white dark:hover:bg-neutral-200 dark:active:bg-neutral-300 dark:text-black border border-transparent shadow-xs'
               }`}
               title={isLoading ? 'Stop generating' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
               aria-label={isLoading ? 'Stop generating' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
             >
               {isLoading ? (
                 <>
-                  <Square className="w-3 h-3 fill-current text-white" />
-                  <span className="text-white">Stop</span>
+                  <Square className="w-3.5 h-3.5 fill-current text-white dark:text-black" />
+                  <span className="text-white dark:text-black">Stop</span>
                 </>
               ) : voiceStatus === 'listening' ? (
                 <>
@@ -895,13 +895,13 @@ export const GrokChatComposer: React.FC<{
                 </>
               ) : hasText ? (
                 <>
-                  <span className="text-white">Send</span>
-                  <ArrowUp className="w-3.5 h-3.5 text-white" strokeWidth={2.2} />
+                  <span className="text-white dark:text-black">Send</span>
+                  <ArrowUp className="w-4 h-4 text-white dark:text-black" strokeWidth={2.2} />
                 </>
               ) : (
                 <>
-                  <Mic className="w-4 h-4 text-white" strokeWidth={1.9} />
-                  <span className="text-white">Voice</span>
+                  <Mic className="w-4 h-4 text-white dark:text-black" strokeWidth={2} />
+                  <span className="text-white dark:text-black">Voice</span>
                 </>
               )}
             </button>
@@ -1985,12 +1985,7 @@ export const Chat: React.FC<ChatProps> = ({
       }
 
       // Safeguard against HTML index fallback being treated as chat response
-      const isHtmlText = (str: string) => {
-        const t = str.trim().toLowerCase();
-        return t.startsWith('<!doctype') || t.startsWith('<html') || t.includes('<head>') || t.includes('id="root"');
-      };
-
-      if (isHtmlText(responseText)) {
+      if (isAppIndexHtmlPayload(responseText)) {
         console.warn('[Chat] Detected HTML document in responseText. Rejecting index.html content.');
         setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
         addToast('Network connection lost. Please check your internet connection and try again.', 'error');
@@ -2310,7 +2305,7 @@ export const Chat: React.FC<ChatProps> = ({
                                 setEditingMessageId(msg.id);
                                 setEditingMessageText(msg.text || '');
                               }}
-                              className="p-1 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                              className="p-1.5 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                               title="Edit prompt"
                               aria-label="Edit prompt"
                             >
@@ -2322,7 +2317,7 @@ export const Chat: React.FC<ChatProps> = ({
                                 e.stopPropagation();
                                 handleCopyMessage(msg.text || '');
                               }}
-                              className="p-1 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                              className="p-1.5 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                               title="Copy prompt"
                               aria-label="Copy prompt"
                             >
@@ -2481,7 +2476,7 @@ export const Chat: React.FC<ChatProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleCopyMessage(cleanedText || msg.text)}
-                                    className="p-1 rounded-md text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                                    className="p-1.5 rounded-full text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                                     title="Copy text"
                                     aria-label="Copy text"
                                   >
@@ -2492,7 +2487,7 @@ export const Chat: React.FC<ChatProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleToggleLike(msg.id, 'up')}
-                                    className={`p-1 rounded-md transition-colors cursor-pointer ${
+                                    className={`p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer ${
                                       likedMessages[msg.id] === 'up' ? 'text-blue-600 fill-blue-500/20' : 'text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white'
                                     }`}
                                     title="Good response"
@@ -2505,7 +2500,7 @@ export const Chat: React.FC<ChatProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleToggleLike(msg.id, 'down')}
-                                    className={`p-1 rounded-md transition-colors cursor-pointer ${
+                                    className={`p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer ${
                                       likedMessages[msg.id] === 'down' ? 'text-red-500 fill-red-500/20' : 'text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white'
                                     }`}
                                     title="Bad response"
@@ -2518,7 +2513,7 @@ export const Chat: React.FC<ChatProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleToggleTTS(msg.id, cleanedText || msg.text)}
-                                    className={`p-1 rounded-md transition-colors cursor-pointer ${
+                                    className={`p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer ${
                                       speakingMsgId === msg.id ? 'text-blue-500 animate-pulse' : 'text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white'
                                     }`}
                                     title={speakingMsgId === msg.id ? 'Stop reading' : 'Read aloud'}
@@ -2531,7 +2526,7 @@ export const Chat: React.FC<ChatProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleShareMessage(cleanedText || msg.text)}
-                                    className="p-1 rounded-md text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                                    className="p-1.5 rounded-full text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                                     title="Share response"
                                     aria-label="Share response"
                                   >
@@ -2543,7 +2538,7 @@ export const Chat: React.FC<ChatProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => setMoreMenuMsgId((prev) => (prev === msg.id ? null : msg.id))}
-                                      className="p-1 rounded-md text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                                      className="p-1.5 rounded-full text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                                       title="More options"
                                       aria-label="More options"
                                     >
@@ -2551,14 +2546,14 @@ export const Chat: React.FC<ChatProps> = ({
                                     </button>
 
                                     {moreMenuMsgId === msg.id && (
-                                      <div className="absolute left-0 bottom-full mb-2 w-40 bg-white dark:bg-[#18181b] border border-neutral-200/80 dark:border-neutral-800 rounded-xl shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-150">
+                                      <div className="absolute left-0 bottom-full mb-2 w-[145px] bg-white dark:bg-[#18181b] border border-neutral-200/80 dark:border-neutral-800 rounded-2xl shadow-xl p-1 z-30 animate-in fade-in zoom-in-95 duration-150">
                                         <button
                                           type="button"
                                           onClick={() => {
                                             setMoreMenuMsgId(null);
                                             handleRegenerateMessage(index);
                                           }}
-                                          className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
+                                          className="w-full text-left px-2.5 py-1.5 text-[12px] font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl transition-colors flex items-center gap-2"
                                         >
                                           <RotateCw className="w-3.5 h-3.5" strokeWidth={1.8} />
                                           Regenerate
@@ -2569,7 +2564,7 @@ export const Chat: React.FC<ChatProps> = ({
                                             setMoreMenuMsgId(null);
                                             addToast('Thank you for reporting. Our team will review this response.', 'info');
                                           }}
-                                          className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
+                                          className="w-full text-left px-2.5 py-1.5 text-[12px] font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl transition-colors flex items-center gap-2"
                                         >
                                           <AlertCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
                                           Report issue

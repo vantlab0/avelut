@@ -149,13 +149,13 @@ const ChatContextMenu: React.FC<{
   }, [onClose]);
 
   // Compute popover position:
-  // Around 230px width, ~245px height. Anchor intelligently near touch/click coordinates without viewport overflow.
+  // Around 200px width, ~210px height. Anchor intelligently near touch/click coordinates without viewport overflow.
   const popoverStyle = useMemo<React.CSSProperties>(() => {
-    const menuWidth = 230;
-    const menuHeight = 245;
+    const menuWidth = 200;
+    const menuHeight = 210;
 
     // Position near the touch/cursor point
-    let left = anchorX > 160 ? anchorX - 180 : anchorX + 10;
+    let left = anchorX > 160 ? anchorX - 160 : anchorX + 10;
     // Bound within viewport horizontally
     if (left + menuWidth > window.innerWidth - 12) {
       left = Math.max(12, window.innerWidth - menuWidth - 12);
@@ -163,7 +163,7 @@ const ChatContextMenu: React.FC<{
     if (left < 12) left = 12;
 
     // Bound vertically
-    let top = anchorY - 30;
+    let top = anchorY - 20;
     if (top + menuHeight > window.innerHeight - 16) {
       top = Math.max(16, window.innerHeight - menuHeight - 16);
     }
@@ -183,76 +183,76 @@ const ChatContextMenu: React.FC<{
       {/* Click-away backdrop */}
       <div className="fixed inset-0 z-[160]" onClick={onClose} aria-hidden="true" />
 
-      {/* Container: Floating rounded card with 20px border radius, dark charcoal background (#262626), elevated drop shadow, padding 10px. Width around 230px. */}
+      {/* Container: Floating rounded card with 20px border radius, dark charcoal background (#262626), elevated drop shadow, padding 6px. Width around 200px. */}
       <div
         ref={menuRef}
         onClick={(e) => e.stopPropagation()}
         style={popoverStyle}
-        className="z-[161] absolute w-[230px] rounded-[20px] p-[10px] bg-[#262626] border border-white/5 shadow-2xl shadow-black/80 transition-all animate-in fade-in zoom-in-95 duration-150 flex flex-col gap-1 text-left font-sans select-none"
+        className="z-[161] absolute w-[200px] rounded-[20px] p-[6px] bg-[#262626] border border-white/5 shadow-2xl shadow-black/80 transition-all animate-in fade-in zoom-in-95 duration-150 flex flex-col gap-0.5 text-left font-sans select-none"
       >
-        {/* 1. Pin (pushpin outline icon) - text and icon in off-white (#ededed) */}
+        {/* 1. Pin (pushpin outline icon) */}
         <button
           type="button"
           onClick={() => {
             onTogglePin(convo.id);
             onClose();
           }}
-          className="w-full flex items-center gap-[12px] px-3 py-2.5 rounded-[12px] text-left text-[15px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
+          className="w-full flex items-center gap-[10px] px-2.5 py-2 rounded-[12px] text-left text-[13.5px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
         >
-          <Pin className="w-5 h-5 shrink-0 text-[#ededed]" />
+          <Pin className="w-4 h-4 shrink-0 text-[#ededed]" />
           <span className="truncate">{isPinned ? 'Unpin' : 'Pin'}</span>
         </button>
 
-        {/* 2. Rename (pencil outline icon) - text and icon in off-white (#ededed) */}
+        {/* 2. Rename (pencil outline icon) */}
         <button
           type="button"
           onClick={() => {
             onClose();
             onRename(convo);
           }}
-          className="w-full flex items-center gap-[12px] px-3 py-2.5 rounded-[12px] text-left text-[15px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
+          className="w-full flex items-center gap-[10px] px-2.5 py-2 rounded-[12px] text-left text-[13.5px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
         >
-          <Pencil className="w-5 h-5 shrink-0 text-[#ededed]" />
+          <Pencil className="w-4 h-4 shrink-0 text-[#ededed]" />
           <span className="truncate">Rename</span>
         </button>
 
-        {/* 3. Add to project (folder-plus outline icon) - off-white text and icon, with a trailing right chevron icon on the far right */}
+        {/* 3. Add to project (folder-plus outline icon) */}
         <button
           type="button"
           onClick={() => {
             onClose();
             onAddToProject(convo);
           }}
-          className="w-full flex items-center gap-[12px] px-3 py-2.5 rounded-[12px] text-left text-[15px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
+          className="w-full flex items-center gap-[10px] px-2.5 py-2 rounded-[12px] text-left text-[13.5px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
         >
-          <FolderPlus className="w-5 h-5 shrink-0 text-[#ededed]" />
+          <FolderPlus className="w-4 h-4 shrink-0 text-[#ededed]" />
           <span className="truncate">Add to project</span>
-          <ChevronRight className="w-4 h-4 shrink-0 text-[#ededed] ml-auto" />
+          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-[#ededed] ml-auto" />
         </button>
 
-        {/* 4. Archive (archive box outline icon) - text and icon in off-white (#ededed) */}
+        {/* 4. Archive (archive box outline icon) */}
         <button
           type="button"
           onClick={() => {
             onClose();
             onArchive(convo);
           }}
-          className="w-full flex items-center gap-[12px] px-3 py-2.5 rounded-[12px] text-left text-[15px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
+          className="w-full flex items-center gap-[10px] px-2.5 py-2 rounded-[12px] text-left text-[13.5px] font-medium text-[#ededed] transition-colors duration-150 hover:bg-white/10 active:bg-white/15 cursor-pointer"
         >
-          <Archive className="w-5 h-5 shrink-0 text-[#ededed]" />
+          <Archive className="w-4 h-4 shrink-0 text-[#ededed]" />
           <span className="truncate">Archive</span>
         </button>
 
-        {/* 5. Delete (trash can outline icon) - text and icon both colored in soft destructive red (#f87171) */}
+        {/* 5. Delete (trash can outline icon) */}
         <button
           type="button"
           onClick={() => {
             onClose();
             onRequestDelete(convo);
           }}
-          className="w-full flex items-center gap-[12px] px-3 py-2.5 rounded-[12px] text-left text-[15px] font-medium text-[#f87171] transition-colors duration-150 hover:bg-[#f87171]/10 active:bg-[#f87171]/20 cursor-pointer"
+          className="w-full flex items-center gap-[10px] px-2.5 py-2 rounded-[12px] text-left text-[13.5px] font-medium text-[#f87171] transition-colors duration-150 hover:bg-[#f87171]/10 active:bg-[#f87171]/20 cursor-pointer"
         >
-          <Trash2 className="w-5 h-5 shrink-0 text-[#f87171]" />
+          <Trash2 className="w-4 h-4 shrink-0 text-[#f87171]" />
           <span className="truncate">Delete</span>
         </button>
       </div>
