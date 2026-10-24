@@ -78,16 +78,21 @@ export async function POST(req: Request) {
       enable_search: isSearchRequested,
       ...(isSearchRequested ? { search_options: { enable_citation: true, enable_source: true } } : {}),
     };
+    // Default streaming to TRUE unless explicitly turned off or JSON object output requested
+    const isStream = body.stream !== false && body.response_format?.type !== 'json_object';
+    payload.stream = isStream;
+    if (isStream) {
+      payload.stream_options = { include_usage: true };
+    }
     if (body.response_format && body.response_format.type === 'json_object') {
       payload.response_format = { type: 'json_object' };
       payload.stream = false;
-    } else if (body.stream) {
-      payload.stream = true;
     }
 
     const requestHeaders: Record<string, string> = {
       'Authorization': `Bearer ${alibabaApiKey}`,
       'Content-Type': 'application/json',
+      'Accept': isStream ? 'text/event-stream' : 'application/json',
     };
     if (workspaceId) {
       requestHeaders['X-DashScope-WorkSpace'] = workspaceId;
@@ -108,42 +113,7 @@ export async function POST(req: Request) {
         if (response.ok) {
           clearTimeout(timer);
           if (payload.stream && response.body) {
-            let streamBody = response.body;
-
-            // If we have search results, inject the search_info SSE event at the start
-            if (searchResults.length > 0) {
-              const encoder = new TextEncoder();
-              const searchInfoChunk = encoder.encode(
-                `data: ${JSON.stringify({
-                  choices: [{ delta: { content: '' }, index: 0 }],
-                  search_info: {
-                    search_results: searchResults.map((r) => ({
-                      title: r.title,
-                      url: r.url,
-                      snippet: r.snippet,
-                    })),
-                  },
-                })}\n\n`
-              );
-
-              const originalReader = response.body.getReader();
-              streamBody = new ReadableStream({
-                async start(controllerStream) {
-                  controllerStream.enqueue(searchInfoChunk);
-                  try {
-                    while (true) {
-                      const { done, value } = await originalReader.read();
-                      if (done) break;
-                      controllerStream.enqueue(value);
-                    }
-                  } finally {
-                    controllerStream.close();
-                  }
-                },
-              });
-            }
-
-            return new Response(streamBody, {
+            return new Response(response.body, {
               status: 200,
               headers: {
                 'Content-Type': 'text/event-stream; charset=utf-8',

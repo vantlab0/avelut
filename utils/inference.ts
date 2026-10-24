@@ -958,6 +958,7 @@ async function* callAlibabaQwenStream(
     messages,
     modalities: ['text'],
     stream: true,
+    stream_options: { include_usage: true },
     enable_thinking: false,
     include_reasoning: false,
     temperature: params?.config?.temperature ?? 0.7,
@@ -982,6 +983,7 @@ async function* callAlibabaQwenStream(
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
         'X-DashScope-WorkSpace': 'ws-o3v6mh0i8y9tqdfx',
       };
       if (apiKey) {
