@@ -10,6 +10,8 @@ import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.RemoteInput;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 
 import com.capacitorjs.plugins.pushnotifications.MessagingService;
 import com.google.firebase.messaging.RemoteMessage;
@@ -108,6 +110,16 @@ public class AvelutMessagingService extends MessagingService {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setContentIntent(contentPendingIntent);
+
+        try {
+            int launcherIconRes = context.getApplicationInfo().icon;
+            if (launcherIconRes != 0) {
+                Bitmap largeIcon = BitmapFactory.decodeResource(context.getResources(), launcherIconRes);
+                if (largeIcon != null) {
+                    builder.setLargeIcon(largeIcon);
+                }
+            }
+        } catch (Exception ignored) {}
 
         if (chatId != null && !chatId.isEmpty()) {
             RemoteInput remoteInput = new RemoteInput.Builder("inline_reply")
