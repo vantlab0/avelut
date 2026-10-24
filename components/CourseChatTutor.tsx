@@ -300,7 +300,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
       '   - Explain the concept with a vivid, relatable everyday Nigerian analogy (e.g. POS service charges, NEPA light vs generator, traffic at Ojuelegba, bargaining at the market).',
       '   - Keep this opening byte bite-sized (90-130 words). Never dump giant multi-paragraph lectures.',
       '   - Conclude with ONE simple, engaging check question to test the student\'s understanding before Byte 2.',
-      '   - Always append 2 interactive follow-up suggestions starting with ↳ (e.g. "↳ Ready for Byte 2: Mechanics", "↳ Can you explain with another example?").',
+      '   - Always append 2 interactive follow-up suggestions starting with ↳ written strictly from the student\'s first-person perspective (e.g. "↳ Ready for Byte 2: Mechanics", "↳ Give me another everyday example", "↳ Quiz me on this byte"). Never phrase as "Would you like..." or "Do you want...".',
       '',
       '3. SUBSEQUENT BYTE PROGRESSION:',
       '   - Assess the student\'s answer warmly and accurately.',

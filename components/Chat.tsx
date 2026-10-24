@@ -183,6 +183,108 @@ const timeAgo = (timestamp: number): string => {
   return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+/**
+ * Curates AI follow-up suggestions so they are personalized from the USER'S perspective ("I", "me", "my", or imperative commands).
+ * Converts second-person assistant phrasing ("Would you like me to...", "Do you want to...", "You can ask...")
+ * into direct student prompts ("Show me...", "Quiz me on...", "Explain...", "Test my knowledge...").
+ */
+export const curateUserSuggestionPrompt = (rawPrompt: string): string => {
+  let p = rawPrompt.trim();
+  if (!p) return '';
+
+  // Remove leading bullet/arrow marks if still present
+  p = p.replace(/^[↳•\-\*>\s]+/, '').trim();
+
+  // Strip wrapping quotes if any
+  if ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
+    p = p.slice(1, -1).trim();
+  }
+
+  // 1. Transform common assistant-centric prefix patterns into user-centric requests
+  const patterns: [RegExp, string][] = [
+    // Would you like me to / Would you like us to / Would you like to
+    [/^would you like (?:me|us) to (?:explain|break down)\s+/i, 'Explain '],
+    [/^would you like (?:me|us) to (?:show|demonstrate)\s+/i, 'Show me '],
+    [/^would you like (?:me|us) to (?:give|provide)\s+/i, 'Give me '],
+    [/^would you like (?:me|us) to (?:quiz|test)\s+(?:you\s+on\s+)?/i, 'Quiz me on '],
+    [/^would you like (?:me|us) to\s+/i, 'Can you '],
+    [/^would you like to (?:take a quiz|do a quiz|practice questions?)(?:\s+on)?/i, 'Quiz me on'],
+    [/^would you like to (?:see|view)\s+/i, 'Show me '],
+    [/^would you like to (?:know|learn) more about\s+/i, 'Tell me more about '],
+    [/^would you like to (?:explore|try)\s+/i, 'Let\'s explore '],
+    [/^would you like to\s+/i, 'I want to '],
+    [/^would you like (?:a|an)\s+(?:quiz|cbt|test)\s+(?:on|about)?\s*/i, 'Quiz me on '],
+    [/^would you like (?:a|an)\s+(?:example|illustration|diagram)\s+(?:of|for)?\s*/i, 'Show me an example of '],
+
+    // Do you want me to / Do you want to
+    [/^do you want (?:me|us) to (?:explain|break down)\s+/i, 'Explain '],
+    [/^do you want (?:me|us) to (?:show|demonstrate)\s+/i, 'Show me '],
+    [/^do you want (?:me|us) to (?:give|provide)\s+/i, 'Give me '],
+    [/^do you want (?:me|us) to (?:quiz|test)\s+(?:you\s+on\s+)?/i, 'Quiz me on '],
+    [/^do you want (?:me|us) to\s+/i, 'Can you '],
+    [/^do you want to (?:take a quiz|do a quiz|practice questions?)(?:\s+on)?/i, 'Quiz me on'],
+    [/^do you want to (?:see|view)\s+/i, 'Show me '],
+    [/^do you want to (?:know|learn) more about\s+/i, 'Tell me more about '],
+    [/^do you want to (?:explore|try)\s+/i, 'Let\'s explore '],
+    [/^do you want to\s+/i, 'I want to '],
+    [/^do you want (?:a|an)\s+(?:quiz|cbt|test)\s+(?:on|about)?\s*/i, 'Quiz me on '],
+    [/^do you want (?:a|an)\s+(?:example|illustration|diagram)\s+(?:of|for)?\s*/i, 'Show me an example of '],
+
+    // Should I / Shall I / Can I / Let me
+    [/^should (?:i|we) (?:explain|break down)\s+/i, 'Explain '],
+    [/^should (?:i|we) (?:show|demonstrate)\s+/i, 'Show me '],
+    [/^should (?:i|we) (?:give|provide)\s+/i, 'Give me '],
+    [/^should (?:i|we) (?:quiz|test)\s+(?:you\s+on\s+)?/i, 'Quiz me on '],
+    [/^should (?:i|we)\s+/i, 'Can you '],
+    [/^shall (?:i|we)\s+/i, 'Can you '],
+    [/^can (?:i|we) (?:explain|help with)\s+/i, 'Explain '],
+    [/^let me (?:explain|break down)\s+/i, 'Explain '],
+    [/^let me (?:show|demonstrate)\s+/i, 'Show me '],
+    [/^let me (?:give|provide)\s+/i, 'Give me '],
+    [/^let me (?:quiz|test)\s+you\s+(?:on\s+)?/i, 'Quiz me on '],
+
+    // You can / You could / Why don't you
+    [/^you can (?:ask me to|have me)\s+/i, 'Please '],
+    [/^you can (?:test|check) your (?:understanding|knowledge)\s+(?:on|with)?\s*/i, 'Test my knowledge on '],
+    [/^you can\s+/i, 'Can we '],
+    [/^why not\s+/i, 'Let\'s '],
+    [/^how about (?:we|a)\s+/i, 'Let\'s '],
+  ];
+
+  for (const [regex, replacement] of patterns) {
+    if (regex.test(p)) {
+      p = p.replace(regex, replacement).trim();
+      // If we turned a question into an imperative command, remove trailing question mark
+      if (p.endsWith('?') && !p.toLowerCase().startsWith('can you') && !p.toLowerCase().startsWith('how') && !p.toLowerCase().startsWith('what') && !p.toLowerCase().startsWith('why')) {
+        p = p.replace(/\?+$/, '');
+      }
+      break;
+    }
+  }
+
+  // 2. Normalize internal second-person pronouns to first-person
+  p = p
+    .replace(/\b(?:quiz|test)\s+you\b/gi, 'quiz me')
+    .replace(/\bshow you\b/gi, 'show me')
+    .replace(/\bgive you\b/gi, 'give me')
+    .replace(/\bhelp you\b/gi, 'help me')
+    .replace(/\btell you\b/gi, 'tell me')
+    .replace(/\bfor you\b/gi, 'for me')
+    .replace(/\byour understanding\b/gi, 'my understanding')
+    .replace(/\byour knowledge\b/gi, 'my knowledge')
+    .replace(/\byour skills\b/gi, 'my skills')
+    .replace(/\byour progress\b/gi, 'my progress')
+    .replace(/\byour notes\b/gi, 'my notes')
+    .replace(/\btest yourself\b/gi, 'test my understanding');
+
+  // Capitalize first character
+  if (p.length > 0) {
+    p = p.charAt(0).toUpperCase() + p.slice(1);
+  }
+
+  return p.trim();
+};
+
 export const parseFollowUpsAndContent = (text: string) => {
   if (!text) return { cleanedText: '', followUps: [] as string[] };
   const lines = text.split('\n');
@@ -192,8 +294,9 @@ export const parseFollowUpsAndContent = (text: string) => {
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
     if (trimmed.startsWith('↳')) {
-      const prompt = trimmed.replace(/^↳\s*/, '').trim();
-      if (prompt) followUps.push(prompt);
+      const rawPrompt = trimmed.replace(/^↳\s*/, '').trim();
+      const curatedPrompt = curateUserSuggestionPrompt(rawPrompt);
+      if (curatedPrompt) followUps.push(curatedPrompt);
     } else {
       contentLines.push(lines[i]);
     }
@@ -1656,7 +1759,16 @@ export const Chat: React.FC<ChatProps> = ({
         aiCapabilities.illustrations
           ? '- VISUAL SVG DIAGRAMS: When explaining workflows, structures, architectures, biological/chemical systems, algorithms, geometric layouts, or flowcharts, output a complete, responsive SVG visual diagram inside a ```svg code fence.\n- VISUAL IMAGES & ILLUSTRATIONS: When explaining physical objects, science, nature, anatomy, history, or real-world concepts, embed an educational visual using markdown: `![Caption description](https://image.pollinations.ai/prompt/detailed%20educational%20illustration%20of%20SUBJECT?width=800&height=500&nologo=true)` where SUBJECT is the specific topic.'
           : '',
-        '- SUGGESTED NEXT STEPS / FOLLOW-UPS: For substantive or educational answers (but NOT on simple greetings like "hi" or "hello"), provide 2 to 3 relevant follow-up actions or questions that the user can tap. Prefix EACH follow-up on its own line with "↳ ". ONLY suggest actions that correspond to currently ON capabilities.',
+        '- SUGGESTED NEXT STEPS / FOLLOW-UPS: For substantive or educational answers (but NOT on simple greetings like "hi" or "hello"), provide 2 to 3 relevant follow-up prompts that the user can tap to send.',
+        '  * CRITICAL PERSONALIZATION RULE: Every suggestion MUST be written from the USER\'S FIRST-PERSON PERSPECTIVE ("I", "me", "my", or direct student action commands).',
+        '  * NEVER phrase suggestions from the assistant\'s perspective (do NOT write "Would you like me to...", "Do you want to...", "You can ask...", or "Should I...").',
+        '  * ALWAYS phrase them as if the student is speaking directly to you, e.g.:',
+        '    - "↳ Quiz me on this with 3 practice questions"',
+        '    - "↳ Show me a real-world worked example"',
+        '    - "↳ Explain how this applies to practical exams"',
+        '    - "↳ Test my understanding with a short challenge"',
+        '    - "↳ Give me flashcards for the key formulas"',
+        '  * Prefix EACH follow-up on its own line with "↳ ". ONLY suggest actions that correspond to currently ON capabilities.',
       ].filter(Boolean).join('\n');
 
       let modeInstruction = '';

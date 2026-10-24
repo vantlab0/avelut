@@ -302,7 +302,7 @@ export const NotebookChat: React.FC<NotebookChatProps> = ({
       '   ### Byte 1: The Core Concept & Foundation',
       '   - Teach the foundation clearly and concisely (90-130 words). Strictly ground your explanation in the chapter notes.',
       '   - Conclude with ONE simple check question to test the student\'s understanding before Byte 2.',
-      '   - Always append 2 interactive follow-up suggestions starting with ↳ (e.g. "↳ Ready for Byte 2: Key Terms", "↳ Can you explain with a real-world example?").',
+      '   - Always append 2 interactive follow-up suggestions starting with ↳ written strictly from the student\'s first-person perspective (e.g. "↳ Ready for Byte 2: Key Terms", "↳ Give me a real-world example", "↳ Quiz me on this byte"). Never phrase as "Would you like..." or "Do you want...".',
       '',
       '3. SUBSEQUENT BYTE PROGRESSION:',
       '   - Assess the student\'s answer warmly and accurately.',
