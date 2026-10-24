@@ -51,9 +51,6 @@ import {
   Square,
   Copy,
   Volume2,
-  MoreVertical,
-  RotateCw,
-  AlertCircle,
   Pencil,
   WifiOff,
 } from 'lucide-react';
@@ -959,7 +956,6 @@ export const Chat: React.FC<ChatProps> = ({
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [isSwitchingChat, setIsSwitchingChat] = useState(false);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
-  const [moreMenuMsgId, setMoreMenuMsgId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageText, setEditingMessageText] = useState<string>('');
   const [activeUserBubbleMenuId, setActiveUserBubbleMenuId] = useState<string | null>(null);
@@ -2151,13 +2147,48 @@ export const Chat: React.FC<ChatProps> = ({
     handleCopyMessage(text);
   };
 
-  const handleRegenerateMessage = (msgIndex: number) => {
+  const handleRegenerateMessage = async (msgIndex: number) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    activeRequestIdRef.current = null;
+    setIsLoading(false);
+
+    const targetAiMsg = messages[msgIndex];
+    if (!targetAiMsg) return;
+
+    let userMsgId: string | undefined = undefined;
+    let userPromptText = '';
+    let userMsgIdx = -1;
+
     for (let i = msgIndex - 1; i >= 0; i--) {
       if (messages[i].sender === 'user' && !isAiMessage(messages[i])) {
-        void handleSendMessage(messages[i].text);
+        userPromptText = messages[i].text || '';
+        userMsgId = messages[i].id;
+        userMsgIdx = i;
         break;
       }
     }
+
+    if (!userMsgId || userMsgIdx === -1) return;
+
+    // Delete target AI message and subsequent messages from local SQLite storage
+    const subsequentMsgs = messages.slice(msgIndex);
+    for (const sm of subsequentMsgs) {
+      if (sm.id) {
+        void deleteLocalMessage(sm.id);
+      }
+    }
+
+    // Form truncated history up to userMsgIdx
+    const customHistory = messages.slice(0, userMsgIdx);
+
+    // Trigger fresh generation for the user prompt
+    await handleSendMessage(userPromptText, {
+      editingUserMsgId: userMsgId,
+      customHistory,
+    });
   };
 
   const handleToggleTTS = useCallback((msgId: string, rawText: string) => {
@@ -2538,45 +2569,16 @@ export const Chat: React.FC<ChatProps> = ({
                                     <Share2 className="w-4 h-4" strokeWidth={1.8} />
                                   </button>
 
-                                  {/* More button (vertical 3-dots) with popover dropdown */}
-                                  <div className="relative">
-                                    <button
-                                      type="button"
-                                      onClick={() => setMoreMenuMsgId((prev) => (prev === msg.id ? null : msg.id))}
-                                      className="p-1 rounded-md text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
-                                      title="More options"
-                                      aria-label="More options"
-                                    >
-                                      <MoreVertical className="w-4 h-4" strokeWidth={1.8} />
-                                    </button>
-
-                                    {moreMenuMsgId === msg.id && (
-                                      <div className="absolute left-0 bottom-full mb-2 w-40 bg-white dark:bg-[#18181b] border border-neutral-200/80 dark:border-neutral-800 rounded-xl shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-150">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setMoreMenuMsgId(null);
-                                            handleRegenerateMessage(index);
-                                          }}
-                                          className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
-                                        >
-                                          <RotateCw className="w-3.5 h-3.5" strokeWidth={1.8} />
-                                          Regenerate
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setMoreMenuMsgId(null);
-                                            addToast('Thank you for reporting. Our team will review this response.', 'info');
-                                          }}
-                                          className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
-                                        >
-                                          <AlertCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
-                                          Report issue
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
+                                  {/* Direct Regenerate button replacing the popup menu */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRegenerateMessage(index)}
+                                    className="p-1 rounded-md text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                                    title="Regenerate response"
+                                    aria-label="Regenerate response"
+                                  >
+                                    <RefreshCcw className="w-4 h-4" strokeWidth={1.8} />
+                                  </button>
                                 </div>
 
                                 {/* Subtle horizontal separator line under the action row as in the screenshot */}
