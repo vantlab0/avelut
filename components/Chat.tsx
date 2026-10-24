@@ -1656,7 +1656,12 @@ export const Chat: React.FC<ChatProps> = ({
               config: { temperature: 0.3 }
             });
             const generatedTitle = getResponseText(titleResult).trim().replace(/^["']|["']$/g, '');
-            if (generatedTitle && generatedTitle.length > 0) {
+            const isRawData =
+              generatedTitle.length > 80 ||
+              generatedTitle.includes('data:') ||
+              generatedTitle.includes('chatcmpl-') ||
+              generatedTitle.includes('"choices"');
+            if (generatedTitle && generatedTitle.length > 0 && !isRawData) {
               void renameLocalConversation(convoIdForTitle, generatedTitle, userProfile.uid);
             }
           } catch (e) {

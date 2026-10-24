@@ -19,7 +19,7 @@ import { uploadToR2, isR2Configured } from "../../services/cloudflareR2Service";
 import { useTheme } from "../../contexts/ThemeContext";
 import { TypingIndicator } from "../TypingIndicator";
 import { getMultipleUserProfiles } from "../../services/userProfileService";
-import { REACTION_EMOJIS, DoubleCheckIcon, ClockIcon, MessageStatusIcon, AttachmentIcon, CameraIcon, SendIcon, TrashIcon, LockIcon, formatLastSeen, formatChatTimestamp, getUnreadCount, getLastMessagePreview, getLastMessageSenderId, createFallbackChatUser, ensureArray, getMessengerCacheKey, resolveDisplayImageUrl, resolveImageDisplayUrl, extractImageCaption, generateMicroThumbnail, isUserOnline } from "../messenger/messengerUtils";
+import { REACTION_EMOJIS, DoubleCheckIcon, ClockIcon, MessageStatusIcon, AttachmentIcon, CameraIcon, SendIcon, TrashIcon, LockIcon, formatLastSeen, formatChatTimestamp, getUnreadCount, getLastMessagePreview, getLastMessageSenderId, isUnresolvedName, createFallbackChatUser, ensureArray, getMessengerCacheKey, resolveDisplayImageUrl, resolveImageDisplayUrl, extractImageCaption, generateMicroThumbnail, isUserOnline } from "../messenger/messengerUtils";
 import { ProgressiveImageBubble } from "../messenger/ProgressiveImageBubble";
 import { VoiceNotePlayer } from "../messenger/VoiceNotePlayer";
 import { AvelutMessageInput } from "../messenger/AvelutMessageInput";
@@ -698,7 +698,7 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
               const otherUserId = details.otherUserId || chatId;
               const existingChat = safePrev.find((c: any) => c && c.id === chatId);
               let otherUser = existingChat?.otherUser;
-              if (!otherUser || otherUser.display_name === 'Unknown user') {
+              if (!otherUser || isUnresolvedName(otherUser.display_name)) {
                 otherUser = userMapRef.current.get(otherUserId) || fetchedUserProfilesRef.current[otherUserId] || createFallbackChatUser(otherUserId);
               }
               return {
@@ -761,6 +761,39 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
       }, [safePartnerRequests, authUser, currentUid]);
 
       const pendingFetches = useRef<Set<string>>(new Set());
+
+      // Auto-Merge Profiles effect
+      useEffect(() => {
+        if (!chats.length) return;
+        setChats(prevChats => {
+          let hasChanged = false;
+          const updated = prevChats.map(c => {
+            if (!c) return c;
+            const otherUserId = c.otherUserId || c.otherUser?.uid;
+            if (!otherUserId) return c;
+            const resolved = userMap.get(otherUserId) || fetchedUserProfiles[otherUserId];
+            if (!resolved) return c;
+
+            const currentOther = c.otherUser;
+            const isCurrentUnresolved = !currentOther || isUnresolvedName(currentOther.display_name);
+            const isDifferentName = resolved.display_name && resolved.display_name !== currentOther?.display_name;
+            const isDifferentPhoto = resolved.photo_url !== undefined && resolved.photo_url !== currentOther?.photo_url;
+
+            if (isCurrentUnresolved || isDifferentName || isDifferentPhoto) {
+              hasChanged = true;
+              return {
+                ...c,
+                otherUser: {
+                  ...c.otherUser,
+                  ...resolved,
+                },
+              };
+            }
+            return c;
+          });
+          return hasChanged ? updated : prevChats;
+        });
+      }, [userMap, fetchedUserProfiles]);
 
       useEffect(() => {
         if (!safeChats.length) return;
@@ -2536,7 +2569,10 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
 
                               if (swipeToReplyRef.current.id === msg.id) {
                                 const diffX = swipeToReplyRef.current.currentX - swipeToReplyRef.current.startX;
-                                if (diffX > 60) {
+                                const diffY = swipeToReplyRef.current.currentY - swipeToReplyRef.current.startY;
+                                const isHorizontal = Math.abs(diffX) > Math.abs(diffY) * 1.6;
+
+                                if (diffX > 100 && isHorizontal) {
                                   setReplyingTo(msg);
                                   e.currentTarget.style.transform = 'translateX(0px)';
                                   swipeToReplyRef.current = { id: null, startX: 0, startY: 0, currentX: 0, currentY: 0, moved: false };
@@ -2571,8 +2607,8 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                                 const diffX = touch.clientX - swipeToReplyRef.current.startX;
                                 const diffY = touch.clientY - swipeToReplyRef.current.startY;
 
-                                // If touch moved more than 10px in any direction, consider it a move and cancel long press timer
-                                if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
+                                const dist = Math.hypot(diffX, diffY);
+                                if (dist > 18) {
                                   swipeToReplyRef.current.moved = true;
                                   if (longPressTimerRef.current) {
                                     clearTimeout(longPressTimerRef.current);
@@ -2580,8 +2616,11 @@ export const Messenger: React.FC<{ userProfile: UserProfile; initialChatId?: str
                                   }
                                 }
 
-                                if (diffX > 0 && diffX < 100) {
+                                const isHorizontal = Math.abs(diffX) > Math.abs(diffY) * 1.6;
+                                if (isHorizontal && diffX >= 28 && diffX <= 120) {
                                   e.currentTarget.style.transform = `translateX(${diffX}px)`;
+                                } else {
+                                  e.currentTarget.style.transform = 'translateX(0px)';
                                 }
                               }
                             }}
