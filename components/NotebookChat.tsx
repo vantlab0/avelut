@@ -77,7 +77,6 @@ export const NotebookChat: React.FC<NotebookChatProps> = ({
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'listening' | 'processing'>('idle');
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [likedMessages, setLikedMessages] = useState<Record<string, 'up' | 'down'>>({});
-  const [moreMenuMsgId, setMoreMenuMsgId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -629,12 +628,30 @@ export const NotebookChat: React.FC<NotebookChatProps> = ({
   }, [speakingMsgId, addToast]);
 
   const handleRegenerateMessage = (msgIndex: number) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsSending(false);
+
+    let userPromptText = '';
+    let userMsgIdx = -1;
     for (let i = msgIndex - 1; i >= 0; i--) {
       if (messages[i].sender === 'user') {
-        void handleSendMessage(messages[i].text);
+        userPromptText = messages[i].text;
+        userMsgIdx = i;
         break;
       }
     }
+
+    if (userMsgIdx === -1) return;
+
+    // Truncate messages up to userMsgIdx so target AI message is removed
+    const truncated = messages.slice(0, userMsgIdx + 1);
+    setMessages(truncated);
+    void saveChapterGeneration(notebook.id, chapter.id, userProfile?.uid || 'local', 'chat', truncated);
+
+    void handleSendMessage(userPromptText);
   };
 
   return (
@@ -773,52 +790,17 @@ export const NotebookChat: React.FC<NotebookChatProps> = ({
                                   </svg>
                                 </button>
 
-                                <div className="relative">
-                                  <button
-                                    type="button"
-                                    onClick={() => setMoreMenuMsgId((prev) => (prev === msg.id ? null : msg.id))}
-                                    className="p-1 rounded-md hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
-                                    title="More options"
-                                    aria-label="More options"
-                                  >
-                                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="currentColor">
-                                      <circle cx="12" cy="5" r="1.75" />
-                                      <circle cx="12" cy="12" r="1.75" />
-                                      <circle cx="12" cy="19" r="1.75" />
-                                    </svg>
-                                  </button>
-
-                                  {moreMenuMsgId === msg.id && (
-                                    <div className="absolute left-0 bottom-full mb-2 w-40 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-150">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setMoreMenuMsgId(null);
-                                          handleRegenerateMessage(index);
-                                        }}
-                                        className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
-                                      >
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                        </svg>
-                                        Regenerate byte
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setMoreMenuMsgId(null);
-                                          addToast('Thank you for your feedback.', 'info');
-                                        }}
-                                        className="w-full text-left px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
-                                      >
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                        </svg>
-                                        Report issue
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRegenerateMessage(index)}
+                                  className="p-1 rounded-md text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                                  title="Regenerate response"
+                                  aria-label="Regenerate response"
+                                >
+                                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  </svg>
+                                </button>
                               </div>
 
                               <div className="w-full border-b border-neutral-200 dark:border-neutral-800/80 mt-3" />
