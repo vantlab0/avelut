@@ -15,7 +15,7 @@ interface AvelutAIProps {
   onSelectConversation?: (id: string | null) => void;
 }
 
-/** Avelut AI chat shell — uses unified Grok-style Chat component */
+/** Avelut AI chat shell — uses unified Chat component */
 export default function AvelutAI({
   userProfile,
   onNavigate,

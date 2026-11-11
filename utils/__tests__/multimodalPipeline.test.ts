@@ -1,6 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import {
-  normalizeQwenModelName,
   normalizeAlibabaDashScopeModel,
   createAvelutAI,
 } from '../../utils/inference';
@@ -18,13 +17,7 @@ describe('Multimodal Pipeline and 429 Rate Limiting Tests', () => {
     expect(typeof result).toBe('string');
   });
 
-  test('2. Model normalization preserves requested multimodal Omni model', () => {
-    expect(normalizeQwenModelName('qwen3.5-omni-flash', true)).toBe('qwen3.5-omni-flash');
-    expect(normalizeAlibabaDashScopeModel('qwen3.5-omni-flash', true)).toBe('qwen3.5-omni-flash');
-    expect(normalizeAlibabaDashScopeModel('qwen-vl-plus', true)).toBe('qwen3.5-omni-flash');
-  });
-
-  test('3. Bounded exponential backoff and fallback on 429 rate limit', async () => {
+  test('2. Bounded exponential backoff and fallback on 429 rate limit', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
     // Return 429 for initial Alibaba calls
@@ -37,7 +30,6 @@ describe('Multimodal Pipeline and 429 Rate Limiting Tests', () => {
 
     const appSettings: any = {
       alibaba_api_key: 'test_alibaba_key',
-      openrouter_api_key: 'test_openrouter_key',
     };
 
     const ai = createAvelutAI(appSettings, null);

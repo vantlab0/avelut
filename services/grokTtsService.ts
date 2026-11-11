@@ -1,6 +1,1 @@
-/**
- * grokTtsService.ts — Grok AI (xAI) TTS integration module
- */
-
-export * from './voice/GrokVoiceEngine';
-export { grokVoiceEngine as grokTtsService } from './voice/GrokVoiceEngine';
+// Removed: Grok entirely. Avelut now uses Alibaba Qwen3-TTS only.

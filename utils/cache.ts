@@ -159,8 +159,7 @@ export function pruneLocalStorageQuota(): void {
       const k = window.localStorage.key(i);
       if (
         k &&
-        (k.startsWith('avelut_grok_tts_') ||
-          k.startsWith('avelut_board_cache_') ||
+        (k.startsWith('avelut_board_cache_') ||
           k === 'avelut_sqlite_memory_fallback')
       ) {
         keysToRemove.push(k);

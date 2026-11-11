@@ -103,8 +103,7 @@ export async function POST(req: Request) {
 
 /**
  * Core synthesis helper:
- * 1. Tries xAI TTS if XAI_API_KEY is configured.
- * 2. Falls back to Alibaba Cloud DashScope TTS (qwen3-tts-flash) using env keys only.
+ * Alibaba Cloud DashScope TTS (qwen3-tts-flash) using env keys only.
  */
 async function handleTtsSynthesis(
   req: Request,
@@ -114,48 +113,13 @@ async function handleTtsSynthesis(
   withTimestamps: boolean,
   isPrivate = false
 ) {
-  const xaiApiKey =
-    process.env.XAI_API_KEY || process.env.GROK_API_KEY || process.env.VITE_XAI_API_KEY;
-
-  if (xaiApiKey) {
-    try {
-      const response = await fetch('https://api.x.ai/v1/tts', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${xaiApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text,
-          voice_id: voiceId || 'altair',
-          language: language || 'en',
-          with_timestamps: withTimestamps,
-        }),
-      });
-
-      if (response.ok) {
-        const payload = await response.json();
-        return new Response(JSON.stringify(payload), {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-        });
-      }
-    } catch (_) {
-      // Fall through to DashScope TTS
-    }
-  }
-
   // Alibaba Cloud DashScope TTS — NEVER hardcode keys (repo is public)
   const alibabaKey = process.env.ALIBABA_API_KEY || process.env.VITE_ALIBABA_API_KEY || '';
 
   if (!alibabaKey) {
     return new Response(
       JSON.stringify({
-        error:
-          'TTS unavailable: set ALIBABA_API_KEY (or XAI_API_KEY) in server environment. No hardcoded key fallback.',
+        error: 'TTS unavailable: set ALIBABA_API_KEY in server environment. No hardcoded key fallback.',
       }),
       {
         status: 503,

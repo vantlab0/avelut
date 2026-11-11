@@ -114,7 +114,7 @@ export const Level4CourseStudio: React.FC<Level4CourseStudioProps> = ({
         addToast(`Successfully deleted ${selectedTopicIds.size} topic(s).`, 'success');
     };
 
-    const aiApiKey = appSettings.openrouter_api_key?.trim() || appSettings.alibaba_api_key?.trim() || '';
+    const aiApiKey = appSettings.alibaba_api_key?.trim() || '';
     const aiClient = useRef<any>(null);
     useEffect(() => {
         aiClient.current = createAvelutAI(appSettings);
@@ -256,7 +256,7 @@ RULES:
   ]
 }`;
 
-            const modelName = appSettings.openrouter_model || 'qwen/qwen3.7-flash';
+            const modelName = appSettings.alibaba_model || 'qwen3.5-omni-flash';
             const response = await aiClient.current.models.generateContent({
                 model: modelName,
                 contents: [

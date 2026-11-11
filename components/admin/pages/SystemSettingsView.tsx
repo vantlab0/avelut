@@ -422,12 +422,11 @@ export const SystemSettingsView: React.FC = () => {
                         {/* Avelut AI */}
                         <div className="space-y-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                             <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                <i className="bi bi-cpu-fill text-amber-500"></i> Avelut AI (OpenRouter Qwen 3.7 Flash)
+                                <i className="bi bi-cpu-fill text-amber-500"></i> Avelut AI (Alibaba Qwen)
                             </h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <input type="text" placeholder="Global Primary Model (qwen/qwen3.7-flash)" value={appSettings.openrouter_model || ''} onChange={e => setAppSettings({...appSettings, openrouter_model: e.target.value})} className="p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl outline-none focus:border-amber-500 text-sm" />
-                                <input type="password" placeholder="OpenRouter API Key (sk-or-v1-...)" value={appSettings.openrouter_api_key || ''} onChange={e => setAppSettings({...appSettings, openrouter_api_key: e.target.value})} className="p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl outline-none focus:border-amber-500 text-sm" />
-                                <input type="password" placeholder="Alibaba API Key (for CosyVoice voice synthesis)" value={appSettings.alibaba_api_key || ''} onChange={e => setAppSettings({...appSettings, alibaba_api_key: e.target.value})} className="p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl outline-none focus:border-amber-500 text-sm md:col-span-2" />
+                                <input type="text" placeholder="Global Primary Model (qwen3.5-omni-flash)" value={appSettings.alibaba_model || ''} onChange={e => setAppSettings({...appSettings, alibaba_model: e.target.value})} className="p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl outline-none focus:border-amber-500 text-sm" />
+                                <input type="password" placeholder="Alibaba API Key (sk-...)" value={appSettings.alibaba_api_key || ''} onChange={e => setAppSettings({...appSettings, alibaba_api_key: e.target.value})} className="p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl outline-none focus:border-amber-500 text-sm md:col-span-2" />
                             </div>
                         </div>
 

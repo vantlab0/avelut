@@ -1,6 +1,6 @@
 /**
  * lesson-feedback-speech — PRODUCTION
- * Same TTS stack as api/speech.ts (xAI → Alibaba DashScope)
+ * Alibaba Cloud DashScope TTS only.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
@@ -49,33 +49,8 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 async function ttsShort(text: string, voice: string): Promise<{ audioBase64: string; mimeType: string }> {
-  const xaiKey = env("XAI_API_KEY", "GROK_API_KEY", "VITE_XAI_API_KEY");
-  if (xaiKey) {
-    try {
-      const res = await fetch("https://api.x.ai/v1/tts", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${xaiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text,
-          voice_id: voice || "altair",
-          language: "en",
-          with_timestamps: false,
-        }),
-      });
-      if (res.ok) {
-        const payload = await res.json();
-        if (payload?.audio) {
-          return { audioBase64: payload.audio, mimeType: payload.content_type || "audio/mpeg" };
-        }
-      }
-    } catch (_) {}
-  }
-
   const alibabaKey = env("ALIBABA_API_KEY", "VITE_ALIBABA_API_KEY");
-  if (!alibabaKey) throw new Error("TTS unavailable: set XAI_API_KEY or ALIBABA_API_KEY");
+  if (!alibabaKey) throw new Error("TTS unavailable: set ALIBABA_API_KEY");
 
   const workspaceId =
     env("ALIBABA_WORKSPACE_ID", "VITE_ALIBABA_WORKSPACE_ID") || "ws-o3v6mh0i8y9tqdfx";

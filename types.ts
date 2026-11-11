@@ -335,16 +335,13 @@ export interface UsageSettings {
   };
 }
 
-export type VoiceProvider = 'grok' | 'alibaba' | 'browser';
-export type AIProvider = 'openrouter' | 'alibaba_qwen';
+export type VoiceProvider = 'alibaba' | 'browser';
+export type AIProvider = 'alibaba_qwen';
 
 export interface AppSettings {
   show_playstore_modal?: boolean;
   playstore_modal_collect_emails?: boolean;
   primary_ai_provider?: AIProvider;
-  openrouter_api_key?: string;
-  openrouter_model?: string;
-  openrouter_base_url?: string;
   alibaba_api_key?: string;
   alibaba_base_url?: string;
   alibaba_model?: string;
@@ -353,8 +350,6 @@ export interface AppSettings {
   notebook_voice_provider?: VoiceProvider;
   alibaba_voice_model?: string;
   alibaba_voice_name?: string;
-  grok_api_key?: string;
-  grok_voice_id?: string;
   upload_center_uploads_enabled?: boolean;
   coming_soon_enabled?: boolean;
   paystack_public_key?: string;

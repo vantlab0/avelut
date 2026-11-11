@@ -51,11 +51,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip non-GET requests and Supabase / OpenRouter / API requests
+  // Skip non-GET requests and Supabase / API requests
   if (
     event.request.method !== 'GET' ||
     url.origin.includes('supabase.co') ||
-    url.origin.includes('openrouter.ai') ||
     url.pathname.includes('/study_guide_messages')
   ) {
     return;

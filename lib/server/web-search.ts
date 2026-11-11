@@ -300,7 +300,7 @@ function parseTavilyResults(query: string, payload: unknown, limit: number = MAX
   return { query, results };
 }
 
-/** OpenAI-compatible function definition understood by DashScope and OpenRouter. */
+/** OpenAI-compatible function definition understood by DashScope. */
 export const WEB_SEARCH_TOOL_DEFINITION = {
   type: 'function' as const,
   function: {

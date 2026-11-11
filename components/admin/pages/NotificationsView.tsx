@@ -27,7 +27,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
     const [notificationRoute, setNotificationRoute] = useState('dashboard');
     const [isSendingPush, setIsSendingPush] = useState(false);
 
-    const ai = createAvelutAI({ openrouter_api_key: aiApiKey, openrouter_model: aiModel } as any);
+    const ai = createAvelutAI({ alibaba_api_key: aiApiKey, alibaba_model: aiModel } as any);
 
     const notificationRoutes = [
         { value: 'dashboard', label: 'Dashboard' },

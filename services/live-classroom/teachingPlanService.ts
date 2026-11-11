@@ -8,7 +8,7 @@
  */
 
 import { readCachedJson, writeCachedJson } from '../../utils/cache';
-import { createAvelutAI, getResponseText, OPENROUTER_MODEL } from '../../utils/inference';
+import { createAvelutAI, getResponseText } from '../../utils/inference';
 import { getFeatureModel } from '../../utils/usage';
 import { cleanAndParseJson } from '../../utils/jsonUtils';
 import type { AppSettings, UserProfile } from '../../types';

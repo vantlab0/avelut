@@ -461,7 +461,7 @@ export const ImageGridRenderer: React.FC<{ images: string[] }> = ({ images }) =>
   );
 };
 
-export const GrokChatComposer: React.FC<{
+export const ChatComposer: React.FC<{
   input: string;
   setInput: (val: string) => void;
   isLoading: boolean;
@@ -2670,7 +2670,7 @@ export const Chat: React.FC<ChatProps> = ({
           if (docFileInputRef.current) docFileInputRef.current.value = '';
         }}
       />
-      <GrokChatComposer
+      <ChatComposer
         input={input}
         setInput={setInput}
         isLoading={isLoading}

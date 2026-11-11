@@ -16,7 +16,7 @@ import { buildTeacherSystemPrompt, type TeacherPromptConfig } from './teacherPro
 import type { AppSettings, UserProfile } from '../../types';
 import { MermaidBoardService } from './visual-engine/MermaidBoardService';
 import { LlmSvgObjectCache } from './visual-engine/LlmSvgObjectCache';
-import { createAvelutAI, getResponseText, OPENROUTER_MODEL } from '../../utils/inference';
+import { createAvelutAI, getResponseText } from '../../utils/inference';
 import { getFeatureModel } from '../../utils/usage';
 
 export const QWEN_REALTIME_MODEL = 'qwen3.8-omni-flash-realtime';

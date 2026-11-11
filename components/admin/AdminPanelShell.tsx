@@ -87,8 +87,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
         const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
         const { settings: appSettings, isLoading: isAppSettingsLoading } = useAppSettings();
-        const aiModel = appSettings.openrouter_model || 'qwen/qwen3.7-flash';
-        const aiApiKey = (appSettings.openrouter_api_key || '').trim();
+        const aiModel = appSettings.alibaba_model || 'qwen3.5-omni-flash';
+        const aiApiKey = (appSettings.alibaba_api_key || '').trim();
         const ai = useMemo(() => createAvelutAI(appSettings, null), [appSettings]);
         const [isSavingAppSettings, setIsSavingAppSettings] = useState(false);
         const [isTestingAppSettings, setIsTestingAppSettings] = useState(false);
@@ -1063,9 +1063,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         const handleSaveAppSettings = async () => {
             const nextSettings = {
                 ...appSettingsDraft,
-                primary_ai_provider: 'openrouter',
-                openrouter_model: (appSettingsDraft.openrouter_model || 'qwen/qwen3.7-flash').trim(),
-                openrouter_api_key: (appSettingsDraft.openrouter_api_key || '').trim(),
+                primary_ai_provider: 'alibaba_qwen',
+                alibaba_model: (appSettingsDraft.alibaba_model || 'qwen3.5-omni-flash').trim(),
+                alibaba_api_key: (appSettingsDraft.alibaba_api_key || '').trim(),
                 alibaba_model: (appSettingsDraft.alibaba_model || 'qwen3.7-flash').trim(),
                 alibaba_api_key: (appSettingsDraft.alibaba_api_key || '').trim(),
                 paystack_public_key: (appSettingsDraft.paystack_public_key || '').trim(),
@@ -1093,16 +1093,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         };
 
         const handleTestAvelutSettings = async () => {
-            const modelToTest = (appSettingsDraft.openrouter_model || 'qwen/qwen3.7-flash').trim();
-            const apiKeyToTest = (appSettingsDraft.openrouter_api_key || '').trim();
+            const modelToTest = (appSettingsDraft.alibaba_model || 'qwen3.5-omni-flash').trim();
+            const apiKeyToTest = (appSettingsDraft.alibaba_api_key || '').trim();
             if (!apiKeyToTest) {
-                addToast('Add an OpenRouter API key before running the hello test.', 'error');
+                addToast('Add an Alibaba API key before running the hello test.', 'error');
                 return;
             }
 
             setIsTestingAppSettings(true);
             try {
-                const testClient = createAvelutAI({ openrouter_api_key: apiKeyToTest, openrouter_model: modelToTest });
+                const testClient = createAvelutAI({ alibaba_api_key: apiKeyToTest, alibaba_model: modelToTest });
                 const response = await testClient.models.generateContent({
                     model: modelToTest,
                     contents: [{ role: 'user', parts: [{ text: 'hello' }] }],

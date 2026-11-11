@@ -72,7 +72,7 @@ const timeAgo = (timestamp: number): string => {
 };
 
 /**
- * Quick-access navigation button — Grok-style stacked cards
+ * Quick-access navigation button — stacked cards
  * Full-width rounded rectangles, larger type, light/dark adaptive
  */
 const LinkRow: React.FC<{

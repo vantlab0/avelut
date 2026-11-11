@@ -67,7 +67,7 @@ export function setCachedBoardItem<T>(key: string, data: T): void {
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && (k.startsWith('avelut_grok_tts_') || k.startsWith('avelut_board_cache_'))) {
+        if (k && (k.startsWith('avelut_board_cache_'))) {
           keysToRemove.push(k);
         }
       }

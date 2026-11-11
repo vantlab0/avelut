@@ -36,7 +36,7 @@ export const TopicPurgeManager: React.FC<TopicPurgeManagerProps> = ({
     const [approvedMergesToExecute, setApprovedMergesToExecute] = useState<SuggestedMerge[]>([]);
     const [isExecutingMerge, setIsExecutingMerge] = useState(false);
 
-    const aiApiKey = appSettings.openrouter_api_key?.trim() || appSettings.alibaba_api_key?.trim() || '';
+    const aiApiKey = appSettings.alibaba_api_key?.trim() || '';
     const aiClient = useRef<any>(null);
 
     if (!aiClient.current) {
@@ -81,7 +81,7 @@ Rules:
   ]
 }`;
 
-            const modelName = appSettings.openrouter_model || 'qwen/qwen3.7-flash';
+            const modelName = appSettings.alibaba_model || 'qwen3.5-omni-flash';
             const response = await aiClient.current.models.generateContent({
                 model: modelName,
                 contents: [

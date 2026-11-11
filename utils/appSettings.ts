@@ -239,18 +239,14 @@ export const DEFAULT_USAGE_SETTINGS = {
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   primary_ai_provider: 'alibaba_qwen',
-  openrouter_api_key: '',
-  openrouter_model: 'qwen/qwen3.5-omni-flash',
   alibaba_api_key: '',
   alibaba_base_url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
   alibaba_model: 'qwen3.5-omni-flash',
-  active_voice_provider: 'grok',
-  studyguide_voice_provider: 'grok',
-  notebook_voice_provider: 'grok',
+  active_voice_provider: 'alibaba',
+  studyguide_voice_provider: 'alibaba',
+  notebook_voice_provider: 'alibaba',
   alibaba_voice_model: 'qwen3-tts-flash',
   alibaba_voice_name: 'Cherry',
-  grok_api_key: '',
-  grok_voice_id: 'altair',
   upload_center_uploads_enabled: true,
   coming_soon_enabled: false,
   show_playstore_modal: true,
@@ -266,45 +262,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   pinecone_api_key: '',
   pinecone_index_name: '',
   revenuecat_api_key_android: '',
-};
-
-/**
- * Central resolution helper for the OpenRouter API key.
- *
- * Only an admin-configured value is returned. Build-time VITE_* variables are
- * deliberately ignored because Vite inlines them into the browser bundle.
- * Server requests fall back to the server-only OPENROUTER_API_KEY.
- */
-export const getOpenRouterApiKey = (appSettings?: AppSettings | Partial<AppSettings> | null): string => {
-  return (appSettings?.openrouter_api_key || '').trim();
-};
-
-/**
- * Central resolution helper for OpenRouter Model.
- * Resolves with priority:
- * 1. App settings `openrouter_model`
- * 2. Environment variables (OPENROUTER_MODEL / VITE_OPENROUTER_MODEL)
- * 3. Default ('qwen/qwen3.7-flash')
- */
-export const getOpenRouterModel = (appSettings?: AppSettings | Partial<AppSettings> | null): string => {
-  const fromSettings = appSettings?.openrouter_model?.trim();
-  if (fromSettings) {
-    return fromSettings;
-  }
-
-  let fromEnv = '';
-  try {
-    // Access the specific public model variable instead of the whole
-    // `import.meta.env` object: Vite inlines every VITE_* key when the bare
-    // object is referenced, which would copy private keys into the bundle.
-    fromEnv = import.meta.env.VITE_OPENROUTER_MODEL || '';
-  } catch (_) {}
-
-  if (!fromEnv && typeof process !== 'undefined' && process?.env) {
-    fromEnv = process.env.OPENROUTER_MODEL || process.env.VITE_OPENROUTER_MODEL || '';
-  }
-
-  return (fromEnv || DEFAULT_APP_SETTINGS.openrouter_model || 'qwen/qwen3.5-omni-flash').trim();
 };
 
 /**
@@ -331,9 +288,6 @@ export const cleanQwenModel = (model?: any, fallback: string = 'qwen3.5-omni-fla
 
 export const normalizeAppSettings = (raw: Partial<AppSettings> | null | undefined): AppSettings => ({
   primary_ai_provider: raw?.primary_ai_provider || DEFAULT_APP_SETTINGS.primary_ai_provider,
-  openrouter_api_key: (raw?.openrouter_api_key || DEFAULT_APP_SETTINGS.openrouter_api_key || '').toString().trim(),
-  openrouter_model: (raw?.openrouter_model || getOpenRouterModel(raw) || 'qwen/qwen3.5-omni-flash').toString().trim(),
-  openrouter_base_url: (raw?.openrouter_base_url || DEFAULT_APP_SETTINGS.openrouter_base_url || '').toString().trim(),
   alibaba_api_key: (raw?.alibaba_api_key || DEFAULT_APP_SETTINGS.alibaba_api_key || '').toString().trim(),
   alibaba_base_url: (raw?.alibaba_base_url || DEFAULT_APP_SETTINGS.alibaba_base_url || '').toString().trim(),
   alibaba_model: cleanQwenModel(raw?.alibaba_model, DEFAULT_APP_SETTINGS.alibaba_model || 'qwen3.5-omni-flash'),
@@ -342,8 +296,6 @@ export const normalizeAppSettings = (raw: Partial<AppSettings> | null | undefine
   notebook_voice_provider: raw?.notebook_voice_provider || raw?.active_voice_provider || DEFAULT_APP_SETTINGS.notebook_voice_provider,
   alibaba_voice_model: (raw?.alibaba_voice_model || DEFAULT_APP_SETTINGS.alibaba_voice_model || '').toString().trim(),
   alibaba_voice_name: (raw?.alibaba_voice_name || DEFAULT_APP_SETTINGS.alibaba_voice_name || '').toString().trim(),
-  grok_api_key: (raw?.grok_api_key || DEFAULT_APP_SETTINGS.grok_api_key || '').toString().trim(),
-  grok_voice_id: (raw?.grok_voice_id || DEFAULT_APP_SETTINGS.grok_voice_id || '').toString().trim(),
   youtube_api_key: (raw?.youtube_api_key || DEFAULT_APP_SETTINGS.youtube_api_key || '').toString().trim(),
   google_client_id: (raw?.google_client_id || DEFAULT_APP_SETTINGS.google_client_id || '').toString().trim(),
   google_api_key: (raw?.google_api_key || DEFAULT_APP_SETTINGS.google_api_key || '').toString().trim(),

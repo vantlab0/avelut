@@ -33,7 +33,7 @@ import type {
   VisualElement,
 } from './types';
 import { SvgRenderer } from './SvgRenderer';
-import { createAvelutAI, getResponseText, OPENROUTER_MODEL } from '../../../utils/inference';
+import { createAvelutAI, getResponseText } from '../../../utils/inference';
 import { getFeatureModel } from '../../../utils/usage';
 import type { AppSettings, UserProfile } from '../../../types';
 

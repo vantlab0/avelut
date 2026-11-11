@@ -1,7 +1,7 @@
 /**
  * Provider-agnostic OpenAI-compatible tool-call loop for web search.
  *
- * DashScope (Alibaba Model Studio) and OpenRouter both expose the OpenAI chat
+ * DashScope (Alibaba Model Studio) exposes the OpenAI chat
  * completions shape, but neither should be handed provider-specific structure
  * blindly. This module only emits the documented `tool_calls` / `tool` roles,
  * validating every model-issued call before anything is executed.

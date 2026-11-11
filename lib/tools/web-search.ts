@@ -10,7 +10,7 @@ import {
 /**
  * AI SDK tool wrapper around the shared server-side Tavily integration.
  *
- * Used by `api/chat.ts`. The DashScope and OpenRouter proxies use the same
+ * Used by `api/chat.ts`. The DashScope proxy uses the same
  * `searchWeb` implementation through their own tool-call loop, so there is a
  * single source of truth for credentials, validation, and error handling.
  */

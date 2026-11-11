@@ -1,11 +1,9 @@
 /**
  * lesson-prep-worker — PRODUCTION
- * Same providers/env as Vercel: openrouter-chat, alibaba-chat, speech (xAI + Alibaba TTS)
+ * Alibaba Cloud DashScope / Model Studio only.
  *
  * Secrets (mirror Vercel):
- *   OPENROUTER_API_KEY, OPENROUTER_MODEL
  *   ALIBABA_API_KEY, ALIBABA_WORKSPACE_ID, ALIBABA_OPENAI_COMPATIBLE_URL, ALIBABA_DASHSCOPE_URL
- *   XAI_API_KEY or GROK_API_KEY
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -14,16 +12,6 @@ const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const OPENROUTER_FALLBACK_MODELS = [
-  "qwen/qwen3.5-omni-flash",
-  "qwen/qwen3.8-omni-flash",
-  "qwen/qwen3.8-flash",
-  "qwen/qwen3.7-flash",
-  "qwen/qwen-2.5-72b-instruct",
-  "deepseek/deepseek-r1:free",
-  "meta-llama/llama-3.3-70b-instruct:free",
-];
 
 const ILLUSTRATION_FIRST =
   "BOARD PRIORITY: illustrations first. Text secondary. Return ONLY valid JSON. No markdown fences.";
@@ -90,52 +78,12 @@ async function chatCompletion(
 ): Promise<string> {
   const temperature = opts?.temperature ?? 0.7;
   const max_tokens = opts?.max_tokens ?? 8192;
-  const openrouterKey = env("OPENROUTER_API_KEY", "VITE_OPENROUTER_API_KEY");
-  const primaryModel =
-    opts?.model || env("OPENROUTER_MODEL", "VITE_OPENROUTER_MODEL") || "qwen/qwen3.5-omni-flash";
-
-  if (openrouterKey) {
-    const models = Array.from(new Set([primaryModel, ...OPENROUTER_FALLBACK_MODELS]));
-    let lastErr = "";
-    for (const model of models) {
-      try {
-        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${openrouterKey}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://avelut.xyz",
-            "X-Title": "Avelut AI",
-          },
-          body: JSON.stringify({
-            model,
-            messages,
-            temperature,
-            max_tokens,
-            response_format: { type: "json_object" },
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const content = data?.choices?.[0]?.message?.content;
-          if (content) return String(content);
-          lastErr = "OpenRouter empty content";
-        } else {
-          lastErr = await res.text();
-          if (res.status !== 429 && res.status < 500) break;
-        }
-      } catch (e: any) {
-        lastErr = e?.message || String(e);
-      }
-    }
-    console.warn("[worker] OpenRouter failed, trying Alibaba:", String(lastErr).slice(0, 200));
-  }
-
   const alibabaKey = env("ALIBABA_API_KEY", "VITE_ALIBABA_API_KEY");
   if (!alibabaKey) {
-    throw new Error("No LLM keys: set OPENROUTER_API_KEY and/or ALIBABA_API_KEY (same as Vercel)");
+    throw new Error("No LLM key: set ALIBABA_API_KEY (same as Vercel)");
   }
 
+  const model = opts?.model || "qwen3.5-omni-flash";
   const workspaceId =
     env("ALIBABA_WORKSPACE_ID", "VITE_ALIBABA_WORKSPACE_ID") || "ws-o3v6mh0i8y9tqdfx";
   const baseUrl =
@@ -150,7 +98,7 @@ async function chatCompletion(
       "X-DashScope-WorkSpace": workspaceId,
     },
     body: JSON.stringify({
-      model: "qwen3.5-omni-flash",
+      model,
       messages,
       temperature,
       max_tokens,
@@ -205,40 +153,9 @@ async function synthesizeSpeech(
   const trimmed = text.trim();
   if (!trimmed) throw new Error("Empty speech text");
 
-  const xaiKey = env("XAI_API_KEY", "GROK_API_KEY", "VITE_XAI_API_KEY");
-  if (xaiKey) {
-    try {
-      const res = await fetch("https://api.x.ai/v1/tts", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${xaiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: trimmed,
-          voice_id: voice || "altair",
-          language: "en",
-          with_timestamps: true,
-        }),
-      });
-      if (res.ok) {
-        const payload = await res.json();
-        if (payload?.audio) {
-          return {
-            bytes: base64ToBytes(payload.audio),
-            mimeType: payload.content_type || "audio/mpeg",
-            meta: payload,
-          };
-        }
-      }
-    } catch (e) {
-      console.warn("[worker] xAI TTS failed, falling back to Alibaba", e);
-    }
-  }
-
   const alibabaKey = env("ALIBABA_API_KEY", "VITE_ALIBABA_API_KEY");
   if (!alibabaKey) {
-    throw new Error("TTS unavailable: set XAI_API_KEY/GROK_API_KEY or ALIBABA_API_KEY");
+    throw new Error("TTS unavailable: set ALIBABA_API_KEY");
   }
 
   const workspaceId =

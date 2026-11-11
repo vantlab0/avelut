@@ -98,7 +98,7 @@ Rules:
 Return only JSON with keys: title, message, version_name.`;
 
             const response = await ai.models.generateContent({
-                model: appSettings.openrouter_model || 'qwen/qwen3.7-flash',
+                model: appSettings.alibaba_model || 'qwen3.5-omni-flash',
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 config: {
                     responseMimeType: 'application/json',

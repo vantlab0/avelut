@@ -91,7 +91,7 @@ export const HybridCourseDrawer: React.FC<HybridCourseDrawerProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const aiApiKey = appSettings.openrouter_api_key?.trim() || appSettings.alibaba_api_key?.trim() || '';
+    const aiApiKey = appSettings.alibaba_api_key?.trim() || '';
     const aiClient = useRef<any>(null);
     useEffect(() => {
         aiClient.current = createAvelutAI(appSettings);

@@ -94,8 +94,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2. Generate structure using OpenRouter or Alibaba API
-    const openrouterKey = Deno.env.get("OPENROUTER_API_KEY") || Deno.env.get("VITE_OPENROUTER_API_KEY");
+    // 2. Generate structure using Alibaba API
     const alibabaKey = Deno.env.get("ALIBABA_API_KEY") || Deno.env.get("VITE_ALIBABA_API_KEY");
     let structureJson: any = null;
 
@@ -120,33 +119,7 @@ Return STRICTLY valid JSON with no markdown block ticks:
   ]
 }`;
 
-    if (openrouterKey) {
-      try {
-        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${openrouterKey}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://avelut.xyz",
-            "X-Title": "Avelut AI",
-          },
-          body: JSON.stringify({
-            model: "qwen/qwen3.5-omni-flash",
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" },
-          }),
-        });
-        if (resp.ok) {
-          const resData = await resp.json();
-          const rawText = resData.choices?.[0]?.message?.content || "";
-          structureJson = JSON.parse(rawText.replace(/^```json\s*|\s*```$/g, "").trim());
-        }
-      } catch (err) {
-        console.warn("[ensure-structure] OpenRouter AI call failed:", err);
-      }
-    }
-
-    if (!structureJson && alibabaKey) {
+    if (alibabaKey) {
       try {
         const workspaceId = Deno.env.get("ALIBABA_WORKSPACE_ID") || "ws-o3v6mh0i8y9tqdfx";
         const resp = await fetch("https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", {

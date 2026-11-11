@@ -13,7 +13,7 @@ import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { compressBase64Image } from '../utils/mediaUpload';
 import {
-  GrokChatComposer,
+  ChatComposer,
   CollapsibleUserMessage,
   CameraCaptureView,
   ImageGridRenderer,
@@ -886,7 +886,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
       />
 
       {/* AVELUT AI CHAT COMPOSER */}
-      <GrokChatComposer
+      <ChatComposer
         input={inputValue}
         setInput={setInputValue}
         isLoading={isSending}

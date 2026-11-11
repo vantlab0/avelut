@@ -384,7 +384,7 @@ export class AppLessonPrepWorker {
     const topicKey = buildTopicKey(topicTitle, courseName);
     const contentHash = buildContentHash(topicTitle, courseName, syllabusContext);
     const prepKey = `${resolvedUserId}::${topicKey}::${durationMode}`;
-    const resolvedVoice = voice || appSettings?.grok_voice_id || 'Altair';
+    const resolvedVoice = voice || appSettings?.alibaba_voice_name || 'Cherry';
 
     if (this.activeControllers.has(prepKey)) return;
 
