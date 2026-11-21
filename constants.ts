@@ -3,7 +3,7 @@ import React from 'react';
 import type { NavItem } from './types';
 import { StudyGuideIcon } from './components/icons/StudyGuideIcon';
 import { CameraIcon } from './components/icons/CameraIcon';
-import { AIIcon } from './components/icons/AIIcon';
+import { TutorMascotIcon } from './components/icons/TutorMascotIcon';
 import { MessengerIcon } from './components/icons/MessengerIcon';
 import { StackIcon } from './components/icons/StackIcon';
 import { GraduationCapIcon } from './components/icons/GraduationCapIcon';
@@ -68,12 +68,12 @@ const UserOutlineIcon: React.FC<{ className?: string }> = ({ className = 'w-5 h-
 );
 
 export const navigationItems: NavItem[] = [
-  { id: 'chat', label: 'New Chat', icon: React.createElement(AIIcon, { className: 'w-5 h-5' }) },
+  { id: 'chat', label: 'New Chat', icon: React.createElement(TutorMascotIcon, { className: 'w-5 h-5' }) },
   { id: 'study_guide', label: 'Study Guide', icon: React.createElement(StudyGuideIcon, { className: 'w-5 h-5' }) },
   { id: 'notebooks', label: 'My Notebooks', icon: React.createElement(NotebooksIcon, { className: 'w-5 h-5' }) },
   { id: 'timetable', label: 'Calendar', icon: React.createElement(CalendarIcon, { className: 'w-5 h-5' }) },
   { id: 'messenger', label: 'Messages', icon: React.createElement(MessengerIcon, { className: 'w-5 h-5' }) },
-  { id: 'playground', label: 'Playground', icon: React.createElement(PlaygroundIcon) },
+  { id: 'playground', label: 'Playground', icon: React.createElement(PlaygroundIcon, { className: 'w-5 h-5' }) },
 ];
 
 export const adminNavigationItems: NavItem[] = [

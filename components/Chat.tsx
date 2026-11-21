@@ -56,6 +56,11 @@ import {
   AlertCircle,
   Pencil,
   WifiOff,
+  BookOpen,
+  Sparkles,
+  Target,
+  Rocket,
+  PenTool,
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
@@ -626,7 +631,7 @@ export const ChatComposer: React.FC<{
       className="chat-composer-container w-full max-w-3xl mx-auto px-3 sm:px-4 pt-2 relative z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md shrink-0"
       onPaste={handlePaste}
     >
-      <div className="relative flex flex-col bg-white dark:bg-[#212124] rounded-[28px] border border-[#E5E5E5] dark:border-white/10 transition-all focus-within:ring-1 focus-within:ring-black/10 dark:focus-within:ring-white/10 shadow-xs">
+      <div className="relative flex flex-col bg-white dark:bg-[#212124] rounded-3xl border-2 border-slate-200 dark:border-white/10 transition-all focus-within:border-blue-500 dark:focus-within:border-blue-500 shadow-none">
         
         {/* Attached Images Preview Row */}
         {attachedImages.length > 0 && (
@@ -652,7 +657,7 @@ export const ChatComposer: React.FC<{
         )}
 
         {/* Top: Text input / textarea */}
-        <div className={`px-4 ${attachedImages.length > 0 ? 'pt-2' : 'pt-3.5'} pb-1`}>
+        <div className={`px-4 sm:px-5 ${attachedImages.length > 0 ? 'pt-2' : 'pt-4'} pb-1`}>
           <textarea
             ref={textareaRef}
             value={input}
@@ -664,7 +669,7 @@ export const ChatComposer: React.FC<{
               if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
               if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
             }}
-            placeholder="Ask anything or paste images..."
+            placeholder="Type your question, upload homework, or tap Voice to talk..."
             rows={1}
             className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-[#171717] dark:text-white placeholder-[#8E8E93] dark:placeholder-neutral-500 text-[15px] sm:text-base resize-none max-h-36 py-0 leading-relaxed [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           />
@@ -672,67 +677,50 @@ export const ChatComposer: React.FC<{
 
         {/* Bottom Row */}
         <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
-          {/* Left Actions: + (plus) button */}
-          <div className="flex items-center gap-2">
+          {/* Left Actions: Explicit action pills */}
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="relative" ref={attachMenuRef}>
               <button
                 type="button"
                 onClick={handleAttachClick}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold font-heading border transition-colors cursor-pointer ${
                   showAttachMenu
-                    ? 'bg-neutral-200 dark:bg-neutral-800 text-[#171717] dark:text-white'
-                    : 'text-neutral-500 hover:text-[#171717] dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30'
+                    : 'bg-white text-neutral-700 border-slate-200 hover:bg-slate-50 dark:bg-[#2a2a2d] dark:text-neutral-200 dark:border-white/10 dark:hover:bg-white/10'
                 }`}
-                title="Attach file"
-                aria-label="Attach file"
+                title="Snap or upload homework"
+                aria-label="Snap or upload"
               >
-                <Plus
-                  className={`w-5 h-5 transition-transform duration-200 ${showAttachMenu ? 'rotate-45' : ''}`}
-                  strokeWidth={2}
-                />
+                <Camera className="w-4 h-4" strokeWidth={2} />
+                <span>Snap / Upload</span>
               </button>
 
-              {/* Redesigned Attachment/Tools Popup */}
+              {/* Attachment/Tools Popup */}
               {showAttachMenu && (
                 <div 
                   className="absolute bottom-full left-0 mb-2.5 w-60 sm:w-64 max-w-[calc(100vw-2rem)] bg-white dark:bg-[#18181b] rounded-[20px] shadow-xl shadow-black/8 dark:shadow-black/40 border border-neutral-200/80 dark:border-white/10 p-1.5 z-50 animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-150 ease-out select-none"
                   style={{ transformOrigin: 'bottom left' }}
                 >
-                  {/* TOP SECTION: File Attachment Actions */}
                   <div className="space-y-0.5">
-                    {/* 1. Camera */}
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowAttachMenu(false);
-                        onOpenCamera();
-                      }}
+                      onClick={() => { setShowAttachMenu(false); onOpenCamera(); }}
                       className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer text-left group"
                     >
                       <Camera className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors shrink-0" strokeWidth={1.9} />
                       <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Camera</span>
                     </button>
-
-                    {/* 2. Gallery */}
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowAttachMenu(false);
-                        onOpenGallery();
-                      }}
+                      onClick={() => { setShowAttachMenu(false); onOpenGallery(); }}
                       className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer text-left group"
                     >
                       <Image className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors shrink-0" strokeWidth={1.9} />
                       <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Gallery</span>
                     </button>
-
-                    {/* 3. Files */}
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowAttachMenu(false);
-                        onOpenFile();
-                      }}
+                      onClick={() => { setShowAttachMenu(false); onOpenFile(); }}
                       className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer text-left group"
                     >
                       <FileText className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white transition-colors shrink-0" strokeWidth={1.9} />
@@ -740,114 +728,63 @@ export const ChatComposer: React.FC<{
                     </button>
                   </div>
 
-                  {/* Subtle Separator */}
                   <div className="h-px bg-neutral-100 dark:bg-white/[0.08] my-1 mx-1" />
 
-                  {/* BOTTOM SECTION: AI Capability Toggles */}
                   <div className="space-y-0.5">
-                    {/* 4. Browse */}
                     <div className="flex items-center justify-between px-3 py-1.5 min-h-[44px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
                         <Globe className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
                         <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Browse</span>
                       </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={capabilities.browse}
-                        aria-label={`Browse ${capabilities.browse ? 'enabled' : 'disabled'}`}
-                        onClick={() => onToggleCapability('browse')}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          capabilities.browse ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'
-                        }`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
-                            capabilities.browse ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
-                          }`}
-                        />
+                      <button type="button" role="switch" aria-checked={capabilities.browse} aria-label={`Browse ${capabilities.browse ? 'enabled' : 'disabled'}`} onClick={() => onToggleCapability('browse')} className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${capabilities.browse ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'}`}>
+                        <span aria-hidden="true" className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${capabilities.browse ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'}`} />
                       </button>
                     </div>
-
-                    {/* 5. Flashcards */}
                     <div className="flex items-center justify-between px-3 py-1.5 min-h-[44px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
                         <Layers className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
                         <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Flashcards</span>
                       </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={capabilities.flashcards}
-                        aria-label={`Flashcards ${capabilities.flashcards ? 'enabled' : 'disabled'}`}
-                        onClick={() => onToggleCapability('flashcards')}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          capabilities.flashcards ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'
-                        }`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
-                            capabilities.flashcards ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
-                          }`}
-                        />
+                      <button type="button" role="switch" aria-checked={capabilities.flashcards} aria-label={`Flashcards ${capabilities.flashcards ? 'enabled' : 'disabled'}`} onClick={() => onToggleCapability('flashcards')} className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${capabilities.flashcards ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'}`}>
+                        <span aria-hidden="true" className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${capabilities.flashcards ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'}`} />
                       </button>
                     </div>
-
-                    {/* 6. Quiz */}
                     <div className="flex items-center justify-between px-3 py-1.5 min-h-[44px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
                         <CheckSquare className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
                         <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Quiz</span>
                       </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={capabilities.quiz}
-                        aria-label={`Quiz ${capabilities.quiz ? 'enabled' : 'disabled'}`}
-                        onClick={() => onToggleCapability('quiz')}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          capabilities.quiz ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'
-                        }`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
-                            capabilities.quiz ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
-                          }`}
-                        />
+                      <button type="button" role="switch" aria-checked={capabilities.quiz} aria-label={`Quiz ${capabilities.quiz ? 'enabled' : 'disabled'}`} onClick={() => onToggleCapability('quiz')} className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${capabilities.quiz ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'}`}>
+                        <span aria-hidden="true" className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${capabilities.quiz ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'}`} />
                       </button>
                     </div>
-
-                    {/* 7. Illustrations */}
                     <div className="flex items-center justify-between px-3 py-1.5 min-h-[44px] rounded-xl hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
                         <Palette className="w-[18px] h-[18px] text-neutral-600 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
                         <span className="text-[14px] font-medium text-neutral-900 dark:text-neutral-100">Illustrations</span>
                       </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={capabilities.illustrations}
-                        aria-label={`Illustrations ${capabilities.illustrations ? 'enabled' : 'disabled'}`}
-                        onClick={() => onToggleCapability('illustrations')}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          capabilities.illustrations ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'
-                        }`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
-                            capabilities.illustrations ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'
-                          }`}
-                        />
+                      <button type="button" role="switch" aria-checked={capabilities.illustrations} aria-label={`Illustrations ${capabilities.illustrations ? 'enabled' : 'disabled'}`} onClick={() => onToggleCapability('illustrations')} className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${capabilities.illustrations ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-200 dark:bg-neutral-700'}`}>
+                        <span aria-hidden="true" className={`pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-sm transition duration-200 ease-in-out ${capabilities.illustrations ? 'translate-x-4 bg-white dark:bg-neutral-900' : 'translate-x-0.5 bg-white'}`} />
                       </button>
                     </div>
                   </div>
                 </div>
               )}
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('avelut:open-drawing'));
+                onOpenGallery();
+              }}
+              className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold font-heading border border-slate-200 bg-white text-neutral-700 hover:bg-slate-50 dark:bg-[#2a2a2d] dark:text-neutral-200 dark:border-white/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              title="Draw or sketch your idea"
+              aria-label="Draw"
+            >
+              <PenTool className="w-4 h-4" strokeWidth={2} />
+              <span>Draw</span>
+            </button>
           </div>
 
           {/* Right: Integrated Voice / Send / Stop Action Button */}
@@ -869,39 +806,41 @@ export const ChatComposer: React.FC<{
                   onToggleVoice();
                 }
               }}
-              className={`h-9 sm:h-10 px-3.5 sm:px-4 rounded-full flex items-center justify-center gap-1.5 shrink-0 transition-all duration-150 active:scale-95 text-xs sm:text-sm font-medium select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-400 disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`inline-flex items-center justify-center gap-2 shrink-0 rounded-full font-bold font-heading transition-all duration-150 active:scale-95 select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed ${
                 isLoading
-                  ? 'bg-black hover:bg-neutral-800 active:bg-neutral-900 text-white dark:bg-black dark:hover:bg-neutral-900 dark:text-white border border-transparent dark:border-neutral-700 shadow-xs'
+                  ? 'bg-neutral-900 hover:bg-neutral-800 text-white px-4 py-2.5 text-sm dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200'
                   : voiceStatus === 'listening'
-                  ? 'bg-rose-500 hover:bg-rose-600 text-white animate-pulse shadow-xs shadow-rose-500/25'
-                  : 'bg-black hover:bg-neutral-800 active:bg-neutral-900 text-white dark:bg-black dark:hover:bg-neutral-900 dark:text-white border border-transparent dark:border-neutral-700 shadow-xs'
+                  ? 'bg-rose-500 hover:bg-rose-600 text-white px-4 py-2.5 text-sm animate-pulse shadow-sm'
+                  : hasText
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 text-sm shadow-sm'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 text-sm sm:text-base shadow-sm'
               }`}
               title={isLoading ? 'Stop generating' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
               aria-label={isLoading ? 'Stop generating' : voiceStatus === 'listening' ? 'Stop listening' : hasText ? 'Send message' : 'Speak to dictate'}
             >
               {isLoading ? (
                 <>
-                  <Square className="w-3 h-3 fill-current text-white" />
-                  <span className="text-white">Stop</span>
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>Stop</span>
                 </>
               ) : voiceStatus === 'listening' ? (
                 <>
-                  <span className="flex items-center gap-0.5 h-3.5">
+                  <span className="flex items-center gap-0.5 h-4">
                     <span className="w-0.5 h-2.5 bg-white rounded-full animate-pulse" />
                     <span className="w-0.5 h-4 bg-white rounded-full animate-pulse [animation-delay:150ms]" />
                     <span className="w-0.5 h-2 bg-white rounded-full animate-pulse [animation-delay:300ms]" />
                   </span>
-                  <span className="text-white">Listening...</span>
+                  <span>Listening...</span>
                 </>
               ) : hasText ? (
                 <>
-                  <span className="text-white">Send</span>
-                  <ArrowUp className="w-3.5 h-3.5 text-white" strokeWidth={2.2} />
+                  <span>Send</span>
+                  <ArrowUp className="w-4 h-4" strokeWidth={2.2} />
                 </>
               ) : (
                 <>
-                  <Mic className="w-4 h-4 text-white" strokeWidth={1.9} />
-                  <span className="text-white">Voice</span>
+                  <Mic className="w-4 h-4" strokeWidth={2} />
+                  <span>Voice</span>
                 </>
               )}
             </button>
@@ -1003,6 +942,57 @@ export const Chat: React.FC<ChatProps> = ({
   const { addToast } = useToast();
   const { attemptApiCall } = useApiLimiter();
   const { settings: appSettings } = useAppSettings();
+
+  const firstName = useMemo(() => {
+    const raw = (userProfile?.display_name || '').trim();
+    return raw.split(/\s+/)[0] || 'there';
+  }, [userProfile?.display_name]);
+
+  const starterPrompts = useMemo(
+    () => [
+      {
+        id: 'homework',
+        title: 'Homework Helper',
+        description: 'Help me solve a homework question step by step',
+        icon: BookOpen,
+        tint: 'bg-blue-50 dark:bg-blue-500/10',
+        border: 'border-blue-200 dark:border-blue-500/25',
+        iconBg: 'bg-blue-100 dark:bg-blue-500/20',
+        iconText: 'text-blue-600 dark:text-blue-400',
+      },
+      {
+        id: 'explain',
+        title: 'Draw & Explain',
+        description: 'Explain a tough topic to me using a simple drawing',
+        icon: Sparkles,
+        tint: 'bg-emerald-50 dark:bg-emerald-500/10',
+        border: 'border-emerald-200 dark:border-emerald-500/25',
+        iconBg: 'bg-emerald-100 dark:bg-emerald-500/20',
+        iconText: 'text-emerald-600 dark:text-emerald-400',
+      },
+      {
+        id: 'quiz',
+        title: 'Quick Quiz',
+        description: 'Quiz me on a subject to test what I know',
+        icon: Target,
+        tint: 'bg-amber-50 dark:bg-amber-500/10',
+        border: 'border-amber-200 dark:border-amber-500/25',
+        iconBg: 'bg-amber-100 dark:bg-amber-500/20',
+        iconText: 'text-amber-600 dark:text-amber-400',
+      },
+      {
+        id: 'fun',
+        title: 'Fun Science & Facts',
+        description: 'Teach me something cool about science or history',
+        icon: Rocket,
+        tint: 'bg-red-50 dark:bg-red-500/10',
+        border: 'border-red-200 dark:border-red-500/25',
+        iconBg: 'bg-red-100 dark:bg-red-500/20',
+        iconText: 'text-red-600 dark:text-red-400',
+      },
+    ],
+    []
+  );
 
   const handleStopGenerating = useCallback(() => {
     if (abortControllerRef.current) {
@@ -2230,7 +2220,45 @@ export const Chat: React.FC<ChatProps> = ({
             </div>
           </div>
         ) : messages.length === 0 && !isLoading ? (
-          <div className="flex-1 h-full min-h-[40vh]" />
+          <div className="flex-1 min-h-full flex flex-col items-center justify-center px-1 sm:px-4 py-8 sm:py-10">
+            <div className="w-full max-w-3xl mx-auto flex flex-col items-center text-center">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 flex items-center justify-center mb-5 shadow-sm">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />
+                </div>
+              </div>
+              <h1 className="font-heading text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight text-neutral-900 dark:text-white leading-tight">
+                Hi {firstName}! What are we learning today?
+              </h1>
+              <p className="mt-3 text-sm sm:text-base text-neutral-500 dark:text-neutral-400 max-w-xl font-medium">
+                Pick a topic below, snap your homework, or tap Voice to talk.
+              </p>
+
+              <div className="mt-8 sm:mt-10 w-full grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-left">
+                {starterPrompts.map((card) => {
+                  const Icon = card.icon;
+                  return (
+                    <button
+                      key={card.id}
+                      type="button"
+                      onClick={() => void handleSendMessage(card.description)}
+                      className={`group w-full rounded-2xl p-4 sm:p-5 border ${card.border} ${card.tint} hover:scale-[1.01] active:!scale-[0.99] transition-transform duration-150 cursor-pointer text-left shadow-none`}
+                    >
+                      <div className={`w-11 h-11 rounded-xl ${card.iconBg} ${card.iconText} flex items-center justify-center mb-3 border border-black/5 dark:border-white/5`}>
+                        <Icon className="w-5 h-5" strokeWidth={2} />
+                      </div>
+                      <div className="font-heading text-base sm:text-lg font-bold text-neutral-900 dark:text-white leading-snug">
+                        {card.title}
+                      </div>
+                      <p className="mt-1.5 text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                        {card.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="w-full max-w-3xl mx-auto space-y-8">
             {messages.map((msg, index) => {

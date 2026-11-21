@@ -4,19 +4,14 @@ import {
   Calendar,
   SquarePen,
   Bell,
-  MoreVertical,
-  Settings,
-  Crown,
-  HelpCircle,
-  Eraser,
-  Trash2,
-  LogOut,
+  Flame,
+  Star,
 } from 'lucide-react';
 import { AppUpdateBadge } from './AppUpdateBadge';
 import { useOTAUpdater } from '../hooks/useOTAUpdater';
 import { NotificationDropdown } from './NotificationDropdown';
 import type { UserProfile, Notification as NotificationType } from '../types';
-import { isNative, openExternalSubscriptionPage } from '../utils/capacitorUtils';
+
 
 export interface HeaderProps {
   activeItem?: string;
@@ -75,36 +70,13 @@ export const Header: React.FC<HeaderProps> = ({
   hasMessages = false,
 }) => {
   const { updateStatus } = useOTAUpdater();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const isAiPage = activeItem === 'chat';
   const isFloating = className?.includes('absolute') || className?.includes('fixed');
-
-  // Handle click outside and Escape key to close dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsMenuOpen(false);
-      }
-    };
-
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleKeyDown);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isMenuOpen]);
+  const streakCount = Number((userProfile as any)?.streak_count || (userProfile as any)?.current_streak || 0);
+  const xpCount = Number((userProfile as any)?.xp || 0);
 
   return (
     <header
@@ -166,21 +138,29 @@ export const Header: React.FC<HeaderProps> = ({
         {rightActions ? (
           rightActions
         ) : hideDefaultRightActions ? null : (
-          <div className="relative pointer-events-auto overflow-visible" ref={dropdownRef}>
+          <>
+            {(streakCount > 0 || xpCount > 0) && (
+              <div
+                className="hidden sm:inline-flex items-center gap-1.5 h-10 px-3 rounded-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-300 font-heading font-semibold text-sm"
+                title={`${streakCount > 0 ? `${streakCount} day streak` : ''}${streakCount > 0 && xpCount > 0 ? ' • ' : ''}${xpCount > 0 ? `${xpCount} XP` : ''}`}
+                aria-label="Learning streak and points"
+              >
+                {streakCount > 0 ? <Flame className="w-4 h-4 text-amber-500" strokeWidth={2} /> : <Star className="w-4 h-4 text-amber-500" strokeWidth={2} />}
+                <span>{streakCount > 0 ? streakCount : xpCount}</span>
+              </div>
+            )}
+            <div className="relative pointer-events-auto overflow-visible" ref={dropdownRef}>
             {/* Combined Pill Container */}
-            <div className="h-11 sm:h-12 rounded-full bg-white dark:bg-[#18181b] shadow-xs hover:shadow-sm border border-[#E5E5E5] dark:border-neutral-800 px-2.5 sm:px-3 flex items-center gap-2 sm:gap-2.5 shrink-0">
+            <div className="h-11 sm:h-12 rounded-full bg-white dark:bg-[#18181b] shadow-xs hover:shadow-sm border border-[#E5E5E5] dark:border-neutral-800 px-2 sm:px-2.5 flex items-center gap-1.5 sm:gap-2 shrink-0">
               {/* Neutral Calendar Icon Button */}
               <button
                 type="button"
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  onNavigate?.('timetable');
-                }}
-                className="w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
-                aria-label="Study Timetable"
-                title="Study Timetable"
+                onClick={() => onNavigate?.('timetable')}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
+                aria-label="Open calendar"
+                title="Calendar"
               >
-                <Calendar className="w-[20px] h-[20px] text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
+                <Calendar className="w-5 h-5 text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
               </button>
 
               {/* Primary Action Button: Compose for AI Chat, Bell for Other Pages */}
@@ -188,30 +168,29 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={onNewChat}
-                  className="w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer"
                   aria-label="New chat"
                   title="New chat"
                 >
-                  <SquarePen className="w-[20px] h-[20px] text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
+                  <SquarePen className="w-5 h-5 text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
                 </button>
               ) : (
                 <div className="relative">
                   <button
                     type="button"
                     onClick={() => {
-                      setIsMenuOpen(false);
                       setIsNotificationOpen((prev) => !prev);
                       onNotificationsClick?.();
                     }}
-                    className={`relative w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
+                    className={`relative w-10 h-10 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
                       isNotificationOpen ? 'bg-neutral-100 dark:bg-neutral-800' : ''
                     }`}
                     aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
                     title="Notifications"
                   >
-                    <Bell className="w-[20px] h-[20px] text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
+                    <Bell className="w-5 h-5 text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
                     {unreadCount > 0 && (
-                      <span className="absolute top-1 right-1 flex h-2 w-2">
+                      <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0066FF] opacity-75" />
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-[#0066FF]" />
                       </span>
@@ -237,136 +216,9 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
 
-              {/* Vertical Hairline Divider */}
-              <div className="w-px h-5 bg-[#E5E5E5] dark:bg-neutral-800 mx-1 sm:mx-1.5" />
-
-              {/* Three Dot Kebab Menu Button */}
-              <button
-                type="button"
-                onClick={() => setIsMenuOpen((prev) => !prev)}
-                className={`w-9 h-9 sm:w-9.5 sm:h-9.5 rounded-full flex items-center justify-center text-[#171717] dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition active:scale-95 cursor-pointer ${
-                  isMenuOpen ? 'bg-neutral-100 dark:bg-neutral-800' : ''
-                }`}
-                aria-label="More options"
-                title="More options"
-                aria-expanded={isMenuOpen}
-              >
-                <MoreVertical className="w-[20px] h-[20px] text-[#171717] dark:text-neutral-300" strokeWidth={1.9} />
-              </button>
             </div>
-
-            {/* Three Dot Dropdown Popover */}
-            {isMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 sm:w-72 bg-white dark:bg-[#18181b] rounded-2xl shadow-xl shadow-black/8 dark:shadow-black/50 border border-neutral-200/80 dark:border-white/10 p-1.5 z-[9999] animate-in fade-in slide-in-from-top-2">
-                {userProfile && (
-                  <div className="px-3 py-2.5 border-b border-neutral-100 dark:border-white/10 mb-1 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-semibold flex items-center justify-center text-sm shrink-0 border border-neutral-200/60 dark:border-white/10">
-                      {(userProfile.display_name || 'U').charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate">
-                        {userProfile.display_name || 'Student'}
-                      </p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                        {userProfile.level || 'Academic'} Level
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Profile & Settings (Consolidated) */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    onNavigate?.('settings');
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition cursor-pointer text-left"
-                >
-                  <Settings className="w-4.5 h-4.5 text-neutral-500 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
-                  <span>Profile & Settings</span>
-                </button>
-
-                {/* Upgrade to Pro */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    openExternalSubscriptionPage(userProfile?.uid);
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition cursor-pointer text-left"
-                >
-                  <div className="flex items-center gap-3">
-                    <Crown className="w-4.5 h-4.5 text-amber-500 shrink-0" strokeWidth={1.9} />
-                    <span>Upgrade to Pro</span>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 uppercase tracking-wider border border-neutral-200/50 dark:border-white/10">
-                    Pro
-                  </span>
-                </button>
-
-                {/* Help & Support */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    onNavigate?.('help');
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition cursor-pointer text-left"
-                >
-                  <HelpCircle className="w-4.5 h-4.5 text-neutral-500 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
-                  <span>Help & Support</span>
-                </button>
-
-                {isAiPage && (hasMessages || hasActiveChat) && (
-                  <>
-                    <div className="h-px bg-neutral-100 dark:bg-white/[0.08] my-1 mx-1" />
-                    {hasMessages && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsMenuOpen(false);
-                          onClearChat?.();
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition cursor-pointer text-left"
-                      >
-                        <Eraser className="w-4.5 h-4.5 text-neutral-500 dark:text-neutral-400 shrink-0" strokeWidth={1.9} />
-                        <span>Clear messages</span>
-                      </button>
-                    )}
-                    {hasActiveChat && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsMenuOpen(false);
-                          onDeleteChat?.();
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition cursor-pointer text-left"
-                      >
-                        <Trash2 className="w-4.5 h-4.5 text-rose-500 shrink-0" strokeWidth={1.9} />
-                        <span>Delete conversation</span>
-                      </button>
-                    )}
-                  </>
-                )}
-
-                <div className="h-px bg-neutral-100 dark:bg-white/[0.08] my-1 mx-1" />
-
-                {/* Log Out */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    onLogoutClick?.();
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition cursor-pointer text-left"
-                >
-                  <LogOut className="w-4.5 h-4.5 text-rose-500 shrink-0" strokeWidth={1.9} />
-                  <span>Log Out</span>
-                </button>
-              </div>
-            )}
-          </div>
+            </div>
+          </>
         )}
       </div>
     </header>

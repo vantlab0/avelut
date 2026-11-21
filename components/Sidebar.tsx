@@ -71,9 +71,78 @@ const timeAgo = (timestamp: number): string => {
   return new Date(timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
+const NAV_THEME: Record<
+  string,
+  {
+    iconBg: string;
+    iconText: string;
+    activeBg: string;
+    activeBorder: string;
+    activeText: string;
+    badgeBg: string;
+  }
+> = {
+  chat: {
+    iconBg: 'bg-blue-50 dark:bg-blue-500/15',
+    iconText: 'text-blue-600 dark:text-blue-400',
+    activeBg: 'bg-blue-50/80 dark:bg-blue-500/10',
+    activeBorder: 'border-blue-200 dark:border-blue-500/30',
+    activeText: 'text-blue-700 dark:text-blue-300',
+    badgeBg: 'bg-blue-600',
+  },
+  study_guide: {
+    iconBg: 'bg-emerald-50 dark:bg-emerald-500/15',
+    iconText: 'text-emerald-600 dark:text-emerald-400',
+    activeBg: 'bg-emerald-50/80 dark:bg-emerald-500/10',
+    activeBorder: 'border-emerald-200 dark:border-emerald-500/30',
+    activeText: 'text-emerald-700 dark:text-emerald-300',
+    badgeBg: 'bg-emerald-600',
+  },
+  notebooks: {
+    iconBg: 'bg-amber-50 dark:bg-amber-500/15',
+    iconText: 'text-amber-600 dark:text-amber-400',
+    activeBg: 'bg-amber-50/80 dark:bg-amber-500/10',
+    activeBorder: 'border-amber-200 dark:border-amber-500/30',
+    activeText: 'text-amber-700 dark:text-amber-300',
+    badgeBg: 'bg-amber-600',
+  },
+  timetable: {
+    iconBg: 'bg-purple-50 dark:bg-purple-500/15',
+    iconText: 'text-purple-600 dark:text-purple-400',
+    activeBg: 'bg-purple-50/80 dark:bg-purple-500/10',
+    activeBorder: 'border-purple-200 dark:border-purple-500/30',
+    activeText: 'text-purple-700 dark:text-purple-300',
+    badgeBg: 'bg-purple-600',
+  },
+  messenger: {
+    iconBg: 'bg-teal-50 dark:bg-teal-500/15',
+    iconText: 'text-teal-600 dark:text-teal-400',
+    activeBg: 'bg-teal-50/80 dark:bg-teal-500/10',
+    activeBorder: 'border-teal-200 dark:border-teal-500/30',
+    activeText: 'text-teal-700 dark:text-teal-300',
+    badgeBg: 'bg-teal-600',
+  },
+  playground: {
+    iconBg: 'bg-red-50 dark:bg-red-500/15',
+    iconText: 'text-red-600 dark:text-red-400',
+    activeBg: 'bg-red-50/80 dark:bg-red-500/10',
+    activeBorder: 'border-red-200 dark:border-red-500/30',
+    activeText: 'text-red-700 dark:text-red-300',
+    badgeBg: 'bg-red-600',
+  },
+};
+
+const DEFAULT_NAV_THEME = {
+  iconBg: 'bg-neutral-100 dark:bg-white/10',
+  iconText: 'text-neutral-600 dark:text-neutral-300',
+  activeBg: 'bg-neutral-100 dark:bg-[#1C1C1C]',
+  activeBorder: 'border-neutral-200 dark:border-white/10',
+  activeText: 'text-neutral-900 dark:text-white',
+  badgeBg: 'bg-neutral-700',
+};
+
 /**
- * Quick-access navigation button — stacked cards
- * Full-width rounded rectangles, larger type, light/dark adaptive
+ * Quick-access navigation button — color-coded, kid-friendly, touch-safe
  */
 const LinkRow: React.FC<{
   icon: React.ReactNode;
@@ -82,39 +151,39 @@ const LinkRow: React.FC<{
   onClick: () => void;
   badge?: number;
   badgeLabel?: string;
-}> = ({ icon, label, active, onClick, badge, badgeLabel }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`w-full flex items-center gap-3.5 px-4 py-3.5 sm:py-4 text-left transition-colors cursor-pointer select-none group relative ${
-      active
-        ? 'bg-neutral-100 dark:bg-[#1C1C1C] text-neutral-900 dark:text-white font-medium'
-        : 'bg-transparent text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-[#1a1a1a]'
-    }`}
-  >
-    <span
-      className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center transition-colors [&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-6.5 sm:[&>svg]:h-6.5 ${
+  itemId?: string;
+}> = ({ icon, label, active, onClick, badge, badgeLabel, itemId }) => {
+  const theme = (itemId && NAV_THEME[itemId]) || DEFAULT_NAV_THEME;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full min-h-[48px] flex items-center gap-3.5 px-3.5 py-3 text-left cursor-pointer select-none group relative rounded-2xl border transition-all duration-150 active:!scale-[0.98] ${
         active
-          ? 'text-neutral-900 dark:text-white'
-          : 'text-neutral-600 dark:text-neutral-400 group-hover:text-neutral-900 dark:group-hover:text-white'
+          ? `${theme.activeBg} ${theme.activeBorder} ${theme.activeText} font-semibold shadow-none`
+          : 'bg-transparent border-transparent text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-white/5'
       }`}
     >
-      {icon}
-    </span>
-    <span className="text-[17px] sm:text-[18px] truncate flex-1 tracking-tight font-semibold leading-none">
-      {label}
-    </span>
-    {badgeLabel ? (
-      <span className="flex-shrink-0 bg-[#E8F0FE] dark:bg-[#1e3a5f]/60 text-[#1a73e8] dark:text-[#8ab4f8] text-[12px] font-semibold px-2.5 py-0.5 rounded-full leading-none">
-        {badgeLabel}
+      <span
+        className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-colors border border-transparent ${theme.iconBg} ${theme.iconText} [&>svg]:w-5 [&>svg]:h-5`}
+      >
+        {icon}
       </span>
-    ) : badge != null && badge > 0 ? (
-      <span className="bg-[#0066FF] text-white text-[11px] font-bold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center">
-        {badge > 99 ? '99+' : badge}
+      <span className="text-[15px] sm:text-[16px] truncate flex-1 tracking-tight font-heading font-semibold leading-none">
+        {label}
       </span>
-    ) : null}
-  </button>
-);
+      {badgeLabel ? (
+        <span className={`flex-shrink-0 ${theme.iconBg} ${theme.iconText} text-[12px] font-semibold px-2.5 py-0.5 rounded-full leading-none`}>
+          {badgeLabel}
+        </span>
+      ) : badge != null && badge > 0 ? (
+        <span className={`${theme.badgeBg} text-white text-[11px] font-bold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center`}>
+          {badge > 99 ? '99+' : badge}
+        </span>
+      ) : null}
+    </button>
+  );
+};
 
 interface ActiveMenuState {
   convo: ChatConversation;
@@ -770,10 +839,10 @@ const SidebarPanel: React.FC<{
   ];
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-black text-neutral-900 dark:text-white select-none">
+    <div className="h-full flex flex-col bg-[#F8FAFC] dark:bg-[#0A0A0A] text-neutral-900 dark:text-white select-none">
       {/* Top Brand Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-3 flex-shrink-0">
-        <h1 className="text-[22px] font-semibold tracking-tight">{brandTitle}</h1>
+        <h1 className="text-[22px] font-bold tracking-tight font-heading">{brandTitle}</h1>
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -801,21 +870,18 @@ const SidebarPanel: React.FC<{
       </div>
 
       {/* Main Navigation — Quick-access cards */}
-      <nav className="px-2 flex-shrink-0">
-        <div className="bg-white dark:bg-[#111111] border border-neutral-200/80 dark:border-white/10 rounded-2xl overflow-hidden flex flex-col">
-          {links.map((item, index) => (
-            <React.Fragment key={item.id}>
-              <LinkRow
-                icon={item.icon}
-                label={item.label}
-                active={activeItem === item.id}
-                onClick={() => onItemClick(item.id)}
-                badge={item.id === 'messenger' ? unreadMessagesCount : undefined}
-              />
-              {index < links.length - 1 && (
-                <div className="h-[1px] bg-neutral-200/50 dark:bg-white/5 mx-3" />
-              )}
-            </React.Fragment>
+      <nav className="px-3 flex-shrink-0">
+        <div className="bg-white dark:bg-[#111111] border border-neutral-200/80 dark:border-white/10 rounded-2xl p-2 flex flex-col gap-1.5">
+          {links.map((item) => (
+            <LinkRow
+              key={item.id}
+              itemId={item.id}
+              icon={item.icon}
+              label={item.label}
+              active={activeItem === item.id}
+              onClick={() => onItemClick(item.id)}
+              badge={item.id === 'messenger' ? unreadMessagesCount : undefined}
+            />
           ))}
         </div>
       </nav>
@@ -939,6 +1005,7 @@ const SidebarPanel: React.FC<{
             {extraNavLinks.map((item) => (
               <LinkRow
                 key={item.id}
+                itemId={item.id}
                 icon={item.icon}
                 label={item.label}
                 active={activeItem === item.id}
@@ -1243,7 +1310,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Desktop Sidebar */}
       <aside
-        className={`hidden ${isCollapsed ? '' : 'md:flex'} flex-shrink-0 w-[280px] h-full border-r border-neutral-200 dark:border-white/5 bg-white dark:bg-black transition-all duration-200`}
+        className={`hidden ${isCollapsed ? '' : 'md:flex'} flex-shrink-0 w-[280px] h-full border-r border-neutral-200/80 dark:border-white/5 bg-[#F8FAFC] dark:bg-[#0A0A0A] transition-all duration-200`}
         aria-hidden={isCollapsed}
       >
         <div className="w-full h-full">

@@ -141,7 +141,11 @@ html.keyboard-open .chat-composer-container {
   }
 
   html, body, input, select, textarea, button {
-    font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: 'Nunito', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   }
 
   /* ── Text Selection Visibility Fix ─────────────────────────────────────────
@@ -567,8 +571,8 @@ html.keyboard-open .chat-composer-container {
 
 @layer base {
   .theme {
-    --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
+    --font-heading: 'Nunito', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
   * {
     /* Use CSS variables instead of Tailwind-only utility classes that may not exist
