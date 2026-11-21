@@ -19,10 +19,7 @@ import {
     sanitizeTopicMetadata,
     normalizeCourse,
     mergeTopics,
-    resolveCourseSemester,
     resolveCourseLevel,
-    inferSemesterFromCourseCode,
-    normalizeSemesterValue,
 } from './studyguide/studyGuideUtils';
 
 async function fileToBase64(file: File): Promise<string> {
@@ -310,7 +307,6 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
 
     const [filter, setFilter] = useState(() => ({
         searchTerm: '',
-        semester: (userProfile?.default_semester_tab || 'second') as 'all' | 'first' | 'second',
     }));
 
     const { uploadTextbook, uploadProgress, isUploadingCourseKey } = useSharedTextbookUpload();
@@ -331,7 +327,6 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
         code: '',
         name: '',
         level: userProfile?.level || '100lvl',
-        semester: 'first' as 'first' | 'second',
         description: '',
     });
     const [isSavingCourseForm, setIsSavingCourseForm] = useState(false);
@@ -342,6 +337,7 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
     const [addTopicTab, setAddTopicTab] = useState<'doc' | 'manual'>('doc');
     const [docUploadFile, setDocUploadFile] = useState<File | null>(null);
     const [isExtractingTopics, setIsExtractingTopics] = useState(false);
+    const [isGeneratingTopics, setIsGeneratingTopics] = useState(false);
     const [extractedTopics, setExtractedTopics] = useState<Array<Topic & { selected: boolean }>>([]);
     const [isSavingExtractedTopics, setIsSavingExtractedTopics] = useState(false);
     const [manualTopicForm, setManualTopicForm] = useState({
@@ -436,16 +432,12 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
             }
 
             const courseId = courseCode.toLowerCase().replace(/\s+/g, '');
-            const courseSemester = filter.semester === 'all'
-                ? (inferSemesterFromCourseCode(courseCode) || 'first')
-                : filter.semester;
             const courseData = {
                 course_id: courseId,
                 course_name: courseName,
                 course_code: courseCode.toUpperCase(),
                 description,
                 level: userProfile.level,
-                semester: courseSemester,
                 course_status: 'active'
             };
 
@@ -462,7 +454,6 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
                 title: courseName,
                 code: courseCode.toUpperCase(),
                 level: userProfile.level,
-                semester: courseSemester === 'second' ? 2 : 1,
                 description,
                 department_id: userProfile.department_id,
                 school_id: userProfile.school_id,
@@ -512,20 +503,14 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
             // Prefer Alibaba Omni model (qwen3.5-omni-flash). Do not force VL-only models.
             const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
 
-            const prompt = `Analyze this university course form, registration slip, curriculum document, or timetable carefully.
-Extract EVERY course listed on the document, accurately determining whether each course belongs to the First Semester or Second Semester.
+            const prompt = `Analyze this university course form, registration slip, curriculum document, course outline, or timetable carefully.
+Extract EVERY course listed on the document.
 
-CRITICAL INSTRUCTIONS FOR ACCURATE SEMESTER DETECTION:
-1. Examine the document thoroughly for semester indicators:
-   - Header labels: "First Semester", "1st Semester", "Harmattan", "Alpha", "Fall" vs "Second Semester", "2nd Semester", "Rain", "Omega", "Spring".
-   - Section groupings: Courses listed under a "FIRST SEMESTER" section/table vs "SECOND SEMESTER" section/table.
-   - Column values: A "Semester", "Sem", or "Term" column containing 1, 2, 1st, 2nd, I, or II.
-   - If the course form contains courses for BOTH first and second semesters, you MUST identify which semester each individual course belongs to and mark each course with "first" or "second".
-   - If the entire document is for one semester only, assign that semester ("first" or "second") to all courses.
-   - If a course has no explicit semester label in the text or headers, infer from Nigerian/standard university course code conventions where odd-numbered courses (e.g., MEE 301, CSC 201, MTH 101, GST 101) typically belong to "first" semester, and even-numbered courses (e.g., MEE 302, CSC 202, MTH 102, GST 102) typically belong to "second" semester.
-2. The "semester" field for each course MUST be strictly either "first" or "second".
-3. For the "level" field, identify the level (e.g., "100lvl", "200lvl", "300lvl", "400lvl", "500lvl") from document headers or course code digits (101-199 -> "100lvl", 201-299 -> "200lvl", etc.). Fall back to "${userProfile.level || '100lvl'}" if not found.
-4. Clean up course codes (e.g. "MEE 301") and course titles (clean title in CAPITAL LETTERS, e.g. "FLUID MECHANICS").
+INSTRUCTIONS:
+1. For each course, extract the course code, course name, level, course unit (if available), and topics/syllabus items if they are present in the document.
+2. For the "level" field, identify the level (e.g., "100lvl", "200lvl", "300lvl", "400lvl", "500lvl") from document headers or course code digits (101-199 -> "100lvl", 201-299 -> "200lvl", etc.). Fall back to "${userProfile.level || '100lvl'}" if not found.
+3. Clean up course codes (e.g. "MEE 301") and course titles (clean title in CAPITAL LETTERS, e.g. "FLUID MECHANICS").
+4. If the document is a course outline/syllabus for a course, include the course and extract its topics into the "topics" array with topic_name and optional topic_context.
 
 Return ONLY a JSON object with a "courses" array.`;
 
@@ -564,11 +549,21 @@ Return ONLY a JSON object with a "courses" array.`;
                                     properties: {
                                         course_name: { type: Type.STRING },
                                         course_code: { type: Type.STRING },
-                                        semester: { type: Type.STRING, description: "Must be 'first' or 'second'" },
                                         level: { type: Type.STRING, description: "e.g. '100lvl', '200lvl', '300lvl'" },
-                                        course_unit: { type: Type.NUMBER }
+                                        course_unit: { type: Type.NUMBER },
+                                        topics: {
+                                            type: Type.ARRAY,
+                                            items: {
+                                                type: Type.OBJECT,
+                                                properties: {
+                                                    topic_name: { type: Type.STRING },
+                                                    topic_context: { type: Type.STRING }
+                                                },
+                                                required: ['topic_name']
+                                            }
+                                        }
                                     },
-                                    required: ['course_name', 'course_code', 'semester']
+                                    required: ['course_name', 'course_code']
                                 }
                             }
                         },
@@ -601,63 +596,6 @@ Return ONLY a JSON object with a "courses" array.`;
 
                 const updates: any = {};
                 const deptPath = `${userProfile.school_id}/colleges/${userProfile.college_id}/departments/${userProfile.department_id}`;
-                let firstCount = 0;
-                let secondCount = 0;
-
-                validCourses.forEach((c: any) => {
-                    const rawCode = (c.course_code || c.code || '').trim().toUpperCase();
-                    const rawName = (c.course_name || c.name || rawCode).trim();
-                    const courseCode = rawCode || rawName.toUpperCase();
-                    const courseName = rawName || courseCode;
-                    const courseId = courseCode.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-                    const courseSemester = resolveCourseSemester(c.semester, courseCode, filter.semester);
-                    const courseLevel = resolveCourseLevel(c.level, courseCode, userProfile.level || '100lvl');
-
-                    if (courseSemester === 'second') {
-                        secondCount++;
-                    } else {
-                        firstCount++;
-                    }
-
-                    const courseData = {
-                        course_id: courseId,
-                        course_name: courseName,
-                        course_code: courseCode,
-                        level: courseLevel,
-                        semester: courseSemester,
-                        course_status: 'active'
-                    };
-                    updates[`schools_data/${deptPath}/levels/${courseLevel}/courses/${courseId}`] = courseData;
-                    updates[`departments_data/${userProfile.department_id}/course_list/${courseId}`] = courseData;
-                });
-                await update(dbRef(db), updates);
-
-                await Promise.all(
-                    validCourses.map((c: any) => {
-                        const rawCode = (c.course_code || c.code || '').trim().toUpperCase();
-                        const rawName = (c.course_name || c.name || rawCode).trim();
-                        const courseCode = rawCode || rawName.toUpperCase();
-                        const courseName = rawName || courseCode;
-                        const courseId = courseCode.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-                        const courseSemester = resolveCourseSemester(c.semester, courseCode, filter.semester);
-                        const courseLevel = resolveCourseLevel(c.level, courseCode, userProfile.level || '100lvl');
-
-                        return supabaseDataService.upsertCourse({
-                            course_id: courseId,
-                            course_code: courseCode,
-                            course_name: courseName,
-                            title: courseName,
-                            code: courseCode,
-                            level: courseLevel,
-                            semester: courseSemester === 'second' ? 2 : 1,
-                            description: `Extracted course for ${userProfile.department_id}`,
-                            department_id: userProfile.department_id,
-                            school_id: userProfile.school_id,
-                        });
-                    })
-                );
 
                 const newExtractedCourses: Course[] = validCourses.map((c: any) => {
                     const rawCode = (c.course_code || c.code || '').trim().toUpperCase();
@@ -665,26 +603,61 @@ Return ONLY a JSON object with a "courses" array.`;
                     const courseCode = rawCode || rawName.toUpperCase();
                     const courseName = rawName || courseCode;
                     const courseId = courseCode.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-                    const courseSemester = resolveCourseSemester(c.semester, courseCode, filter.semester);
                     const courseLevel = resolveCourseLevel(c.level, courseCode, userProfile.level || '100lvl');
+                    const extractedTopics: Topic[] = Array.isArray(c.topics)
+                        ? c.topics
+                            .filter((t: any) => t && (t.topic_name || t.name))
+                            .map((t: any, i: number) => sanitizeTopicMetadata(t, i))
+                        : [];
 
-                    return {
+                    const courseData: Course = {
                         course_id: courseId,
                         course_name: courseName,
                         course_code: courseCode,
                         level: courseLevel,
-                        semester: courseSemester,
-                        topics: [],
+                        course_status: 'active',
+                        topics: extractedTopics,
                     };
+                    updates[`schools_data/${deptPath}/levels/${courseLevel}/courses/${courseId}`] = courseData;
+                    updates[`departments_data/${userProfile.department_id}/course_list/${courseId}`] = courseData;
+                    return courseData;
                 });
+                await update(dbRef(db), updates);
+
+                await Promise.all(
+                    newExtractedCourses.map(async (c) => {
+                        await supabaseDataService.upsertCourse({
+                            course_id: c.course_id,
+                            course_code: c.course_code,
+                            course_name: c.course_name,
+                            title: c.course_name,
+                            code: c.course_code,
+                            level: c.level,
+                            description: `Extracted course for ${userProfile.department_id}`,
+                            department_id: userProfile.department_id,
+                            school_id: userProfile.school_id,
+                        });
+                        if (Array.isArray(c.topics) && c.topics.length > 0) {
+                            await Promise.all(c.topics.map((t, idx) => supabaseDataService.upsertTopic({
+                                topic_id: t.topic_id,
+                                course_id: c.course_id,
+                                topic_name: t.topic_name,
+                                topic_order: idx + 1,
+                                topic_context: t.topic_context,
+                                start_point: t.start_point,
+                                end_point: t.end_point,
+                            })));
+                        }
+                    })
+                );
 
                 setCourses(prev => {
                     const merged = [...prev];
                     newExtractedCourses.forEach(nc => {
                         const idx = merged.findIndex(x => x.course_id === nc.course_id);
                         if (idx >= 0) {
-                            merged[idx] = { ...merged[idx], ...nc };
+                            const existing = merged[idx];
+                            merged[idx] = { ...existing, ...nc, topics: mergeTopics(existing.topics || [], nc.topics || []) };
                         } else {
                             merged.unshift(nc);
                         }
@@ -694,22 +667,12 @@ Return ONLY a JSON object with a "courses" array.`;
                 });
                 setShowAddCourseModal(false);
 
-                // Auto-adjust filter so the user immediately sees their imported courses
-                if (firstCount > 0 && secondCount > 0) {
-                    setFilter(f => ({ ...f, semester: 'all' }));
-                } else if (secondCount > 0 && firstCount === 0 && filter.semester === 'first') {
-                    setFilter(f => ({ ...f, semester: 'second' }));
-                } else if (firstCount > 0 && secondCount === 0 && filter.semester === 'second') {
-                    setFilter(f => ({ ...f, semester: 'first' }));
-                }
-
                 void deductAICredits(userProfile.uid, cost, 'Study Guide Course Form Extraction', appSettings);
 
-                const summaryMsg = firstCount > 0 && secondCount > 0
-                    ? `Successfully saved ${validCourses.length} courses (${firstCount} First Semester, ${secondCount} Second Semester)!`
-                    : secondCount > 0
-                        ? `Successfully saved ${secondCount} Second Semester course(s)!`
-                        : `Successfully saved ${firstCount} First Semester course(s)!`;
+                const topicCount = newExtractedCourses.reduce((sum, c) => sum + (c.topics?.length || 0), 0);
+                const summaryMsg = topicCount > 0
+                    ? `Successfully saved ${newExtractedCourses.length} course(s) and ${topicCount} topic(s)!`
+                    : `Successfully saved ${newExtractedCourses.length} course(s)!`;
                 addToast(summaryMsg, 'success');
             } else {
                 throw new Error("No courses found in the document");
@@ -780,7 +743,6 @@ Return ONLY a JSON object with a "courses" array.`;
 
             const courseId = code.toLowerCase().replace(/\s+/g, '');
             const courseLevel = manualCourseForm.level || userProfile.level || '100lvl';
-            const courseSemester = manualCourseForm.semester;
 
             const courseData = {
                 course_id: courseId,
@@ -788,7 +750,6 @@ Return ONLY a JSON object with a "courses" array.`;
                 course_code: code,
                 description,
                 level: courseLevel,
-                semester: courseSemester,
                 course_status: 'active',
                 topics: [],
             };
@@ -806,7 +767,6 @@ Return ONLY a JSON object with a "courses" array.`;
                 title: courseName,
                 code: code,
                 level: courseLevel,
-                semester: courseSemester === 'second' ? 2 : 1,
                 description,
                 department_id: userProfile.department_id,
                 school_id: userProfile.school_id,
@@ -824,7 +784,6 @@ Return ONLY a JSON object with a "courses" array.`;
                 code: '',
                 name: '',
                 level: userProfile?.level || '100lvl',
-                semester: 'first',
                 description: '',
             });
         } catch (err: any) {
@@ -832,6 +791,106 @@ Return ONLY a JSON object with a "courses" array.`;
             addToast(err.message || 'Failed to save course', 'error');
         } finally {
             setIsSavingCourseForm(false);
+        }
+    };
+
+    const handleGenerateTopics = async (targetCourse?: Course | null) => {
+        const target = targetCourse || targetCourseForTopic || topicPickerCourse;
+        if (!target) {
+            addToast('No course selected.', 'error');
+            return;
+        }
+
+        const cost = getFeatureCost('study_guide_extraction', appSettings) || 0;
+        const creditCheck = checkAICredits(userProfile, cost, appSettings);
+        if (!creditCheck.allowed) {
+            setLimitModalData({ balance: creditCheck.balance, cost: creditCheck.cost });
+            setShowLimitModal(true);
+            return;
+        }
+
+        setIsGeneratingTopics(true);
+        try {
+            const ai = createAvelutAI(appSettings, userProfile);
+            if (!ai) throw new Error('AI service is not configured in App Controls.');
+            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
+
+            const prompt = `You are an academic curriculum and syllabus specialist.
+Generate a comprehensive, well-structured list of syllabus topics for this university course.
+
+Course name: ${target.course_name}
+Course code: ${target.course_code || target.course_id}
+Level: ${target.level || userProfile.level || '100lvl'}
+Department: ${userProfile.department_id || 'General'}
+
+Return ONLY a JSON object with a "topics" array. Each topic must have:
+- topic_name: clear, standardized topic title
+- topic_context: 1-2 sentence summary of what the topic covers
+- start_point: optional (can be empty string)
+- end_point: optional (can be empty string)
+
+Generate 8-15 logical, sequential topics covering the full course scope.`;
+
+            const callRes = await attemptApiCall(() => ai.models.generateContent({
+                model: aiModel,
+                contents: prompt,
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            topics: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        topic_name: { type: Type.STRING },
+                                        topic_context: { type: Type.STRING },
+                                        start_point: { type: Type.STRING },
+                                        end_point: { type: Type.STRING },
+                                    },
+                                    required: ['topic_name']
+                                }
+                            }
+                        },
+                        required: ['topics']
+                    }
+                },
+            }));
+
+            if (!callRes.success || !callRes.data) throw new Error(callRes.message || 'Failed to generate topics');
+            const text = getResponseText(callRes.data);
+            if (!text) throw new Error('AI returned an empty response');
+
+            let cleanJson = text.trim();
+            const codeBlockMatch = cleanJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (codeBlockMatch) cleanJson = codeBlockMatch[1].trim();
+            const firstBrace = cleanJson.indexOf('{');
+            const lastBrace = cleanJson.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1) cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+            const data = JSON.parse(cleanJson);
+
+            const topics: Array<Topic & { selected: boolean }> = (Array.isArray(data.topics) ? data.topics : [])
+                .filter((t: any) => t && (t.topic_name || t.name))
+                .map((t: any, i: number) => ({
+                    ...sanitizeTopicMetadata(t, i),
+                    selected: true,
+                }));
+
+            if (topics.length === 0) throw new Error('AI could not generate topics for this course. Try again.');
+
+            setTargetCourseForTopic(target);
+            setExtractedTopics(topics);
+            setDocUploadFile(null);
+            setAddTopicTab('doc');
+            setShowAddTopicModal(true);
+            void deductAICredits(userProfile.uid, cost, 'Study Guide Topic Generation', appSettings);
+            addToast(`Generated ${topics.length} topics. Review and save the ones you want.`, 'success');
+        } catch (err: any) {
+            console.error('Error generating topics:', err);
+            addToast(err.message || 'Failed to generate topics', 'error');
+        } finally {
+            setIsGeneratingTopics(false);
         }
     };
 
@@ -1265,10 +1324,6 @@ Return a JSON object containing a "topics" array.`;
     }, [userProfile.department_id, userProfile.level, addToast, userProfile.uid]);
 
     const filteredCourses = courses.filter(course => {
-        if (filter.semester !== 'all' && course.semester !== filter.semester) {
-            return false;
-        }
-
         const searchTerm = filter.searchTerm.trim().toLowerCase();
         if (!searchTerm) {
             return true;
@@ -1374,6 +1429,20 @@ Return a JSON object containing a "topics" array.`;
                             </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => void handleGenerateTopics(topicPickerCourse)}
+                                disabled={isGeneratingTopics}
+                                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                                title="Generate topics with AI"
+                            >
+                                {isGeneratingTopics ? (
+                                    <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                    <i className="bi bi-stars text-xs"></i>
+                                )}
+                                <span>{isGeneratingTopics ? 'Generating...' : 'Generate Topics'}</span>
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => {
@@ -1743,19 +1812,7 @@ Return a JSON object containing a "topics" array.`;
                                             <option value="500lvl">500 Level</option>
                                         </select>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                                            Semester
-                                        </label>
-                                        <select
-                                            value={manualCourseForm.semester}
-                                            onChange={(e) => setManualCourseForm(f => ({ ...f, semester: e.target.value as 'first' | 'second' }))}
-                                            className="w-full bg-slate-50 dark:bg-[#1C1C1C] border border-slate-200 dark:border-[#2A2A2A] rounded-2xl px-3 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#3A3A3A] transition-all"
-                                        >
-                                            <option value="first">1st Semester</option>
-                                            <option value="second">2nd Semester</option>
-                                        </select>
-                                    </div>
+
                                 </div>
 
                                 <div>
@@ -1781,7 +1838,7 @@ Return a JSON object containing a "topics" array.`;
                                         Upload Course Registration Form
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mb-4">
-                                        Upload your course form PDF or photo. AI will accurately detect 1st vs 2nd semester and register all courses.
+                                        Upload your course form, course outline, PDF, or photo. AI will read it and extract courses and topics.
                                     </p>
                                     <label className={`px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${isExtractingCourses ? 'opacity-60 pointer-events-none' : ''}`}>
                                         <i className="bi bi-cloud-arrow-up text-sm font-black"></i>
@@ -2202,38 +2259,7 @@ Return a JSON object containing a "topics" array.`;
                                 <i className="bi bi-search text-sm"></i>
                             </div>
                         </div>
-                        <div className="bg-slate-100 dark:bg-[#1C1C1C] p-1 rounded-2xl flex border border-slate-200/80 dark:border-[#2A2A2A] shrink-0 justify-center">
-                            <button
-                                onClick={() => setFilter(f => ({ ...f, semester: 'first' }))}
-                                className={`flex-1 sm:flex-none px-4 sm:px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider transition-all ${
-                                    filter.semester === 'first'
-                                        ? 'bg-white dark:bg-[#141414] text-slate-900 dark:text-white shadow-xs'
-                                        : 'text-slate-500 hover:text-slate-800 dark:text-[#A3A3A3] dark:hover:text-slate-200'
-                                }`}
-                            >
-                                1st Sem
-                            </button>
-                            <button
-                                onClick={() => setFilter(f => ({ ...f, semester: 'second' }))}
-                                className={`flex-1 sm:flex-none px-4 sm:px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider transition-all ${
-                                    filter.semester === 'second'
-                                        ? 'bg-white dark:bg-[#141414] text-slate-900 dark:text-white shadow-xs'
-                                        : 'text-slate-500 hover:text-slate-800 dark:text-[#A3A3A3] dark:hover:text-slate-200'
-                                }`}
-                            >
-                                2nd Sem
-                            </button>
-                            <button
-                                onClick={() => setFilter(f => ({ ...f, semester: 'all' }))}
-                                className={`flex-1 sm:flex-none px-4 sm:px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider transition-all ${
-                                    filter.semester === 'all'
-                                        ? 'bg-white dark:bg-[#141414] text-slate-900 dark:text-white shadow-xs'
-                                        : 'text-slate-500 hover:text-slate-800 dark:text-[#A3A3A3] dark:hover:text-slate-200'
-                                }`}
-                            >
-                                All
-                            </button>
-                        </div>
+
                         <button
                             type="button"
                             onClick={() => {
@@ -2241,7 +2267,6 @@ Return a JSON object containing a "topics" array.`;
                                     code: '',
                                     name: '',
                                     level: userProfile?.level || '100lvl',
-                                    semester: filter.semester === 'second' ? 'second' : 'first',
                                     description: ''
                                 });
                                 setAddCourseTab('manual');

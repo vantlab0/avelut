@@ -153,10 +153,8 @@ export function validateCourseUploadMetadata(params: {
   }
 
   const semester = (course?.semester || params.fallbackSemester || '').toString().trim().toLowerCase();
-  if (!semester) {
-    errors.push('The course semester is missing.');
-  } else if (semester !== 'first' && semester !== 'second') {
-    errors.push('The course semester must be "first" or "second".');
+  if (semester && semester !== 'first' && semester !== 'second') {
+    errors.push('The course semester must be "first" or "second" when provided.');
   }
 
   if (params.year !== undefined && !/^\d{4}$/.test(params.year.trim())) {

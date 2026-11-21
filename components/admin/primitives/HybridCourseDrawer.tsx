@@ -38,7 +38,6 @@ interface ExtractedCourseItem {
     course_name: string;
     course_unit: number;
     level: string;
-    semester: 'first' | 'second';
     isGlobalExist: boolean;
     existingLinkedDepts?: string[];
 }
@@ -60,7 +59,6 @@ export const HybridCourseDrawer: React.FC<HybridCourseDrawerProps> = ({
     const [title, setTitle] = useState('');
     const [units, setUnits] = useState('3');
     const [level, setLevel] = useState('100lvl');
-    const [semester, setSemester] = useState<'first' | 'second'>('first');
     const [selectedDeptIds, setSelectedDeptIds] = useState<Set<string>>(new Set([currentDeptId]));
     const [deptSearchQuery, setDeptSearchQuery] = useState('');
     const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
@@ -136,7 +134,6 @@ export const HybridCourseDrawer: React.FC<HybridCourseDrawerProps> = ({
                 course_name: trimmedTitle,
                 course_unit: Number(units) || 3,
                 level,
-                semester,
                 course_status: 'ACTIVE',
                 topics: [],
                 textbook_urls: [],
@@ -216,7 +213,6 @@ Extract for each course:
 - course_name (string, strictly in CAPITAL LETTERS as written on the document, e.g. "APPLIED THERMODYNAMICS" — NO snake_case, NO underscores)
 - course_unit (number, e.g. 3)
 - level (string, e.g. "300lvl")
-- semester (string, "first" or "second")
 
 OUTPUT ONLY A VALID JSON OBJECT:
 {
@@ -225,8 +221,7 @@ OUTPUT ONLY A VALID JSON OBJECT:
       "course_code": "MEE 301",
       "course_name": "APPLIED THERMODYNAMICS",
       "course_unit": 3,
-      "level": "300lvl",
-      "semester": "first"
+      "level": "300lvl"
     }
   ]
 }`;
@@ -290,7 +285,6 @@ OUTPUT ONLY A VALID JSON OBJECT:
                                         course_name: { type: Type.STRING },
                                         course_unit: { type: Type.NUMBER },
                                         level: { type: Type.STRING },
-                                        semester: { type: Type.STRING },
                                     },
                                     required: ['course_name'],
                                 },
@@ -339,24 +333,7 @@ OUTPUT ONLY A VALID JSON OBJECT:
                     return '100lvl';
                 };
 
-                const inferSem = (rawSem?: any, code?: string): 'first' | 'second' => {
-                    if (rawSem) {
-                        const s = String(rawSem).trim().toLowerCase();
-                        if (s === 'second' || s === '2' || s === '2nd' || s.includes('second') || s.includes('2nd') || s.includes('rain') || s.includes('omega') || s.includes('spring')) return 'second';
-                        if (s === 'first' || s === '1' || s === '1st' || s.includes('first') || s.includes('1st') || s.includes('harmattan') || s.includes('alpha') || s.includes('fall')) return 'first';
-                    }
-                    if (code) {
-                        const match = code.match(/\b([1-9]\d{2,3})\b/) || code.match(/(\d+)/);
-                        if (match) {
-                            const num = parseInt(match[1] || match[0], 10);
-                            if (!isNaN(num)) return (num % 2 === 1) ? 'first' : 'second';
-                        }
-                    }
-                    return 'first';
-                };
-
                 const resolvedLevel = inferLvl(item.level, courseCode);
-                const resolvedSemester = inferSem(item.semester, courseCode);
 
                 return {
                     course_id: courseId,
@@ -364,7 +341,6 @@ OUTPUT ONLY A VALID JSON OBJECT:
                     course_name: courseName || 'Untitled Course',
                     course_unit: Number(item.course_unit) || 3,
                     level: resolvedLevel,
-                    semester: resolvedSemester,
                     isGlobalExist: isExist,
                     existingLinkedDepts: existingDepts,
                 };
@@ -432,7 +408,6 @@ OUTPUT ONLY A VALID JSON OBJECT:
                     course_name: item.course_name,
                     course_unit: item.course_unit,
                     level: item.level,
-                    semester: item.semester,
                     course_status: 'ACTIVE',
                     topics: [],
                     textbook_urls: [],
@@ -581,19 +556,7 @@ OUTPUT ONLY A VALID JSON OBJECT:
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                                Semester
-                            </label>
-                            <select
-                                value={semester}
-                                onChange={(e) => setSemester(e.target.value as any)}
-                                className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 transition-all"
-                            >
-                                <option value="first">First Semester</option>
-                                <option value="second">Second Semester</option>
-                            </select>
-                        </div>
+
 
                         {/* Cross-List MultiSelectDropdown */}
                         <div className="space-y-2 relative" ref={dropdownRef}>
@@ -849,8 +812,6 @@ OUTPUT ONLY A VALID JSON OBJECT:
                                                         <span>{item.course_unit} Units</span>
                                                         <span>•</span>
                                                         <span>{item.level}</span>
-                                                        <span>•</span>
-                                                        <span>{item.semester} semester</span>
                                                     </div>
                                                 </div>
 

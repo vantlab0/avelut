@@ -35,7 +35,6 @@ function uint8ToBase64(bytes: Uint8Array): string {
 }
 
 const LEVELS = ['100lvl', '200lvl', '300lvl', '400lvl', '500lvl'] as const;
-const SEMESTERS = ['first', 'second'] as const;
 
 type AuthMode = 'login' | 'signup';
 type UploadCenterView = 'dashboard' | 'departments' | 'requests' | 'courses' | 'past_questions';
@@ -327,7 +326,6 @@ export const UploadCenter: React.FC = () => {
   const [selectedCollegeId, setSelectedCollegeId] = useState<string>('');
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
   const [selectedLevel, setSelectedLevel] = useState<(typeof LEVELS)[number]>('100lvl');
-  const [selectedSemester, setSelectedSemester] = useState<(typeof SEMESTERS)[number]>('first');
   
   const [newCourseName, setNewCourseName] = useState('');
   const [newCourseCode, setNewCourseCode] = useState('');
@@ -578,27 +576,33 @@ export const UploadCenter: React.FC = () => {
       course,
       deptPath,
       courseKey,
-      fallbackSemester: selectedSemester,
       year: type === 'past_question' ? year : undefined,
     });
     if (metadataErrors.length) {
       return addToast(metadataErrors[0], 'error');
     }
 
-    const pdfFiles = Array.from(files).filter((file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
-    if (!pdfFiles.length) return addToast('Please choose PDF files only.', 'error');
+    const supportedFiles = Array.from(files).filter((file) => {
+      const name = file.name.toLowerCase();
+      return file.type === 'application/pdf' || name.endsWith('.pdf') || file.type.startsWith('image/') || /\.(jpe?g|png|webp|bmp|gif|heic|heif)$/i.test(name);
+    });
+    if (!supportedFiles.length) return addToast('Please choose PDF or image files only.', 'error');
 
     try {
-      pdfFiles.forEach(inspectPdfFile);
+      supportedFiles.forEach((file) => {
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        if (isPdf) inspectPdfFile(file);
+        else inspectExtractionFile(file);
+      });
     } catch (fileError) {
       return addToast(
-        fileError instanceof CourseExtractionError ? fileError.message : 'One of the selected PDFs is invalid.',
+        fileError instanceof CourseExtractionError ? fileError.message : 'One of the selected files is invalid.',
         'error'
       );
     }
 
     const normalizedLevel = normalizeLevel(course.level);
-    const effectiveSemester = normalizeSemester(course.semester || selectedSemester);
+    const effectiveSemester = normalizeSemester(course.semester);
 
     setIsUploadingCourseKey(courseKey);
     setUploadProgress({ status: 'Starting upload...', percent: 5 });
@@ -611,47 +615,57 @@ export const UploadCenter: React.FC = () => {
       const extractedTopicGroups: Topic[][] = [];
       let extractedQuestions: any[] = [];
 
-      for (let index = 0; index < pdfFiles.length; index += 1) {
-        const file = pdfFiles[index];
-        setUploadProgress({ status: `Uploading PDF to storage (${index + 1}/${pdfFiles.length})...`, percent: 10 + (index * 5) });
+      for (let index = 0; index < supportedFiles.length; index += 1) {
+        const file = supportedFiles[index];
+        setUploadProgress({ status: `Uploading PDF to storage (${index + 1}/${supportedFiles.length})...`, percent: 10 + (index * 5) });
         const uploadToken = `${Date.now()}_${index}_${file.lastModified}_${file.size}`;
         const fileRef = storageRef(storage, `textbooks/uploader/${currentUser.uid}/${courseKey}/${uploadToken}_${file.name}`);
         const result = await uploadBytes(fileRef, file);
         const downloadURL = await getDownloadURL(result.ref);
         uploadedUrls.push(downloadURL);
 
-        setUploadProgress({ status: `Extracting textbook contents (${index + 1}/${pdfFiles.length})...`, percent: 20 + (index * 5) });
-        
-        setUploadProgress({ status: `Reading PDF text (${index + 1}/${pdfFiles.length})...`, percent: 20 + (index * 5) });
+        setUploadProgress({ status: `Extracting file contents (${index + 1}/${supportedFiles.length})...`, percent: 20 + (index * 5) });
 
-        // Prefer real PDF text: it avoids request-size limits, works on scanned
-        // and text PDFs alike (with a vision fallback), and can be reused for
-        // vector indexing without reading the file twice.
-        let source: { kind: 'text'; text: string } | { kind: 'pdf'; chunks: string[] };
+        const isImageFile = file.type.startsWith('image/') || /\.(jpe?g|png|webp|bmp|gif|heic|heif)$/i.test(file.name);
+        let source: { kind: 'text'; text: string } | { kind: 'pdf'; chunks: string[] } | { kind: 'image'; data: string; mimeType: string };
         let extractedText = '';
-        try {
-          const { extractTextFromPDF } = await import('../utils/pdfExtraction');
-          extractedText = await extractTextFromPDF(file);
-        } catch (textError) {
-          console.warn('[UploadCenter] PDF text extraction failed; trying document vision.', (textError as Error)?.message);
-        }
 
-        if (isUsablePdfText(extractedText)) {
-          pdfTextCache.set(file, extractedText);
-          const capped = capPromptText(extractedText);
-          source = { kind: 'text', text: capped.text };
-          if (capped.truncated) {
-            addToast(`Large PDF: only the first ${capped.text.length.toLocaleString()} characters were sent for topic extraction.`, 'info');
-          }
+        if (isImageFile) {
+          setUploadProgress({ status: `Reading image (${index + 1}/${supportedFiles.length})...`, percent: 25 + (index * 5) });
+          const reader = new FileReader();
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve(String(reader.result || ''));
+            reader.onerror = () => reject(new Error('Failed to read image file'));
+            reader.readAsDataURL(file);
+          });
+          const base64 = dataUrl.split(',')[1] || '';
+          source = { kind: 'image', data: base64, mimeType: file.type || 'image/jpeg' };
         } else {
-          setUploadProgress({ status: `Preparing scanned PDF (${index + 1}/${pdfFiles.length})...`, percent: 25 + (index * 5) });
-          source = { kind: 'pdf', chunks: await createPdfInlineChunks(file) };
+          setUploadProgress({ status: `Reading PDF text (${index + 1}/${supportedFiles.length})...`, percent: 20 + (index * 5) });
+          try {
+            const { extractTextFromPDF } = await import('../utils/pdfExtraction');
+            extractedText = await extractTextFromPDF(file);
+          } catch (textError) {
+            console.warn('[UploadCenter] PDF text extraction failed; trying document vision.', (textError as Error)?.message);
+          }
+
+          if (isUsablePdfText(extractedText)) {
+            pdfTextCache.set(file, extractedText);
+            const capped = capPromptText(extractedText);
+            source = { kind: 'text', text: capped.text };
+            if (capped.truncated) {
+              addToast(`Large document: only the first ${capped.text.length.toLocaleString()} characters were sent for extraction.`, 'info');
+            }
+          } else {
+            setUploadProgress({ status: `Preparing scanned document (${index + 1}/${supportedFiles.length})...`, percent: 25 + (index * 5) });
+            source = { kind: 'pdf', chunks: await createPdfInlineChunks(file) };
+          }
         }
         
-        setUploadProgress({ status: `AI extracting syllabus topics (${index + 1}/${pdfFiles.length})...`, percent: 35 + (index * 5) });
+        setUploadProgress({ status: `AI extracting syllabus topics (${index + 1}/${supportedFiles.length})...`, percent: 35 + (index * 5) });
 
         
-        const textbookPrompt = `Analyze this PDF textbook for "${course.course_name}" at "${normalizedLevel}" level.
+        const textbookPrompt = `Analyze this course outline/document for "${course.course_name}" at "${normalizedLevel}" level.
 First, determine if this document is ACTUALLY related to the course "${course.course_name}".
 If it is completely unrelated (e.g. a cooking recipe for a Math course), set "is_related" to false and provide an "unrelated_reason" explaining why.
 If it is related, set "is_related" to true and extract a comprehensive syllabus/course outline into a structured JSON array of topics with concise grounding context.
@@ -662,7 +676,7 @@ RULES:
 3. Each topic object must have a non-empty topic_name, plus topic_id, topic_context, start_point, end_point.
 FORMAT: { "is_related": true, "unrelated_reason": "", "syllabus": [ { "topic_name": "...", "topic_id": "...", "topic_context": "...", "start_point": "...", "end_point": "..." } ] }`;
 
-        const pqPrompt = `Analyze this PDF past question paper for "${course.course_name}".
+        const pqPrompt = `Analyze this past question document for "${course.course_name}".
 First, determine if this document is ACTUALLY related to the course "${course.course_name}".
 If it is completely unrelated, set "is_related" to false and provide an "unrelated_reason" explaining why.
 If it is related, set "is_related" to true and extract all the questions and their options.
@@ -673,12 +687,18 @@ RULES:
 FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question": "...", "options": ["..."], "correctAnswer": "...", "explanation": "..." } ] }`;
 
         const promptText = type === 'textbook' ? textbookPrompt : pqPrompt;
-        const chunkInputs = source.kind === 'text' ? [source.text] : source.chunks;
+        const chunkInputs = source.kind === 'text'
+          ? [source.text]
+          : source.kind === 'image'
+            ? [source.data]
+            : source.chunks;
         const chunkPromises = chunkInputs.map(async (chunkInput) => {
           return attemptApiCall(async () => {
             const userParts = source.kind === 'text'
-              ? [{ text: `${promptText}\n\nDOCUMENT TEXT (extracted from the uploaded PDF):\n${chunkInput}` }]
-              : [{ text: promptText }, { inlineData: { mimeType: 'application/pdf', data: chunkInput } }];
+              ? [{ text: `${promptText}\n\nDOCUMENT TEXT (extracted from the uploaded document):\n${chunkInput}` }]
+              : source.kind === 'image'
+                ? [{ text: promptText }, { inlineData: { mimeType: source.mimeType, data: chunkInput } }]
+                : [{ text: promptText }, { inlineData: { mimeType: 'application/pdf', data: chunkInput } }];
             const aiResponse = await ai.models.generateContent({
               model: aiModel,
               contents: [{ role: 'user', parts: userParts }],
@@ -839,8 +859,8 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
 
             addToast('Extracting textbook content...', 'info');
             setUploadProgress({ status: 'Parsing raw text from PDF for database...', percent: 65 });
-            const cachedText = pdfTextCache.get(pdfFiles[0]);
-            const rawText = cachedText || await extractTextFromPDF(pdfFiles[0]);
+            const cachedText = pdfTextCache.get(supportedFiles[0]);
+            const rawText = cachedText || await extractTextFromPDF(supportedFiles[0]);
             if (!isUsablePdfText(rawText)) {
               throw new CourseExtractionError(
                 'EMPTY_DOCUMENT',
@@ -907,7 +927,7 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
         course_name: newCourseName.trim(),
         course_code: newCourseCode.trim().toUpperCase(),
         level: selectedLevel,
-        semester: selectedSemester,
+
         course_status: 'active',
       };
       
@@ -1067,7 +1087,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
       coursesToSave.forEach(course => {
         const courseId = course.course_code.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
         const courseLevel = normalizeLevel((course as any).level || selectedLevel);
-        const courseSemester = normalizeSemester((course as any).semester || inferSemesterFromCode(course.course_code) || selectedSemester);
+        const courseSemester = normalizeSemester((course as any).semester || inferSemesterFromCode(course.course_code));
         const courseData: Partial<Course> = {
           course_id: courseId,
           course_name: course.course_name.trim(),
@@ -1232,7 +1252,6 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
     if (!levelData?.courses) return [];
     
     return Object.values(levelData.courses)
-      .filter((c: any) => normalizeSemester(c.semester) === selectedSemester)
       .map((c: any) => ({ ...c, level: selectedLevel }));
   };
 
@@ -1254,7 +1273,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
             const levelData = dept.levels[levelId];
             if (levelData?.courses) {
               Object.values(levelData.courses).forEach((c: any) => {
-                if (normalizeSemester(c.semester) === selectedSemester && levelId === selectedLevel) {
+                if (levelId === selectedLevel) {
                   const courseId = c.course_id || c.course_name;
                   deptCountMap.set(courseId, (deptCountMap.get(courseId) || 0) + 1);
                   if (!seenIds.has(courseId)) {
@@ -1402,9 +1421,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                   {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
 
-                <select value={selectedSemester} onChange={e => setSelectedSemester(e.target.value as any)} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
-                  {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+
               </div>
             </div>
 
@@ -1421,9 +1438,6 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                       <div key={course.course_id + course.level} className={`bg-white border rounded-[24px] p-6 shadow-sm transition-all ${isUploaded ? 'border-blue-200' : 'border-slate-200'}`}>
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex flex-col items-start gap-2">
-                             <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md border ${course.semester === 'first' ? 'bg-blue-50 text-[#0F172A] border-blue-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
-                                {course.semester === 'first' ? '1st Sem' : '2nd Sem'}
-                             </span>
                              {course.department_count > 0 && (
                                 <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md bg-sky-50 text-sky-600 border border-sky-200">
                                    {course.department_count} Dept{course.department_count > 1 ? 's' : ''} Offering
@@ -1519,12 +1533,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                         {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
                     </div>
-                    <div className="flex-1 min-w-[200px]">
-                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Semester</label>
-                        <select value={selectedSemester} onChange={e => setSelectedSemester(e.target.value as any)} className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
-                        {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
+
                     <button onClick={() => setIsAddingCourse(!isAddingCourse)} className="flex items-center justify-center h-12 gap-2 bg-slate-900 text-white px-6 rounded-xl text-sm font-bold hover:bg-sky-600 transition">
                         <Plus className="w-4 h-4"/> Add Course
                     </button>
@@ -1585,18 +1594,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                                   >
                                     {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
                                   </select>
-                                  <select
-                                    value={c.semester || selectedSemester}
-                                    onChange={e => {
-                                      const newCourses = [...extractedCourses];
-                                      newCourses[idx].semester = e.target.value as 'first' | 'second';
-                                      setExtractedCourses(newCourses);
-                                    }}
-                                    className="p-2 text-xs border border-slate-200 rounded outline-none focus:border-sky-400 bg-white"
-                                  >
-                                    <option value="first">1st Semester</option>
-                                    <option value="second">2nd Semester</option>
-                                  </select>
+
                                 </div>
                               </div>
                             ))}
@@ -1680,7 +1678,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                   })}
                   {!departmentCourses.length && (
                     <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-[24px]">
-                      No courses found in this department for {selectedLevel} - {selectedSemester}.
+                      No courses found in this department for {selectedLevel}.
                     </div>
                   )}
                 </div>
@@ -1712,9 +1710,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                   {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
 
-                <select value={selectedSemester} onChange={e => setSelectedSemester(e.target.value as any)} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
-                  {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+
               </div>
             </div>
 
@@ -1758,7 +1754,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                   })}
                   {!departmentCourses.length && (
                     <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-[24px]">
-                      No courses found in this department for {selectedLevel} - {selectedSemester}.
+                      No courses found in this department for {selectedLevel}.
                     </div>
                   )}
                 </div>
@@ -1814,7 +1810,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                 )}
             </div>
 
-            <input ref={fileInputRef} type="file" multiple accept="application/pdf" className="hidden" onChange={e => {
+            <input ref={fileInputRef} type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={e => {
                 if (e.target.files?.length) {
                     handleFileUpload(uploadModal.course, uploadModal.courseKey, uploadModal.deptPath, e.target.files, uploadType, uploadType === 'past_question' ? pqYear : undefined);
                     setUploadModal(null);
@@ -1842,7 +1838,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
             >
                 <div className="flex flex-col gap-3">
                     <div className="text-sm font-bold text-slate-500 mb-2 pointer-events-none">
-                        Drag and drop your PDFs here, or
+                        Drag and drop your PDF or image files here, or
                     </div>
                     <button onClick={() => fileInputRef.current?.click()} className="w-full py-3 bg-sky-600 text-white rounded-xl font-bold hover:bg-sky-700 transition flex items-center justify-center gap-2">
                         <UploadCloud className="w-5 h-5" /> Select Local Files

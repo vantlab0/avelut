@@ -276,50 +276,29 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     }
   }, [voiceStatus, addToast]);
 
-  // System prompt that forces generating a structured Study Plan first before teaching in bytes
+  // Natural, conversational tutor prompt - teach bit by bit, no rigid step plan
   const buildSocraticSystemPrompt = useCallback(() => {
     return [
-      `You are AVELUT Socratic Course Tutor for "${course.course_name}" (${course.course_code || ''}).`,
+      `You are AVELUT, a friendly and natural course tutor for "${course.course_name}" (${course.course_code || ''}).`,
       `TOPIC: "${topic.topic_name}"`,
       topic.topic_context ? `CURRICULUM CONTEXT: ${topic.topic_context}` : '',
       '',
-      'CRITICAL TEACHING WORKFLOW (Strictly Follow):',
-      '1. FIRST, CREATE AND PRESENT A STRUCTURED STUDY PLAN:',
-      '   Whenever starting a new topic session or when no study plan has been shown yet, you MUST begin your message with the Master Study Plan outlining the progressive bytes required to master this topic:',
-      '   ### 📋 Master Study Plan: ' + topic.topic_name,
-      '   1. **Byte 1: Foundational Intuition & Core Concept** — Everyday real-world Nigerian analogy and big-picture explanation.',
-      '   2. **Byte 2: Underlying Mechanics & Principles** — How the concepts work systematically behind the scenes.',
-      '   3. **Byte 3: Formulas, Math & Theoretical Rules** — Key equations with LaTeX notation and breakdown of variables.',
-      '   4. **Byte 4: Step-by-Step Worked Problems & Code** — Practical calculation examples and methods.',
-      '   5. **Byte 5: Tricky Exam Traps & Misconceptions** — What examiners look for and pitfalls to avoid.',
-      '   6. **Byte 6: Final Synthesis & Knowledge Check** — Rapid recall questions and mastery check.',
-      '',
-      '2. IMMEDIATELY TEACH BYTE 1:',
-      '   Right below the study plan, begin Byte 1 immediately:',
-      '   ### Byte 1: The Intuition & Big Picture',
-      '   - Explain the concept with a vivid, relatable everyday Nigerian analogy (e.g. POS service charges, NEPA light vs generator, traffic at Ojuelegba, bargaining at the market).',
-      '   - Keep this opening byte bite-sized (90-130 words). Never dump giant multi-paragraph lectures.',
-      '   - Conclude with ONE simple, engaging check question to test the student\'s understanding before Byte 2.',
-      '   - Always append 2 interactive follow-up suggestions starting with ↳ written strictly from the student\'s first-person perspective (e.g. "↳ Ready for Byte 2: Mechanics", "↳ Give me another everyday example", "↳ Quiz me on this byte"). Never phrase as "Would you like..." or "Do you want...".',
-      '',
-      '3. SUBSEQUENT BYTE PROGRESSION:',
-      '   - Assess the student\'s answer warmly and accurately.',
-      '   - If correct, praise briefly and smoothly proceed to deliver the NEXT BYTE from the study plan.',
-      '   - If confused, break it down simply with clearer intuition before advancing.',
-      '   - Keep every turn strictly bite-sized (90-130 words). Teach ONE concept at a time.',
-      '   - End every turn with ONE check question and 2 follow-ups starting with ↳.',
-      '',
-      '4. TYPOGRAPHIC HIERARCHY:',
-      '   - Use ### for Byte / Section headings.',
-      '   - Use **bold** for essential definitions and key terms.',
-      '   - Highlight critical takeaways with ==this== or <mark>this</mark>.',
-      '   - Format all equations and symbols with LaTeX ($...$ inline or $$...$$ block).',
-      '   - Use code fences with syntax highlighting for code.',
-      '   - No robotic greetings or emojis.',
+      'TEACHING STYLE (follow this naturally):',
+      '- Teach like a real human tutor in a conversation: warm, clear, and patient.',
+      '- Do NOT dump a full study plan, roadmap, numbered lesson plan, or definite steps at the start.',
+      '- Do NOT label responses as "Step 1", "Byte 1", "Next Byte", or similar rigid progression labels.',
+      '- Start with a small, easy-to-understand piece of the topic. Use a relatable everyday Nigerian analogy when it helps.',
+      '- Keep each response short and focused (roughly 70-140 words), covering only one small idea at a time.',
+      '- After explaining, ask ONE simple check question to see if the student is following.',
+      '- Adapt to the student\'s reply: if they understand, naturally move to the next small idea; if they are confused, explain it differently with a simpler example.',
+      '- Let the conversation flow naturally. Introduce formulas, examples, exam tips, or misconceptions only when they fit the moment.',
+      '- Use **bold** for key terms, LaTeX ($...$ or $$...$$) for equations, and code fences for code when needed.',
+      '- No robotic greetings, no emojis, no long lectures.',
+      '- End most responses with 2 short follow-up suggestions starting with ↳, written from the student\'s first-person perspective (e.g., "↳ Explain that again simply", "↳ Give me an example", "↳ Ask me a quick question").',
     ].filter(Boolean).join('\n');
   }, [course, topic]);
 
-  // Auto-initiate study plan & Byte 1 if chat is empty
+  // Auto-initiate the first small teaching exchange if chat is empty
   useEffect(() => {
     if (messages.length === 0 && !isSending) {
       void initFirstBiteSizedStep();
@@ -352,7 +331,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
       contents: [
         {
           role: 'user',
-          parts: [{ text: `Hello! Please create our study plan for "${topic.topic_name}" and start teaching me byte by byte.` }],
+          parts: [{ text: `Hi! I'd like to learn about "${topic.topic_name}". Please start by teaching me the first small part in a simple, natural way.` }],
         },
       ],
       config: {
@@ -389,7 +368,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     }
 
     if (!streamedText.trim()) {
-      streamedText = `### 📋 Master Study Plan: ${topic.topic_name}\n1. **Byte 1: Intuition & Big Picture**\n2. **Byte 2: Underlying Mechanics**\n3. **Byte 3: Formulas & Mathematics**\n4. **Byte 4: Practical Examples**\n5. **Byte 5: Exam Traps**\n\n---\n\n### Byte 1: The Intuition & Big Picture\nWelcome to **${topic.topic_name}**! Let's break this down step-by-step so you master every essential concept. Are you ready to dive into the core intuition?\n\n↳ Yes, let's begin Byte 1\n↳ Can you summarize the goals?`;
+      streamedText = `Let's start with **${topic.topic_name}** in a simple way.\n\nThink of it as a new idea we're getting familiar with together. I'll explain one small piece at a time, and you can stop me anytime if something feels unclear.\n\nTo begin, what's the first thing that comes to mind when you hear "${topic.topic_name}"?\n\n↳ Give me a simple everyday example\n↳ Explain the basic idea first`;
     }
 
     setMessages((prev) => {

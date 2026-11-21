@@ -43,7 +43,6 @@ export const Level3CourseCatalog: React.FC<Level3CourseCatalogProps> = ({
     const [newCourseTitle, setNewCourseTitle] = useState('');
     const [newCreditUnits, setNewCreditUnits] = useState('3');
     const [newLevel, setNewLevel] = useState('100lvl');
-    const [newSemester, setNewSemester] = useState<'first' | 'second'>('first');
     const [isCreating, setIsCreating] = useState(false);
 
     // Delete Course Modal state
@@ -221,7 +220,6 @@ export const Level3CourseCatalog: React.FC<Level3CourseCatalogProps> = ({
             course_name: title,
             course_unit: Number(newCreditUnits) || 3,
             level: newLevel,
-            semester: newSemester,
             course_status: 'ACTIVE',
             topics: [],
             textbook_urls: [],
@@ -550,10 +548,6 @@ export const Level3CourseCatalog: React.FC<Level3CourseCatalogProps> = ({
                                         <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800">
                                             {course.level || '100lvl'}
                                         </span>
-                                        <span>•</span>
-                                        <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800">
-                                            {course.semester ? `${course.semester} sem` : '1st sem'}
-                                        </span>
                                     </div>
                                 </div>
 
@@ -595,7 +589,7 @@ export const Level3CourseCatalog: React.FC<Level3CourseCatalogProps> = ({
                                     <th className="py-4 px-6">Course Code</th>
                                     <th className="py-4 px-6">Title</th>
                                     <th className="py-4 px-6">Units</th>
-                                    <th className="py-4 px-6">Level / Semester</th>
+                                    <th className="py-4 px-6">Level</th>
                                     <th className="py-4 px-6 text-center">Topics</th>
                                     <th className="py-4 px-6 text-center">Materials</th>
                                     <th className="py-4 px-6 text-right">Actions</th>
@@ -645,7 +639,7 @@ export const Level3CourseCatalog: React.FC<Level3CourseCatalogProps> = ({
                                                 {course.course_unit || 3} Units
                                             </td>
                                             <td className="py-4 px-6 font-semibold text-xs text-slate-500">
-                                                {course.level || '100lvl'} ({course.semester || 'first'})
+                                                {course.level || '100lvl'}
                                             </td>
                                             <td className="py-4 px-6 text-center font-bold text-xs text-amber-600">
                                                 {topicCount}
