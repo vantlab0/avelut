@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       process.env.ALIBABA_API_KEY ||
       process.env.VITE_ALIBABA_API_KEY ||
       validClientKey ||
-      'sk-ws-H.DDLPMIE.fbaD.MEQCIFkao1-I0HQyUMxmrty8-k1S70b0xjgF1BoNksO2pM6WAiACzxp1ojlxhmc6YQFNodecye0oQOBAalaHxCVNdJfQjA';
+      'sk-ws-H.DIPYRHM.G84f.MEUCIQDZhIC9AXqAS4TPj_UNF1fMPFym2ozZsAtCnsSfX69kQgIgSvk9u7N7s6vb9oZTdxxDiXn9qVi88UEeAGWVh3kmBZ8';
 
     const workspaceId =
       req.headers.get('x-dashscope-workspace') ||

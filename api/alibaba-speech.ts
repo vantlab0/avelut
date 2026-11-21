@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     const baseUrl =
       process.env.ALIBABA_DASHSCOPE_URL ||
       process.env.VITE_ALIBABA_DASHSCOPE_URL ||
-      'https://dashscope-intl.aliyuncs.com/api/v1';
+      'https://ws-o3v6mh0i8y9tqdfx.ap-southeast-1.maas.aliyuncs.com/api/v1';
 
     const requestHeaders: Record<string, string> = {
       'Authorization': `Bearer ${apiKey}`,

@@ -239,8 +239,8 @@ export const DEFAULT_USAGE_SETTINGS = {
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   primary_ai_provider: 'alibaba_qwen',
-  alibaba_api_key: '',
-  alibaba_base_url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+  alibaba_api_key: 'sk-ws-H.DIPYRHM.G84f.MEUCIQDZhIC9AXqAS4TPj_UNF1fMPFym2ozZsAtCnsSfX69kQgIgSvk9u7N7s6vb9oZTdxxDiXn9qVi88UEeAGWVh3kmBZ8',
+  alibaba_base_url: 'https://ws-o3v6mh0i8y9tqdfx.ap-southeast-1.maas.aliyuncs.com/api/v1',
   alibaba_model: 'qwen3.5-omni-flash',
   active_voice_provider: 'alibaba',
   studyguide_voice_provider: 'alibaba',
