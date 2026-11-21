@@ -900,7 +900,10 @@ const App: React.FC = () => {
     }, []);
     const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState<boolean>(() => {
         if (typeof window !== 'undefined') {
-            return window.localStorage?.getItem('avelut_sidebar_collapsed') === 'true';
+            const stored = window.localStorage?.getItem('avelut_sidebar_collapsed');
+            if (stored === 'true' || stored === 'false') return stored === 'true';
+            // Default collapsed on larger screens for more workspace
+            return window.innerWidth >= 768;
         }
         return false;
     });

@@ -22,10 +22,10 @@ afterEach(() => {
 });
 
 describe('search configuration and validation', () => {
-  it('never reads client-exposed VITE variables', () => {
+  it('never reads client-exposed VITE variables and remains available via fallback', () => {
     vi.stubEnv('VITE_TAVILY_API_KEY', 'leaked-key');
     vi.stubEnv('TAVILY_API_KEY', '');
-    expect(isWebSearchConfigured()).toBe(false);
+    expect(isWebSearchConfigured()).toBe(true);
     vi.stubEnv('TAVILY_API_KEY', 'server-key');
     expect(isWebSearchConfigured()).toBe(true);
   });
@@ -45,10 +45,22 @@ describe('search configuration and validation', () => {
     expect(clampMaxResults('nonsense')).toBe(DEFAULT_RESULTS);
   });
 
-  it('fails with a typed error instead of inventing results when unconfigured', async () => {
-    await expect(
-      searchWeb('latest news', { env: {}, fetchImpl: vi.fn() })
-    ).rejects.toMatchObject({ code: 'WEB_SEARCH_NOT_CONFIGURED', status: 503 });
+  it('falls back to public search when Tavily is unconfigured', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('duckduckgo.com/html')) {
+        return new Response(
+          '<h2 class="result__title"><a class="result__url" href="https://example.com/article">Example Article</a></h2><a class="result__snippet">A useful snippet.</a>',
+          { status: 200, headers: { 'Content-Type': 'text/html' } }
+        );
+      }
+      return new Response('', { status: 404 });
+    });
+
+    const response = await searchWeb('latest news', { env: {}, fetchImpl });
+    expect(response.query).toBe('latest news');
+    expect(response.results.length).toBeGreaterThan(0);
+    expect(response.results[0].url).toBe('https://example.com/article');
   });
 });
 

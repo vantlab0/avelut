@@ -144,9 +144,18 @@ describe('executeWebSearchToolCalls', () => {
     expect(JSON.parse(result[0].message.content).instruction).toContain('Do not fabricate');
   });
 
-  it('reports missing server configuration through the tool result', async () => {
+  it('falls back to public search when Tavily is not configured', async () => {
     vi.stubEnv('TAVILY_API_KEY', '');
-    const fetchImpl = vi.fn();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('duckduckgo.com/html')) {
+        return new Response(
+          '<h2 class="result__title"><a class="result__url" href="https://example.com/ai-news">AI News</a></h2><a class="result__snippet">Latest AI news.</a>',
+          { status: 200, headers: { 'Content-Type': 'text/html' } }
+        );
+      }
+      return new Response('', { status: 404 });
+    });
     const result = await executeWebSearchToolCalls(
       [
         {
@@ -158,8 +167,9 @@ describe('executeWebSearchToolCalls', () => {
       { fetchImpl }
     );
 
-    expect(result[0].error).toBe('WEB_SEARCH_NOT_CONFIGURED');
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(result[0].error).toBeUndefined();
+    expect(result[0].sources.length).toBeGreaterThan(0);
+    expect(fetchImpl).toHaveBeenCalled();
   });
 });
 

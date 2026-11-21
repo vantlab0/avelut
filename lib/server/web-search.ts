@@ -70,8 +70,11 @@ export function getSearchApiKey(env: SearchEnv = process.env): string | null {
   return key ? key : null;
 }
 
-export function isWebSearchConfigured(env: SearchEnv = process.env): boolean {
-  return getSearchApiKey(env) !== null;
+export function isWebSearchConfigured(_env: SearchEnv = process.env): boolean {
+  // A keyless public fallback exists, so web search is always available.
+  // Tavily is used when TAVILY_API_KEY is configured; otherwise we fall back
+  // to public sources (Google News RSS / DuckDuckGo HTML).
+  return true;
 }
 
 export interface SearchWebOptions {
@@ -184,39 +187,47 @@ export async function searchWeb(
     options.signal.addEventListener('abort', onExternalAbort, { once: true });
   }
 
-  if (!apiKey) {
-    clearTimeout(timer);
-    options.signal?.removeEventListener('abort', onExternalAbort);
-    throw new WebSearchError('WEB_SEARCH_NOT_CONFIGURED', 'Web search is not configured on this deployment.', 503);
-  }
-
   try {
-    const response = await fetchImpl('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        query,
-        max_results: maxResults,
-        search_depth: 'basic',
-        include_answer: false,
-        include_raw_content: false,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new WebSearchError(
-        'WEB_SEARCH_UPSTREAM_ERROR',
-        `Web search upstream request failed with status ${response.status}`,
-        response.status
-      );
+    if (!apiKey) {
+      const results = await searchWebPublic(query, maxResults, controller.signal, fetchImpl);
+      return { query, results };
     }
 
-    const payload = await response.json();
-    return parseTavilyResults(query, payload, maxResults);
+    try {
+      const response = await fetchImpl('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          query,
+          max_results: maxResults,
+          search_depth: 'basic',
+          include_answer: false,
+          include_raw_content: false,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new WebSearchError(
+          'WEB_SEARCH_UPSTREAM_ERROR',
+          `Web search upstream request failed with status ${response.status}`,
+          response.status
+        );
+      }
+
+      const payload = await response.json();
+      return parseTavilyResults(query, payload, maxResults);
+    } catch (tavilyError) {
+      if ((tavilyError as { name?: string })?.name === 'AbortError') {
+        throw new WebSearchError('WEB_SEARCH_TIMEOUT', 'Web search timed out.', 504);
+      }
+      console.warn('[web_search] Tavily failed, falling back to public search:', (tavilyError as Error)?.message || tavilyError);
+      const results = await searchWebPublic(query, maxResults, controller.signal, fetchImpl);
+      return { query, results };
+    }
   } catch (error) {
     if (error instanceof WebSearchError) throw error;
     if ((error as { name?: string })?.name === 'AbortError') {

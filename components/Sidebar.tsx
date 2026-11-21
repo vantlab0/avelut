@@ -1181,6 +1181,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   overlayRef,
   sidebarRef,
   containerRef,
+  isCollapsed = false,
+  onToggleCollapse,
 }) => {
   const handleMobileItemClick = (id: string) => {
     onItemClick(id);
@@ -1240,7 +1242,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-shrink-0 w-[280px] h-full border-r border-neutral-200 dark:border-white/5 bg-white dark:bg-black">
+      <aside
+        className={`hidden ${isCollapsed ? '' : 'md:flex'} flex-shrink-0 w-[280px] h-full border-r border-neutral-200 dark:border-white/5 bg-white dark:bg-black transition-all duration-200`}
+        aria-hidden={isCollapsed}
+      >
         <div className="w-full h-full">
           <SidebarPanel
             activeItem={activeItem}
