@@ -893,6 +893,7 @@ export const NotebookChat: React.FC<NotebookChatProps> = ({
         onAttachImage={(img) => void addOptimizedImage(img)}
         onOpenGallery={() => fileInputRef.current?.click()}
         onOpenCamera={() => setIsCameraOpen(true)}
+        showGenerationToggles={false}
         onSend={() => handleSendMessage()}
         onStop={handleStopGenerating}
         autoFocus={true}

@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkBreaks from 'remark-breaks';
 import rehypeKatex from 'rehype-katex';
+import DOMPurify from 'dompurify';
 import 'katex/dist/katex.min.css';
 import { prepareMarkdown, rehypeMarkdownPresentation } from '../utils/markdownPreprocess';
 import { CodeBlock } from './CodeBlock';
@@ -51,6 +52,36 @@ const ChatImageRenderer: React.FC<{ src?: string; alt?: string }> = ({ src, alt 
   );
 };
 
+/** Render model-authored HTML layouts without ever trusting the raw markup. */
+const HtmlLayout: React.FC<{ html: string }> = ({ html }) => {
+  const sanitized = React.useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return DOMPurify.sanitize(html, {
+      USE_PROFILES: { html: true },
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
+      ADD_ATTR: ['target', 'rel', 'colspan', 'rowspan'],
+    });
+  }, [html]);
+
+  if (!sanitized) {
+    return <pre className="my-4 whitespace-pre-wrap break-words text-sm">{html}</pre>;
+  }
+
+  return (
+    <div
+      className="ai-html-layout my-5 w-full overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950/40 p-4 sm:p-5"
+      dangerouslySetInnerHTML={{ __html: sanitized }}
+    />
+  );
+};
+
+/** Detect a standalone HTML document/fragment returned instead of markdown. */
+const isStandaloneHtml = (content: string): boolean => {
+  const trimmed = content.trim();
+  return /^<(?:!doctype\s+html|html|body|div|table|section|main|article|header|figure|ul|ol)\b/i.test(trimmed)
+    && /<\/(?:html|body|div|table|section|main|article|header|figure|ul|ol)>\s*$/i.test(trimmed);
+};
+
 const components: Components = {
   h1: ({ children }) => <h1 className="text-xl sm:text-2xl font-bold tracking-tight mt-7 mb-3.5 leading-snug text-neutral-900 dark:text-white">{children}</h1>,
   h2: ({ children }) => <h2 className="text-lg sm:text-xl font-bold tracking-tight mt-6 mb-3 leading-snug text-neutral-900 dark:text-white">{children}</h2>,
@@ -79,6 +110,9 @@ const components: Components = {
       const cleanVal = String(children ?? '').replace(/\n$/, '');
       if (rawLanguage.startsWith('action:') || rawLanguage === 'cbt' || rawLanguage === 'flashcards') {
         return <ActionCard type={rawLanguage as any} rawPayload={cleanVal} />;
+      }
+      if (rawLanguage === 'html' || rawLanguage === 'html-layout') {
+        return <HtmlLayout html={cleanVal} />;
       }
       const language = rawLanguage === 'svg' ? 'svg' : rawLanguage;
       return <CodeBlock language={language} value={cleanVal} />;
@@ -116,13 +150,17 @@ class SafeMarkdownBoundary extends React.Component<{ children: React.ReactNode; 
 export const MarkdownContent: React.FC<MarkdownContentProps> = React.memo(({ content, className = '' }) => (
   <SafeMarkdownBoundary rawText={content}>
     <div className={`font-reading text-[15.5px] sm:text-[16.5px] leading-[1.8] tracking-[-0.011em] text-neutral-900 dark:text-neutral-100 prose prose-neutral dark:prose-invert max-w-none min-w-0 break-words font-normal select-text [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden ${className}`}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-        rehypePlugins={[rehypeMarkdownPresentation, rehypeKatex]}
-        components={components}
-      >
-        {prepareMarkdown(content)}
-      </ReactMarkdown>
+      {isStandaloneHtml(content) ? (
+        <HtmlLayout html={content} />
+      ) : (
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+          rehypePlugins={[rehypeMarkdownPresentation, rehypeKatex]}
+          components={components}
+        >
+          {prepareMarkdown(content)}
+        </ReactMarkdown>
+      )}
     </div>
   </SafeMarkdownBoundary>
 ));
