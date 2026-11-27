@@ -42,7 +42,7 @@ const VOICES = [
   {
     id: 'jennifer',
     voiceName: 'Jennifer',
-    text: "Hello! I'm Jennifer. Welcome to Avelut, your AI-powered university learning companion. Together, we'll break down complex topics step by step on our interactive whiteboard.",
+    text: "Hello! I'm Jennifer. Welcome to Avelut, your AI-powered learning companion. Together, we'll break down complex topics step by step on our interactive whiteboard.",
   },
   {
     id: 'aiden',

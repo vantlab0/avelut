@@ -61,9 +61,9 @@ describe('api/notifications FCM v1 API', () => {
         title: 'New Study Partner Message',
         message: 'Hey, let us review Calculus together!',
         customData: {
-          route: 'messenger',
-          chatId: 'chat_calc_101',
-          senderId: 'user_sender_999',
+          route: 'chat',
+          conversationId: 'chat_calc_101',
+          senderName: 'Study Partner',
         },
       }),
     });
@@ -89,8 +89,8 @@ describe('api/notifications FCM v1 API', () => {
     expect(msg.data.title).toBe('New Study Partner Message');
     expect(msg.data.body).toBe('Hey, let us review Calculus together!');
     expect(msg.data.message).toBe('Hey, let us review Calculus together!');
-    expect(msg.data.route).toBe('messenger');
-    expect(msg.data.chatId).toBe('chat_calc_101');
-    expect(msg.data.senderId).toBe('user_sender_999');
+    expect(msg.data.route).toBe('chat');
+    expect(msg.data.conversationId).toBe('chat_calc_101');
+    expect(msg.data.senderName).toBe('Study Partner');
   });
 });

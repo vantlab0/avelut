@@ -137,23 +137,13 @@ export const VoiceProviderSelector: React.FC<VoiceProviderSelectorProps> = ({
         </div>
       </div>
 
-      {/* Provider API Keys & Model Parameters */}
-      <div className="space-y-4 pt-2">
-        <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Provider Credentials & Parameters</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Alibaba API Key */}
-          <div className="space-y-1.5 sm:col-span-2">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Alibaba Cloud DashScope / Model Studio API Key</label>
-            <input
-              type="password"
-              placeholder="sk-..."
-              value={appSettings.alibaba_api_key || ''}
-              onChange={(e) => onChange({ ...appSettings, alibaba_api_key: e.target.value })}
-              className="w-full p-3 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs outline-none focus:border-[#0066FF]"
-            />
-            <p className="text-[11px] text-slate-400">Server env key: ALIBABA_API_KEY (never VITE_-prefixed). Leave blank to use the server key.</p>
-          </div>
-        </div>
+      {/* Credentials are server-only */}
+      <div className="space-y-2 pt-2">
+        <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Credentials</h4>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          The DashScope key is managed server-side in the Supabase <code>api_keys</code> table (provider{' '}
+          <code>alibaba</code>) with a server environment-variable fallback. It is never stored in app settings.
+        </p>
       </div>
 
       {/* Live Status indicator */}

@@ -1,5 +1,5 @@
 /**
- * Framework-agnostic long-press controller used by messenger rows and bubbles.
+ * Framework-agnostic long-press controller for interactive rows and bubbles.
  *
  * A long press only fires when the pointer stays within `moveThreshold` CSS
  * pixels for `delay` ms. Scrolling therefore cancels the timer naturally, and

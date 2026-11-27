@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Type, createAvelutAI, getResponseText } from '../../../utils/inference';
 import { useToast } from '../../../hooks/useToast';
 import { useAppSettings } from '../../../hooks/useAppSettings';
+import { AVELUT_TEXT_MODEL } from '../../../lib/textModel';
 
 const PLAYSTORE_UPDATE_PATH = 'app_updates/playstore/latest';
 const PLAYSTORE_PACKAGE_ID = 'com.avelut.app';
@@ -98,7 +99,7 @@ Rules:
 Return only JSON with keys: title, message, version_name.`;
 
             const response = await ai.models.generateContent({
-                model: appSettings.alibaba_model || 'qwen3.5-omni-flash',
+                model: AVELUT_TEXT_MODEL,
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 config: {
                     responseMimeType: 'application/json',

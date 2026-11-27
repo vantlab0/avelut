@@ -28,7 +28,7 @@
             <data android:scheme="com.avelut.app" />
         </intent-filter>
 
-        <!-- Deep link for custom notification actions -->
+        <!-- Deep link for notification routes -->
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
@@ -63,8 +63,6 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_name" />
-
-        <receiver android:name=".NotificationActionReceiver" android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

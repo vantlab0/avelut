@@ -32,7 +32,6 @@ The default Tailwind palettes NOT overridden in the config (`blue-*`, `sky-*`, `
 - `components/NotebookDetail.tsx`
 - `components/NotebookChat.tsx`
 - `components/CourseChatTutor.tsx`
-- `components/Messenger.tsx`
 - `components/tutorial/TeachingEngineSessionView.tsx`
 - `components/tutorial/LessonDurationModal.tsx`
 - `components/tutorial/TopicSummaryNotebookModal.tsx`
@@ -58,16 +57,9 @@ Files already clean (verified by gate): `components/StudyGuide.tsx`, `components
 - `ghost`: `hover:bg-muted hover:text-foreground`
 - `link`: `text-accent underline-offset-4`
 
-### Messenger bubble chrome fixed (dark mode)
-
-`styles.css`:
-
-- .dark `.message-bubble.outgoing` border: `rgba(56,189,248,0.4)` (sky-400) → `rgba(255,255,255,0.12)` (hairline white)
-- .dark `.message-bubble.incoming .message-time` color: `#38BDF8` (sky-400) → `#94A3B8` (slate-400)
-
 ## Verification
 
-Grep gate (scope: `components/tutorial/**`, `components/Messenger.tsx`, `components/StudyGuide.tsx`, `components/MyNotebooks.tsx`, `components/NotebookDetail.tsx`, `components/NotebookChat.tsx`, `components/CourseChatTutor.tsx`, `components/ui/button.tsx`):
+Grep gate (scope: `components/tutorial/**`, `components/StudyGuide.tsx`, `components/MyNotebooks.tsx`, `components/NotebookDetail.tsx`, `components/NotebookChat.tsx`, `components/CourseChatTutor.tsx`, `components/ui/button.tsx`):
 
 - Regex: `(?:bg|text|border|ring|from|to|via|shadow|marker|fill|stroke|hover:bg|hover:text|dark:\w+|placeholder:)(?:blue|sky|red|cyan|fuchsia)-\d+`
 - Result: **GATE PASS** — zero matches in all scoped paths.

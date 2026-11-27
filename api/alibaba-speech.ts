@@ -1,3 +1,5 @@
+import { getAlibabaApiKey } from '../lib/server/alibabaConfig';
+
 export const maxDuration = 30;
 
 export async function OPTIONS() {
@@ -28,11 +30,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const apiKey =
-      process.env.ALIBABA_API_KEY ||
-      process.env.VITE_ALIBABA_API_KEY ||
-      req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
-      '';
+    // DB-first key resolution; client Authorization headers are ignored.
+    const apiKey = await getAlibabaApiKey();
 
     if (!apiKey) {
       return new Response(

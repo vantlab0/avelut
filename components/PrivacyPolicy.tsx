@@ -91,7 +91,7 @@ export default function PrivacyPolicy() {
                   To provide our custom study roadmaps, AI chat response streaming, and document search grounding, AVELUT collects the following types of information:
                 </p>
                 <ul className="list-disc pl-5 space-y-2 text-slate-300">
-                  <li><strong>Account Metadata:</strong> When signing up using our authentication portal, we store your email address, name, university department, level, and registration timestamp.</li>
+                  <li><strong>Account Metadata:</strong> When signing up using our authentication portal, we store your email address, name, optional school or class details, and registration timestamp.</li>
                   <li><strong>Academic Context Data:</strong> Your selected courses, streaks, activity logs, and specific study guide settings that you configure to tailor your learning workspace.</li>
                   <li><strong>Uploaded Course Materials:</strong> Textbook files, lecture slides, syllabus documents (PDFs, DOCX, TXT), and visual solver images that you upload to ground the AI's retrieved knowledge (RAG).</li>
                   <li><strong>Conversational Logs:</strong> The queries you type, mic audio captures, and files you attach to Avelut AI chat, along with the generated responses.</li>
@@ -105,7 +105,7 @@ export default function PrivacyPolicy() {
                   We process data solely for educational purposes, including:
                 </p>
                 <ul className="list-disc pl-5 space-y-2 text-slate-300">
-                  <li><strong>Personalized AI Grounding:</strong> Linking the AI assistant's system guidelines with your department syllabus and textbooks so replies are relevant to your coursework.</li>
+                  <li><strong>Personalized AI Grounding:</strong> Linking the AI assistant's system guidelines with your class syllabus and textbooks so replies are relevant to your coursework.</li>
                   <li><strong>Image & Voice Resolution:</strong> Feeding visual captures or mic inputs to multimodal generative models to explain formulas, diagrams, or read audio transcripts.</li>
                   <li><strong>Gamification Streaks & Analytics:</strong> Tracking streaks and activity logs to support student motivation.</li>
                   <li><strong>API Abuse Controls:</strong> Monitoring transaction usage counts against active limits to maintain platform performance for all students.</li>

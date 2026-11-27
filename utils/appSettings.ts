@@ -1,4 +1,5 @@
 import type { AppSettings, CanonicalPricingConfig, LiveTutorialPackageId } from '../types';
+import { AVELUT_TEXT_MODEL, normalizeTextModel } from '../lib/textModel';
 
 export const APP_SETTINGS_PATH = 'app_settings/global';
 
@@ -217,13 +218,13 @@ export const DEFAULT_USAGE_SETTINGS = {
     study_guide_extraction: 3,
   },
   feature_models: {
-    visual_solve: 'qwen3.5-omni-flash',
-    chat_interaction: 'qwen3.5-omni-flash',
-    flashcard_generation: 'qwen3.5-omni-flash',
-    ai_quiz_generation: 'qwen3.5-omni-flash',
-    study_guide_lesson: 'qwen3.5-omni-flash',
-    study_guide_extraction: 'qwen3.5-omni-flash',
-    title_generation: 'qwen3.5-omni-flash',
+    visual_solve: AVELUT_TEXT_MODEL,
+    chat_interaction: AVELUT_TEXT_MODEL,
+    flashcard_generation: AVELUT_TEXT_MODEL,
+    ai_quiz_generation: AVELUT_TEXT_MODEL,
+    study_guide_lesson: AVELUT_TEXT_MODEL,
+    study_guide_extraction: AVELUT_TEXT_MODEL,
+    title_generation: AVELUT_TEXT_MODEL,
   },
   additional_prices: {
     live_tutorial_pass: CANONICAL_PRICING.packages.live_tutorial_15.priceNgn,
@@ -239,9 +240,10 @@ export const DEFAULT_USAGE_SETTINGS = {
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   primary_ai_provider: 'alibaba_qwen',
-  alibaba_api_key: 'sk-ws-H.DIPYRHM.G84f.MEUCIQDZhIC9AXqAS4TPj_UNF1fMPFym2ozZsAtCnsSfX69kQgIgSvk9u7N7s6vb9oZTdxxDiXn9qVi88UEeAGWVh3kmBZ8',
+  // No alibaba_api_key here: the secret lives in Supabase api_keys (env
+  // fallback) and is never part of client app settings.
   alibaba_base_url: 'https://ws-o3v6mh0i8y9tqdfx.ap-southeast-1.maas.aliyuncs.com/api/v1',
-  alibaba_model: 'qwen3.5-omni-flash',
+  alibaba_model: AVELUT_TEXT_MODEL,
   active_voice_provider: 'alibaba',
   studyguide_voice_provider: 'alibaba',
   notebook_voice_provider: 'alibaba',
@@ -265,32 +267,19 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 };
 
 /**
- * Central resolution helper for the Alibaba DashScope key.
- *
- * Only an admin-configured value is returned. Server-only ALIBABA_API_KEY is
- * used by the API routes and never inlined into the client bundle.
+ * All text features use exactly one model. Caller values/legacy aliases are
+ * accepted for backwards compatibility but always resolve to the canonical
+ * `qwen3.7-flash`. Voice/TTS models are configured separately.
  */
-export const getAlibabaApiKey = (appSettings?: AppSettings | Partial<AppSettings> | null): string => {
-  return (appSettings?.alibaba_api_key || '').trim();
-};
-
-export const cleanQwenModel = (model?: any, fallback: string = 'qwen3.5-omni-flash'): string => {
-  if (!model || typeof model !== 'string') return fallback;
-  const clean = model
-    .replace(/^qwen\//i, '')
-    .replace(/^alibaba\//i, '')
-    .replace(/^google\//i, '')
-    .replace(/^openai\//i, '')
-    .replace(/^anthropic\//i, '')
-    .trim();
-  return clean.toLowerCase().startsWith('qwen') ? clean : fallback;
+export const cleanQwenModel = (_model?: any, _fallback?: string): typeof AVELUT_TEXT_MODEL => {
+  return normalizeTextModel(typeof _model === 'string' ? _model : undefined);
 };
 
 export const normalizeAppSettings = (raw: Partial<AppSettings> | null | undefined): AppSettings => ({
   primary_ai_provider: raw?.primary_ai_provider || DEFAULT_APP_SETTINGS.primary_ai_provider,
-  alibaba_api_key: (raw?.alibaba_api_key || DEFAULT_APP_SETTINGS.alibaba_api_key || '').toString().trim(),
+  // Legacy alibaba_api_key is intentionally dropped from client settings.
   alibaba_base_url: (raw?.alibaba_base_url || DEFAULT_APP_SETTINGS.alibaba_base_url || '').toString().trim(),
-  alibaba_model: cleanQwenModel(raw?.alibaba_model, DEFAULT_APP_SETTINGS.alibaba_model || 'qwen3.5-omni-flash'),
+  alibaba_model: cleanQwenModel(raw?.alibaba_model, DEFAULT_APP_SETTINGS.alibaba_model),
   active_voice_provider: raw?.active_voice_provider || DEFAULT_APP_SETTINGS.active_voice_provider,
   studyguide_voice_provider: raw?.studyguide_voice_provider || raw?.active_voice_provider || DEFAULT_APP_SETTINGS.studyguide_voice_provider,
   notebook_voice_provider: raw?.notebook_voice_provider || raw?.active_voice_provider || DEFAULT_APP_SETTINGS.notebook_voice_provider,

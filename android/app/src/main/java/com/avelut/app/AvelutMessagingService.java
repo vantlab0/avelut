@@ -9,7 +9,6 @@ import android.net.Uri;
 import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
-import androidx.core.app.RemoteInput;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 
@@ -57,7 +56,6 @@ public class AvelutMessagingService extends MessagingService {
             body = "";
         }
 
-        String chatId = data != null ? data.get("chatId") : null;
         String route = data != null ? data.get("route") : null;
 
         Context context = getApplicationContext();
@@ -69,7 +67,7 @@ public class AvelutMessagingService extends MessagingService {
             NotificationChannel channel = notificationManager.getNotificationChannel(CHANNEL_ID);
             if (channel == null) {
                 channel = new NotificationChannel(CHANNEL_ID, "General", NotificationManager.IMPORTANCE_HIGH);
-                channel.setDescription("Avelut messages and updates");
+                channel.setDescription("Avelut notifications and updates");
                 channel.enableVibration(true);
                 notificationManager.createNotificationChannel(channel);
             }
@@ -85,15 +83,13 @@ public class AvelutMessagingService extends MessagingService {
         Uri.Builder uriBuilder = new Uri.Builder()
                 .scheme("avelut")
                 .authority("action");
-        if (chatId != null && !chatId.isEmpty()) {
-            uriBuilder.appendQueryParameter("chatId", chatId);
-        } else if (route != null && !route.isEmpty()) {
+        if (route != null && !route.isEmpty()) {
             uriBuilder.appendQueryParameter("route", route);
         }
         contentIntent.setData(uriBuilder.build());
         contentIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
-        int notifId = chatId != null && !chatId.isEmpty() ? chatId.hashCode() : (int) System.currentTimeMillis();
+        int notifId = (int) System.currentTimeMillis();
 
         PendingIntent contentPendingIntent = PendingIntent.getActivity(
                 context,
@@ -120,52 +116,6 @@ public class AvelutMessagingService extends MessagingService {
                 }
             }
         } catch (Exception ignored) {}
-
-        if (chatId != null && !chatId.isEmpty()) {
-            RemoteInput remoteInput = new RemoteInput.Builder("inline_reply")
-                    .setLabel("Reply")
-                    .build();
-
-            Intent replyIntent = new Intent(context, NotificationActionReceiver.class);
-            replyIntent.putExtra("action_id", "reply_action");
-            replyIntent.putExtra("chatId", chatId);
-
-            PendingIntent replyPendingIntent = PendingIntent.getBroadcast(
-                    context,
-                    notifId + 1,
-                    replyIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0)
-            );
-
-            NotificationCompat.Action replyAction = new NotificationCompat.Action.Builder(
-                    iconResId,
-                    "Reply",
-                    replyPendingIntent
-            )
-            .addRemoteInput(remoteInput)
-            .build();
-
-            Intent readIntent = new Intent(context, NotificationActionReceiver.class);
-            readIntent.putExtra("action_id", "mark_read");
-            readIntent.putExtra("chatId", chatId);
-
-            PendingIntent readPendingIntent = PendingIntent.getBroadcast(
-                    context,
-                    notifId + 2,
-                    readIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-            );
-
-            NotificationCompat.Action readAction = new NotificationCompat.Action.Builder(
-                    0,
-                    "Mark as read",
-                    readPendingIntent
-            )
-            .build();
-
-            builder.addAction(replyAction);
-            builder.addAction(readAction);
-        }
 
         notificationManager.notify(notifId, builder.build());
     }

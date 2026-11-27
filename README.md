@@ -67,7 +67,6 @@ It’s always on. It’s built for your courses. And it doesn’t judge how many
 | **Flashcards** | Generate decks fast — practice until the ideas stick |
 | **Quizzes & exam mode** | Timed practice with explanations, not just a score |
 | **Scan & solve** | Snap a problem or diagram and get a clear walkthrough |
-| **Messenger** | Study with people on the same path |
 | **Progress that makes sense** | See where you’re strong and where to spend the next hour |
 
 You don’t need five apps and a stack of photocopies.  

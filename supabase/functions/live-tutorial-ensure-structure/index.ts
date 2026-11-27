@@ -5,6 +5,8 @@
  * Does NOT generate board contents or TTS audio.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getAlibabaApiKey } from "../_shared/alibabaConfig.ts";
+import { AVELUT_TEXT_MODEL } from "../_shared/textModel.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -95,7 +97,7 @@ Deno.serve(async (req) => {
     }
 
     // 2. Generate structure using Alibaba API
-    const alibabaKey = Deno.env.get("ALIBABA_API_KEY") || Deno.env.get("VITE_ALIBABA_API_KEY");
+    const alibabaKey = await getAlibabaApiKey();
     let structureJson: any = null;
 
     const prompt = `You are a world-class university lecturer creating a structured whiteboard lecture plan.
@@ -130,7 +132,7 @@ Return STRICTLY valid JSON with no markdown block ticks:
             "X-DashScope-WorkSpace": workspaceId,
           },
           body: JSON.stringify({
-            model: "qwen3.5-omni-flash",
+            model: AVELUT_TEXT_MODEL,
             messages: [{ role: "user", content: prompt }],
             response_format: { type: "json_object" },
           }),

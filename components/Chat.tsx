@@ -1157,7 +1157,7 @@ export const Chat: React.FC<ChatProps> = ({
   }, [userProfile.uid]);
 
   useEffect(() => {
-    let contextText = `STUDENT LEVEL: ${userProfile.level || ''}\nDEPARTMENT: ${userProfile.department_id || ''}\n\n`;
+    let contextText = '';
     try {
       const cachedProgress = typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem(`avelut_progress_${userProfile.uid}`) || '{}') : null;
       if (cachedProgress && Object.keys(cachedProgress).length > 0) {
@@ -1177,7 +1177,7 @@ export const Chat: React.FC<ChatProps> = ({
         const progressRef = dbRef(db, `user_progress/${userProfile.uid}`);
         const progressSnap = await get(progressRef);
         if (progressSnap.exists()) {
-          let updatedText = `STUDENT LEVEL: ${userProfile.level || ''}\nDEPARTMENT: ${userProfile.department_id || ''}\n\nSTUDENT PROGRESS DATA:\n`;
+          let updatedText = 'STUDENT PROGRESS DATA:\n';
           const progressData = progressSnap.val();
           Object.keys(progressData).forEach((courseId) => {
             const courses = progressData[courseId];
@@ -1192,7 +1192,7 @@ export const Chat: React.FC<ChatProps> = ({
       }
     };
     fetchCourseContext();
-  }, [userProfile.uid, userProfile.department_id, userProfile.level]);
+  }, [userProfile.uid]);
 
   useEffect(() => {
     if (!activeConversationId) {

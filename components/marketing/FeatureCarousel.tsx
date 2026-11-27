@@ -37,13 +37,6 @@ const features = [
         description: 'Timed practice with explanations for every miss — not just a score. Focus the next hour where it actually moves your grade.',
         icon: <i className="bi bi-ui-checks-grid text-3xl"></i>,
         bgImage: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=800&q=80'
-    },
-    {
-        id: 'messenger',
-        title: 'Study with peers',
-        description: 'Messenger and course spaces so you can share what’s working — without leaving the app that already holds your lessons.',
-        icon: <i className="bi bi-people text-3xl"></i>,
-        bgImage: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80'
     }
 ];
 

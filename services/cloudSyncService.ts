@@ -1,17 +1,11 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
-import { notifyTableChanged } from '../lib/sqlite/sqliteService';
 import {
   getPendingSyncQueue,
   removeSyncQueueItem,
   updateSyncQueueError,
   markConversationSynced,
   markMessageSynced,
-  bulkUpsertRemoteConversations,
-  bulkUpsertRemoteMessages,
-  LocalConversation,
-  LocalMessage
 } from './chatStorageService';
-import { isAiMessage } from '../utils/chatMessageNormalizer';
 
 export type CloudSyncStatus = 'synced' | 'syncing' | 'offline' | 'pending' | 'error';
 
@@ -44,7 +38,6 @@ class CloudSyncEngine {
   private listeners: Set<SyncListener> = new Set();
   private isSyncing = false;
   private syncIntervalId: any = null;
-  private realtimeChannel: any = null;
   private currentUserId: string | null = null;
 
   constructor() {
@@ -62,7 +55,8 @@ class CloudSyncEngine {
   }
 
   /**
-   * Start background sync engine and instant Realtime WebSocket listeners.
+   * Start background sync engine. AI conversations live only in local SQLite;
+   * only generic app state (e.g. profile) is synced remotely.
    */
   public start(userId: string): void {
     if (!userId) return;
@@ -72,13 +66,8 @@ class CloudSyncEngine {
       clearInterval(this.syncIntervalId);
     }
 
-    // 1. Setup instant Supabase Realtime WebSocket subscription
-    this.setupRealtimeSubscription(userId);
-
-    // 2. Trigger immediate sync on start
     void this.triggerSync();
 
-    // 3. Fallback background sync interval
     this.syncIntervalId = setInterval(() => {
       if (this.isOnline()) {
         void this.triggerSync();
@@ -87,92 +76,15 @@ class CloudSyncEngine {
   }
 
   /**
-   * Stop background sync engine and release Realtime WebSockets.
+   * Stop background sync engine.
    */
   public stop(): void {
     if (this.syncIntervalId) {
       clearInterval(this.syncIntervalId);
       this.syncIntervalId = null;
     }
-    if (this.realtimeChannel) {
-      void supabase.removeChannel(this.realtimeChannel);
-      this.realtimeChannel = null;
-    }
     this.currentUserId = null;
     this.updateStatus('synced', 0);
-  }
-
-  /**
-   * Establish Realtime WebSocket connection for live database reactions.
-   */
-  private setupRealtimeSubscription(userId: string): void {
-    if (!isSupabaseConfigured || !userId) return;
-    const uuid = toDeterministicUUID(userId);
-
-    if (this.realtimeChannel) {
-      void supabase.removeChannel(this.realtimeChannel);
-      this.realtimeChannel = null;
-    }
-
-    this.realtimeChannel = supabase
-      .channel(`cloud-sync-live:${uuid}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messenger_conversations',
-        },
-        async (payload) => {
-          if (payload.new) {
-            const item = payload.new as any;
-            if (item.user1_id === uuid || item.user2_id === uuid) {
-              await bulkUpsertRemoteConversations([
-                {
-                  id: item.id,
-                  user_id: userId,
-                  title: item.last_message_preview || 'Chat',
-                  created_at: new Date(item.last_message_time || item.updated_at).getTime(),
-                  last_updated_at: new Date(item.updated_at).getTime(),
-                  sync_status: 'synced',
-                  is_deleted: 0,
-                },
-              ]);
-              notifyTableChanged('conversations');
-            }
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messenger_messages',
-        },
-        async (payload) => {
-          if (payload.new) {
-            const item = payload.new as any;
-            const isAi = isAiMessage({ text: item.text_content, id: item.id });
-            await bulkUpsertRemoteMessages([
-              {
-                id: item.id,
-                conversation_id: item.conversation_id,
-                user_id: item.sender_id,
-                sender: (item.sender_id === userId && !isAi) ? 'user' : 'assistant',
-                text: item.text_content || '',
-                attachments_json: null,
-                image_url: item.media_url || null,
-                timestamp: new Date(item.created_at).getTime(),
-                sync_status: 'synced',
-                is_deleted: 0,
-              },
-            ]);
-            notifyTableChanged('messages');
-          }
-        }
-      )
-      .subscribe();
   }
 
   public isOnline(): boolean {
@@ -200,7 +112,7 @@ class CloudSyncEngine {
   }
 
   /**
-   * Main sync workflow: process outgoing mutations then fetch latest remote updates.
+   * Main sync workflow: settle local AI chat queue items and sync generic app state.
    */
   public async triggerSync(): Promise<void> {
     if (this.isSyncing) return;
@@ -219,11 +131,6 @@ class CloudSyncEngine {
         await this.processOutgoingSyncQueue(pendingItems);
       }
 
-      // Download downstream remote changes from Supabase if user is logged in
-      if (this.currentUserId) {
-        await this.pullDownstreamChanges(this.currentUserId);
-      }
-
       const remainingQueue = await getPendingSyncQueue();
       if (remainingQueue.length > 0) {
         this.updateStatus('pending', remainingQueue.length);
@@ -239,7 +146,8 @@ class CloudSyncEngine {
   }
 
   /**
-   * Push local SQLite mutations up to Supabase.
+   * Process queued local mutations. AI chat rows are settled locally; only
+   * app_state is pushed to Supabase.
    */
   private async processOutgoingSyncQueue(pendingItems: any[]): Promise<void> {
     for (const item of pendingItems) {
@@ -248,70 +156,16 @@ class CloudSyncEngine {
 
         switch (item.entity_type) {
           case 'conversation': {
-            const userId = payload.user_id || this.currentUserId;
-            if (!userId) break;
-
-            if (item.action === 'delete') {
-              // Delete conversation from Supabase
-              await supabase
-                .from('messenger_conversations')
-                .delete()
-                .eq('id', item.entity_id);
-            } else {
-              // Upsert conversation metadata
-              const u1 = toDeterministicUUID(userId);
-              const u2 = toDeterministicUUID(payload.other_user_id || userId);
-              await supabase
-                .from('messenger_conversations')
-                .upsert({
-                  id: item.entity_id,
-                  user1_id: u1,
-                  user2_id: u2,
-                  last_message_preview: payload.title || 'Conversation',
-                  last_message_time: new Date(payload.last_updated_at || Date.now()).toISOString(),
-                  updated_at: new Date().toISOString(),
-                });
-              await markConversationSynced(item.entity_id);
-            }
+            // AI tutor conversations are local-only SQLite data. There is no
+            // remote messenger table to sync to; just settle the local queue.
+            await markConversationSynced(item.entity_id);
             break;
           }
 
           case 'message': {
-            if (item.action === 'delete') {
-              await supabase
-                .from('messenger_messages')
-                .delete()
-                .eq('id', item.entity_id);
-            } else {
-              // AI responses are local assistant messages, NOT peer messenger messages!
-              const isAi = payload.sender === 'assistant' ||
-                           payload.sender === 'bot' ||
-                           item.entity_id?.startsWith('ai_') ||
-                           item.entity_id?.startsWith('bot_') ||
-                           isAiMessage(payload);
-
-              if (isAi) {
-                await markMessageSynced(item.entity_id);
-                await removeSyncQueueItem(item.id);
-                break;
-              }
-
-              const senderId = toDeterministicUUID(payload.user_id || this.currentUserId || '');
-              const recipientId = toDeterministicUUID(payload.recipient_id || payload.user_id || this.currentUserId || '');
-              await supabase
-                .from('messenger_messages')
-                .upsert({
-                  id: item.entity_id,
-                  conversation_id: payload.conversation_id,
-                  sender_id: senderId,
-                  recipient_id: recipientId,
-                  message_type: payload.image_url ? 'image' : 'text',
-                  text_content: payload.text,
-                  media_url: payload.image_url || null,
-                  created_at: new Date(payload.timestamp || Date.now()).toISOString(),
-                });
-              await markMessageSynced(item.entity_id);
-            }
+            // AI tutor messages are local-only SQLite data. Mark them synced
+            // locally so the UI does not leave them stuck in "pending".
+            await markMessageSynced(item.entity_id);
             break;
           }
 
@@ -340,87 +194,12 @@ class CloudSyncEngine {
   }
 
   /**
-   * Pull latest conversations and progress from Supabase and merge into local SQLite.
+   * Retained for hooks/useChatStorage.ts compatibility. AI tutor conversations
+   * are stored only in local SQLite (no remote messenger tables remain), so
+   * this is intentionally a safe no-op. Local reads still work unchanged.
    */
-  private async pullDownstreamChanges(userId: string): Promise<void> {
-    if (!userId || userId.trim() === '' || userId === 'guest' || userId.startsWith('guest_')) {
-      return;
-    }
-
-    try {
-      const uuid = toDeterministicUUID(userId.trim());
-      const { data: conversations, error } = await supabase
-        .from('messenger_conversations')
-        .select('*')
-        .or(`user1_id.eq.${uuid},user2_id.eq.${uuid}`)
-        .order('updated_at', { ascending: false });
-
-      if (error) {
-        // Table might not exist or RLS policy might restrict anonymous queries
-        if (error.code !== 'PGRST116') {
-          console.warn('[CloudSync] Error fetching remote conversations:', error.message || error);
-        }
-        return;
-      }
-
-      if (conversations && conversations.length > 0) {
-        const remoteConversations: LocalConversation[] = conversations.map(item => ({
-          id: item.id,
-          user_id: userId,
-          title: item.last_message_preview || 'Chat',
-          created_at: new Date(item.last_message_time || item.updated_at).getTime(),
-          last_updated_at: new Date(item.updated_at).getTime(),
-          sync_status: 'synced',
-          is_deleted: 0,
-        }));
-        await bulkUpsertRemoteConversations(remoteConversations);
-        notifyTableChanged('conversations');
-      }
-    } catch (err) {
-      console.warn('[CloudSync] Failed to pull downstream changes from Supabase:', err);
-    }
-  }
-
-  /**
-   * Pull messages for a specific conversation on-demand from Supabase and save to SQLite.
-   */
-  public async pullMessagesForConversation(conversationId: string, userId: string): Promise<void> {
-    if (!conversationId || !this.isOnline() || !isSupabaseConfigured) return;
-
-    try {
-      const { data: messages, error } = await supabase
-        .from('messenger_messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.warn(`[CloudSync] Error pulling messages for ${conversationId}:`, error);
-        return;
-      }
-
-      if (messages && messages.length > 0) {
-        const remoteMessages: LocalMessage[] = messages.map(item => {
-          const isAi = isAiMessage({ text: item.text_content, id: item.id });
-          return {
-            id: item.id,
-            conversation_id: item.conversation_id,
-            user_id: item.sender_id,
-            sender: (item.sender_id === userId && !isAi) ? 'user' : 'assistant',
-            text: item.text_content || '',
-            attachments_json: null,
-            image_url: item.media_url || null,
-            timestamp: new Date(item.created_at).getTime(),
-            sync_status: 'synced',
-            is_deleted: 0,
-          };
-        });
-        await bulkUpsertRemoteMessages(remoteMessages);
-        notifyTableChanged('messages');
-      }
-    } catch (err) {
-      console.warn(`[CloudSync] Failed to pull messages for conversation ${conversationId}:`, err);
-    }
+  public async pullMessagesForConversation(_conversationId: string, _userId: string): Promise<void> {
+    return;
   }
 }
 

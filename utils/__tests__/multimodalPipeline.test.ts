@@ -4,10 +4,18 @@ import {
   createAvelutAI,
 } from '../../utils/inference';
 import { compressBase64Image } from '../../utils/mediaUpload';
+import { AVELUT_TEXT_MODEL } from '../../lib/textModel';
 
 describe('Multimodal Pipeline and 429 Rate Limiting Tests', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  test('0. All text model inputs normalize to qwen3.7-flash', () => {
+    expect(normalizeAlibabaDashScopeModel('qwen/qwen3.7-flash', true, true)).toBe(AVELUT_TEXT_MODEL);
+    expect(normalizeAlibabaDashScopeModel('qwen3.5-omni-flash', false, false)).toBe(AVELUT_TEXT_MODEL);
+    expect(normalizeAlibabaDashScopeModel('qwen3.8-max')).toBe(AVELUT_TEXT_MODEL);
+    expect(normalizeAlibabaDashScopeModel()).toBe(AVELUT_TEXT_MODEL);
   });
 
   test('1. Image downscaling and base64 compression helper', async () => {
@@ -28,14 +36,12 @@ describe('Multimodal Pipeline and 429 Rate Limiting Tests', () => {
       text: async () => JSON.stringify({ error: 'RATE_LIMIT', message: 'Upstream provider is temporarily overloaded.' }),
     } as Response);
 
-    const appSettings: any = {
-      alibaba_api_key: 'test_alibaba_key',
-    };
+    const appSettings: any = {};
 
     const ai = createAvelutAI(appSettings, null);
 
     const callPromise = ai.models.generateContent({
-      model: 'qwen3.5-omni-flash',
+      model: AVELUT_TEXT_MODEL,
       contents: [{
         role: 'user',
         parts: [
@@ -59,11 +65,11 @@ describe('Multimodal Pipeline and 429 Rate Limiting Tests', () => {
       text: async () => JSON.stringify({ choices: [{ message: { content: 'Calculus Concept Overview' } }] }),
     } as Response);
 
-    const appSettings: any = { alibaba_api_key: 'test_key' };
+    const appSettings: any = {};
     const ai = createAvelutAI(appSettings, null);
 
     const result = await ai.models.generateContent({
-      model: 'qwen3.5-omni-flash',
+      model: AVELUT_TEXT_MODEL,
       contents: [{
         role: 'user',
         parts: [{ text: 'Summarize text prompt into short title: Calculus limits and derivatives' }],

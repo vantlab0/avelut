@@ -9,6 +9,7 @@ import {
   type ToolCall,
 } from '../lib/server/web-search-loop';
 import type { WebSearchResult } from '../lib/server/web-search';
+import { AVELUT_TEXT_MODEL } from '../lib/textModel';
 
 const jsonResponse = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), {
@@ -177,7 +178,7 @@ describe('runWebSearchToolLoop', () => {
   const options = {
     baseUrl: 'https://dashscope.example.com/v1',
     headers: { Authorization: 'Bearer model-key' },
-    model: 'qwen3.5-omni-flash',
+    model: AVELUT_TEXT_MODEL,
     messages: [{ role: 'user', content: 'What happened today?' }],
     timeoutMs: 5000,
   };

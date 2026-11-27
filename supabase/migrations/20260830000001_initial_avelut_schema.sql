@@ -169,32 +169,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. Messenger & Social Collaboration
-CREATE TABLE IF NOT EXISTS public.messenger_conversations (
-    id TEXT PRIMARY KEY,
-    user1_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    user2_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    last_message_preview TEXT,
-    last_message_sender UUID REFERENCES public.profiles(id),
-    last_message_time TIMESTAMPTZ DEFAULT NOW(),
-    unread_user1 INTEGER DEFAULT 0,
-    unread_user2 INTEGER DEFAULT 0,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.messenger_messages (
-    id TEXT PRIMARY KEY,
-    conversation_id TEXT NOT NULL REFERENCES public.messenger_conversations(id) ON DELETE CASCADE,
-    sender_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    recipient_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    message_type TEXT DEFAULT 'text', -- 'text' | 'image' | 'voice' | 'file'
-    text_content TEXT,
-    media_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    is_delivered BOOLEAN DEFAULT FALSE,
-    is_read BOOLEAN DEFAULT FALSE
-);
-
+-- 6. Social Collaboration
 CREATE TABLE IF NOT EXISTS public.study_partners (
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     partner_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -239,8 +214,6 @@ CREATE INDEX IF NOT EXISTS idx_courses_dept ON public.courses(department_id, lev
 CREATE INDEX IF NOT EXISTS idx_user_progress_user ON public.user_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_exam_history_user ON public.exam_history(user_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id, is_read, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_messenger_messages_convo ON public.messenger_messages(conversation_id, created_at ASC);
-CREATE INDEX IF NOT EXISTS idx_messenger_conv_users ON public.messenger_conversations(user1_id, user2_id);
 
 -- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -257,8 +230,6 @@ ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.exam_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messenger_conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messenger_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.study_partners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
@@ -290,29 +261,6 @@ ON public.exam_history FOR ALL TO authenticated USING (auth.uid() = user_id) WIT
 -- Notifications Policies
 CREATE POLICY "Users can view and update their own notifications" 
 ON public.notifications FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
--- Messenger Conversations Policies
-CREATE POLICY "Users can view conversations they belong to" 
-ON public.messenger_conversations FOR SELECT TO authenticated 
-USING (auth.uid() = user1_id OR auth.uid() = user2_id);
-
-CREATE POLICY "Users can create or update their conversations" 
-ON public.messenger_conversations FOR ALL TO authenticated 
-USING (auth.uid() = user1_id OR auth.uid() = user2_id)
-WITH CHECK (auth.uid() = user1_id OR auth.uid() = user2_id);
-
--- Messenger Messages Policies
-CREATE POLICY "Users can view messages sent or received" 
-ON public.messenger_messages FOR SELECT TO authenticated 
-USING (auth.uid() = sender_id OR auth.uid() = recipient_id);
-
-CREATE POLICY "Users can send messages" 
-ON public.messenger_messages FOR INSERT TO authenticated 
-WITH CHECK (auth.uid() = sender_id);
-
-CREATE POLICY "Users can update received messages" 
-ON public.messenger_messages FOR UPDATE TO authenticated 
-USING (auth.uid() = recipient_id OR auth.uid() = sender_id);
 
 -- Study Partners Policies
 CREATE POLICY "Users can manage their study partners" 
@@ -378,7 +326,5 @@ WITH CHECK (bucket_id = 'solution_shares' AND (storage.foldername(name))[1] = au
 
 ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messenger_messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messenger_conversations;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.user_progress;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.subscriptions;

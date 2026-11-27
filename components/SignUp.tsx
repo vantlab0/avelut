@@ -52,7 +52,6 @@ export const SignUp: React.FC<SignUpProps> = ({ onSwitchToLogin }) => {
       if (res.error) {
         addToast(res.error, 'error');
       } else {
-        sessionStorage.setItem('just_signed_up', 'true');
         addToast('Account created successfully!', 'success');
       }
     } catch (err: any) {

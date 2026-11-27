@@ -8,7 +8,6 @@ interface AvelutAIProps {
   userProfile: UserProfile;
   onNavigate?: (tab: string) => void;
   setCustomHeaderConfig?: (config: any) => void;
-  unreadMessagesCount?: number;
   onConversationsUpdate?: (conversations: ChatConversation[]) => void;
   onOpenMenu?: () => void;
   activeConversationId?: string | null;
@@ -20,7 +19,6 @@ export default function AvelutAI({
   userProfile,
   onNavigate,
   setCustomHeaderConfig,
-  unreadMessagesCount = 0,
   onConversationsUpdate,
   onOpenMenu,
   activeConversationId,

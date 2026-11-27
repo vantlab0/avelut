@@ -463,111 +463,8 @@ ALTER TABLE public.live_minute_pools ADD COLUMN IF NOT EXISTS used_minutes INTEG
 ALTER TABLE public.live_minute_pools ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- ==============================================================================
--- 7. MESSENGER, CHATS, NOTIFICATIONS & SOCIAL
+-- 7. NOTIFICATIONS & SOCIAL
 -- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.chats (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    direct_key TEXT,
-    is_group BOOLEAN DEFAULT FALSE,
-    title TEXT,
-    name TEXT,
-    created_by UUID,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.chats ADD COLUMN IF NOT EXISTS direct_key TEXT;
-ALTER TABLE public.chats ADD COLUMN IF NOT EXISTS is_group BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.chats ADD COLUMN IF NOT EXISTS title TEXT;
-ALTER TABLE public.chats ADD COLUMN IF NOT EXISTS name TEXT;
-ALTER TABLE public.chats ADD COLUMN IF NOT EXISTS created_by UUID;
-ALTER TABLE public.chats ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-CREATE UNIQUE INDEX IF NOT EXISTS chats_direct_key_unique ON public.chats (direct_key) WHERE direct_key IS NOT NULL;
-
-CREATE TABLE IF NOT EXISTS public.chat_members (
-    chat_id UUID REFERENCES public.chats(id) ON DELETE CASCADE,
-    user_id UUID,
-    other_user_id UUID,
-    last_message_text TEXT,
-    last_message_at TIMESTAMPTZ,
-    last_message_sender_id UUID,
-    last_message_is_read BOOLEAN DEFAULT FALSE,
-    unread_count INTEGER DEFAULT 0,
-    is_muted BOOLEAN DEFAULT FALSE,
-    is_pinned BOOLEAN DEFAULT FALSE,
-    is_archived BOOLEAN DEFAULT FALSE,
-    joined_at TIMESTAMPTZ DEFAULT NOW(),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (chat_id, user_id)
-);
-
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS other_user_id UUID;
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS last_message_text TEXT;
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS last_message_at TIMESTAMPTZ;
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS last_message_sender_id UUID;
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS last_message_is_read BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS unread_count INTEGER DEFAULT 0;
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS is_muted BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS joined_at TIMESTAMPTZ DEFAULT NOW();
-ALTER TABLE public.chat_members ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
-
-CREATE TABLE IF NOT EXISTS public.messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    chat_id UUID REFERENCES public.chats(id) ON DELETE CASCADE,
-    sender_id UUID,
-    text TEXT DEFAULT '',
-    media_url TEXT,
-    media_type TEXT,
-    reply_to UUID,
-    is_deleted BOOLEAN DEFAULT FALSE,
-    is_delivered BOOLEAN DEFAULT FALSE,
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS text TEXT DEFAULT '';
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS media_url TEXT;
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS media_type TEXT;
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS reply_to UUID;
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS is_delivered BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
-
--- Legacy messenger compatibility tables
-CREATE TABLE IF NOT EXISTS public.messenger_conversations (
-    id TEXT PRIMARY KEY,
-    participant_ids TEXT[] NOT NULL DEFAULT '{}',
-    user1_id UUID,
-    user2_id UUID,
-    last_message_preview TEXT,
-    last_message_sender UUID,
-    last_message_time TIMESTAMPTZ DEFAULT NOW(),
-    unread_user1 INTEGER DEFAULT 0,
-    unread_user2 INTEGER DEFAULT 0,
-    last_message JSONB,
-    unread_counts JSONB DEFAULT '{}'::jsonb,
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.messenger_messages (
-    id TEXT PRIMARY KEY,
-    conversation_id TEXT,
-    sender_id TEXT NOT NULL,
-    recipient_id UUID,
-    message_type TEXT DEFAULT 'text',
-    text_content TEXT,
-    text TEXT,
-    media_url TEXT,
-    timestamp BIGINT,
-    read_by JSONB DEFAULT '{}'::jsonb,
-    is_delivered BOOLEAN DEFAULT FALSE,
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS public.study_partners (
     id UUID DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
@@ -1114,115 +1011,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
--- Get or Create Direct Chat
-CREATE OR REPLACE FUNCTION public.get_or_create_direct_chat(p_other_user_id uuid)
-RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_user_id uuid := auth.uid();
-    v_chat_id uuid;
-    v_direct_key text;
-BEGIN
-    IF v_user_id IS NULL THEN
-        RAISE EXCEPTION 'Authentication is required';
-    END IF;
-
-    IF p_other_user_id IS NULL OR p_other_user_id = v_user_id THEN
-        RAISE EXCEPTION 'A different recipient is required';
-    END IF;
-
-    v_direct_key := LEAST(v_user_id::text, p_other_user_id::text) || ':' || GREATEST(v_user_id::text, p_other_user_id::text);
-
-    SELECT id INTO v_chat_id
-    FROM public.chats
-    WHERE direct_key = v_direct_key;
-
-    IF v_chat_id IS NULL THEN
-        INSERT INTO public.chats (direct_key)
-        VALUES (v_direct_key)
-        ON CONFLICT (direct_key) WHERE direct_key IS NOT NULL DO UPDATE
-        SET direct_key = EXCLUDED.direct_key
-        RETURNING id INTO v_chat_id;
-    END IF;
-
-    INSERT INTO public.chat_members (chat_id, user_id, other_user_id)
-    VALUES
-        (v_chat_id, v_user_id, p_other_user_id),
-        (v_chat_id, p_other_user_id, v_user_id)
-    ON CONFLICT (chat_id, user_id) DO UPDATE
-    SET other_user_id = EXCLUDED.other_user_id;
-
-    RETURN v_chat_id;
-END;
-$$;
-
--- Send Chat Message
-CREATE OR REPLACE FUNCTION public.send_chat_message(
-    p_chat_id uuid,
-    p_message_id uuid,
-    p_sender_id uuid,
-    p_text text,
-    p_media_url text,
-    p_media_type text,
-    p_reply_to uuid,
-    p_created_at timestamptz
-)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_created_at timestamptz := COALESCE(p_created_at, NOW());
-    v_summary text;
-    v_inserted_message_id uuid;
-BEGIN
-    IF auth.uid() IS NULL OR auth.uid() <> p_sender_id THEN
-        RAISE EXCEPTION 'Sender must be the authenticated user';
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM public.chat_members
-        WHERE chat_id = p_chat_id AND user_id = p_sender_id
-    ) THEN
-        RAISE EXCEPTION 'Sender is not a chat member';
-    END IF;
-
-    INSERT INTO public.messages (
-        id, chat_id, sender_id, text, media_url, media_type, reply_to, created_at
-    )
-    VALUES (
-        p_message_id, p_chat_id, p_sender_id, COALESCE(p_text, ''), p_media_url, p_media_type, p_reply_to, v_created_at
-    )
-    ON CONFLICT (id) DO NOTHING
-    RETURNING id INTO v_inserted_message_id;
-
-    IF v_inserted_message_id IS NULL THEN
-        RETURN;
-    END IF;
-
-    v_summary := CASE
-        WHEN p_media_type = 'voice' THEN 'Voice message'
-        WHEN p_media_type = 'image' THEN 'Image file'
-        WHEN p_media_type = 'file' THEN 'Document file'
-        WHEN COALESCE(p_text, '') <> '' THEN p_text
-        ELSE 'Media'
-    END;
-
-    UPDATE public.chat_members
-    SET
-        last_message_text = v_summary,
-        last_message_at = v_created_at,
-        last_message_sender_id = p_sender_id,
-        last_message_is_read = (user_id = p_sender_id),
-        unread_count = CASE WHEN user_id = p_sender_id THEN 0 ELSE unread_count + 1 END
-    WHERE chat_id = p_chat_id;
-END;
-$$;
-
 -- Claim Lesson Prep Job
 CREATE OR REPLACE FUNCTION public.claim_lesson_prep_job(
     p_worker_id text,
@@ -1292,8 +1080,6 @@ CREATE INDEX IF NOT EXISTS idx_user_progress_topic ON public.user_progress(topic
 CREATE INDEX IF NOT EXISTS idx_exam_history_user ON public.exam_history(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_usage_records_user ON public.usage_records(user_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_messages_chat_created ON public.messages(chat_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_chat_members_user ON public.chat_members(user_id, last_message_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON public.notifications(user_id, is_read, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_study_partners_pair ON public.study_partners(user_id, partner_id);
 
@@ -1320,9 +1106,6 @@ ALTER TABLE public.user_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.exam_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usage_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chat_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.study_partners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_blocks ENABLE ROW LEVEL SECURITY;
@@ -1395,36 +1178,6 @@ DROP POLICY IF EXISTS usage_records_own ON public.usage_records;
 CREATE POLICY usage_records_own ON public.usage_records FOR ALL USING (auth.uid() = user_id);
 DROP POLICY IF EXISTS subscriptions_own ON public.subscriptions;
 CREATE POLICY subscriptions_own ON public.subscriptions FOR ALL USING (auth.uid() = user_id);
-
--- Chats, Chat Members & Messages
-DROP POLICY IF EXISTS chats_select ON public.chats;
-CREATE POLICY chats_select ON public.chats FOR SELECT
-    USING (EXISTS (SELECT 1 FROM public.chat_members WHERE chat_id = chats.id AND user_id = auth.uid()));
-
-DROP POLICY IF EXISTS chats_insert ON public.chats;
-CREATE POLICY chats_insert ON public.chats FOR INSERT WITH CHECK (true);
-
-DROP POLICY IF EXISTS chat_members_select ON public.chat_members;
-CREATE POLICY chat_members_select ON public.chat_members FOR SELECT USING (user_id = auth.uid());
-
-DROP POLICY IF EXISTS chat_members_update ON public.chat_members;
-CREATE POLICY chat_members_update ON public.chat_members FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS chat_members_delete ON public.chat_members;
-CREATE POLICY chat_members_delete ON public.chat_members FOR DELETE USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS chat_members_insert ON public.chat_members;
-CREATE POLICY chat_members_insert ON public.chat_members FOR INSERT WITH CHECK (true);
-
-DROP POLICY IF EXISTS messages_select ON public.messages;
-CREATE POLICY messages_select ON public.messages FOR SELECT
-    USING (EXISTS (SELECT 1 FROM public.chat_members WHERE chat_id = messages.chat_id AND user_id = auth.uid()));
-
-DROP POLICY IF EXISTS messages_insert ON public.messages;
-CREATE POLICY messages_insert ON public.messages FOR INSERT WITH CHECK (true);
-
-DROP POLICY IF EXISTS messages_update ON public.messages;
-CREATE POLICY messages_update ON public.messages FOR UPDATE USING (auth.uid() = sender_id);
 
 -- Study Partners & Notifications
 DROP POLICY IF EXISTS study_partners_all ON public.study_partners;
@@ -1533,8 +1286,6 @@ GRANT EXECUTE ON FUNCTION public.increment_user_credits(text, int, text) TO auth
 GRANT EXECUTE ON FUNCTION public.consume_live_tutorial_minutes(text, text, int, int) TO authenticated, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.increment_user_xp(text, int) TO authenticated, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.update_daily_streak(text) TO authenticated, anon, service_role;
-GRANT EXECUTE ON FUNCTION public.get_or_create_direct_chat(uuid) TO authenticated, anon, service_role;
-GRANT EXECUTE ON FUNCTION public.send_chat_message(uuid, uuid, uuid, text, text, text, uuid, timestamptz) TO authenticated, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.claim_lesson_prep_job(text, int) TO authenticated, anon, service_role;
 
 -- ==============================================================================
@@ -1551,9 +1302,6 @@ DO $$
 DECLARE
     tbl text;
     tables text[] := ARRAY[
-        'messages', 
-        'chats', 
-        'chat_members', 
         'notifications', 
         'study_partners', 
         'topic_teaching_structures', 
@@ -1574,7 +1322,7 @@ BEGIN
 END $$;
 
 -- ==============================================================================
--- 15. RECORD ALL 13 MIGRATIONS AS APPLIED
+-- 15. RECORD APPLIED MIGRATIONS
 -- ==============================================================================
 INSERT INTO public.schema_migrations (id, applied_at, success, details) VALUES
     ('20260830000001_initial_avelut_schema.sql', NOW(), true, 'Consolidated full schema execution'),
@@ -1585,7 +1333,6 @@ INSERT INTO public.schema_migrations (id, applied_at, success, details) VALUES
     ('20260906_fix_notifications_and_study_partners_rls.sql', NOW(), true, 'Consolidated full schema execution'),
     ('20260908_create_topic_teaching_structures_and_views.sql', NOW(), true, 'Consolidated full schema execution'),
     ('20260908_fix_study_partners_upsert_rls.sql', NOW(), true, 'Consolidated full schema execution'),
-    ('20260909_fix_messenger_delivery.sql', NOW(), true, 'Consolidated full schema execution'),
     ('20260911_lesson_prep_cloud.sql', NOW(), true, 'Consolidated full schema execution'),
     ('20260912_live_tutorial_redesign.sql', NOW(), true, 'Consolidated full schema execution'),
     ('20260913_playground_tables.sql', NOW(), true, 'Consolidated full schema execution'),

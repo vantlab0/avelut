@@ -5,7 +5,7 @@ const testimonials = [
     {
         id: 1,
         name: "Sarah Jenkins",
-        university: "Stanford University",
+        school: "Lincoln High School",
         text: "Avelut completely changed how I study for Organic Chemistry. The Visual Solver broke down complex reaction mechanisms that I had been struggling with for weeks.",
         rating: 5,
         avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80"
@@ -13,26 +13,18 @@ const testimonials = [
     {
         id: 2,
         name: "David Chen",
-        university: "MIT",
-        text: "The context-aware AI tutor is mind-blowing. I uploaded my 800-page physics textbook, and it instantly knew how to explain concepts using the exact terminology my professor uses.",
+        school: "Northside Secondary School",
+        text: "The context-aware AI tutor is mind-blowing. I uploaded my physics textbook, and it instantly knew how to explain concepts using the exact terminology my teacher uses.",
         rating: 5,
         avatar: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=150&q=80"
     },
     {
         id: 3,
         name: "Emily Rodriguez",
-        university: "NYU",
+        school: "Riverside High School",
         text: "I used to spend hours searching through PDFs for specific answers. Now, Avelut's study guide finds it in seconds and tests my knowledge before the exam.",
         rating: 5,
         avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80"
-    },
-    {
-        id: 4,
-        name: "Michael Thompson",
-        university: "University of Michigan",
-        text: "The peer messenger integration with the AI is genius. My study group can chat about a problem, and pull the AI into the conversation to settle debates.",
-        rating: 5,
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80"
     }
 ];
 
@@ -91,7 +83,7 @@ export const Testimonials: React.FC = () => {
                                             />
                                             <div className="text-left">
                                                 <div className="font-bold text-white">{t.name}</div>
-                                                <div className="text-amber-400 text-sm">{t.university}</div>
+                                                <div className="text-amber-400 text-sm">{t.school}</div>
                                             </div>
                                         </div>
                                     </div>

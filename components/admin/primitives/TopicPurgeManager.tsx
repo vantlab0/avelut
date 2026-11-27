@@ -7,6 +7,7 @@ import { MergeReviewModal, SuggestedMerge } from './MergeReviewModal';
 import { ScopeSelectionModal } from './ScopeSelectionModal';
 import { Sparkles, Loader2, Layers } from 'lucide-react';
 import type { Course, Topic } from '../../../types';
+import { AVELUT_TEXT_MODEL } from '../../../lib/textModel';
 
 interface ExtendedTopic extends Topic {
     estimated_hours?: string;
@@ -36,7 +37,6 @@ export const TopicPurgeManager: React.FC<TopicPurgeManagerProps> = ({
     const [approvedMergesToExecute, setApprovedMergesToExecute] = useState<SuggestedMerge[]>([]);
     const [isExecutingMerge, setIsExecutingMerge] = useState(false);
 
-    const aiApiKey = appSettings.alibaba_api_key?.trim() || '';
     const aiClient = useRef<any>(null);
 
     if (!aiClient.current) {
@@ -81,7 +81,7 @@ Rules:
   ]
 }`;
 
-            const modelName = appSettings.alibaba_model || 'qwen3.5-omni-flash';
+            const modelName = AVELUT_TEXT_MODEL;
             const response = await aiClient.current.models.generateContent({
                 model: modelName,
                 contents: [

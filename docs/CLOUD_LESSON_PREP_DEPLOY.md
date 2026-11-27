@@ -45,7 +45,7 @@ npx supabase login
 npx supabase link --project-ref eywpksapztzbnthlgfhd
 
 npx supabase secrets set \
-  OPENROUTER_API_KEY="<your key>" \
+  ALIBABA_API_KEY="<fallback key>" \
   SPEECH_API_URL="https://<your-vercel-domain>/api/speech"
 
 npx supabase functions deploy lesson-prep-enqueue
@@ -54,6 +54,11 @@ npx supabase functions deploy lesson-feedback-speech
 ```
 
 Set `SUPABASE_SERVICE_ROLE_KEY` in Edge secrets from Dashboard → Settings → API (do not commit it).
+The Alibaba key is read first from the service-role-only `api_keys` table (apply
+`supabase/api_keys_table.sql`, provider `alibaba`, `is_active = true`). Edge
+functions use `ALIBABA_API_KEY` only when that row is missing or the lookup
+fails, or when the service-role env vars are unavailable. All text generation
+uses the single canonical model `qwen3.7-flash`.
 
 ## Step 4 — Optional cron
 

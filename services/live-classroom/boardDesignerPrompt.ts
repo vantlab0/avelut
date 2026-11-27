@@ -1,5 +1,5 @@
 export const BOARD_DESIGNER_SYSTEM_PROMPT = `
-You are the board designer for a live university lecture. You receive a
+You are the board designer for a live secondary-school lesson. You receive a
 semantic request and return ONLY valid JSON in this exact shape:
 
 {

@@ -1,5 +1,5 @@
 import type { AppSettings, UserProfile } from '../types';
-import { getAlibabaApiKey } from './appSettings';
+import { AVELUT_TEXT_MODEL, normalizeTextModel } from '../lib/textModel';
 
 /**
  * Universal JSON Schema Type Enum (replaces @google/genai Type)
@@ -408,10 +408,9 @@ export interface AvelutAIOptions {
  * endpoint from env/settings and the app proxy over the public DashScope path.
  */
 function resolveAlibabaEndpoints(
-  appSettings: AppSettings,
-  apiKey: string,
+  _appSettings: AppSettings,
   isNative: boolean,
-  options?: AvelutAIOptions
+  _options?: AvelutAIOptions
 ): string[] {
   // Always route via the fast, server-side alibaba-chat proxy endpoint.
   // This completely eliminates CORS preflight blocks and client 401 unauthorized errors,
@@ -428,36 +427,17 @@ function resolveAlibabaEndpoints(
   ];
 }
 
-export function normalizeAlibabaDashScopeModel(model?: string, hasImage: boolean = false, hasDocument: boolean = false): string {
-  // PDF understanding requires qwen3.8-max / qwen3.8-flash / qwen3.8-27b (not omni).
-  if (hasDocument) {
-    const cleanDoc = (model || '')
-      .replace(/^qwen\//i, '')
-      .replace(/^alibaba\//i, '')
-      .trim()
-      .toLowerCase();
-    if (cleanDoc.includes('qwen3.8-max') || cleanDoc === 'qwen3.8-flash' || cleanDoc.includes('qwen3.8-27b')) {
-      return cleanDoc.includes('max') ? 'qwen3.8-max' : (cleanDoc.includes('27b') ? 'qwen3.8-27b' : 'qwen3.8-flash');
-    }
-    return 'qwen3.8-flash';
-  }
-  // Always prefer requested / default Omni model. Do NOT force qwen-vl-plus
-  // (that caused "image format is illegal" for PDFs sent as image_url).
-  const clean = (model || '')
-    .replace(/^qwen\//i, '')
-    .replace(/^alibaba\//i, '')
-    .replace(/^google\//i, '')
-    .replace(/^openai\//i, '')
-    .replace(/^anthropic\//i, '')
-    .replace(/^meta-llama\//i, '')
-    .trim();
-  if (!clean || !clean.toLowerCase().startsWith('qwen')) {
-    return 'qwen3.5-omni-flash';
-  }
-  if (clean === 'qwen-vl-plus' || clean === 'qwen-vl-max' || clean === 'qwen3.7-flash') {
-    return 'qwen3.5-omni-flash';
-  }
-  return clean;
+/**
+ * Every text request resolves to exactly one model. Caller-supplied models
+ * (including the legacy `qwen/qwen3.7-flash` alias) are accepted but ignored;
+ * document/image requests use the same text model as everything else.
+ */
+export function normalizeAlibabaDashScopeModel(
+  _model?: string,
+  _hasImage: boolean = false,
+  _hasDocument: boolean = false
+): typeof AVELUT_TEXT_MODEL {
+  return normalizeTextModel(_model);
 }
 
 /**
@@ -484,9 +464,8 @@ async function callAlibabaQwen(
   appSettings: AppSettings,
   options?: AvelutAIOptions
 ): Promise<any> {
-  const apiKey = getAlibabaApiKey(appSettings);
-  const { messages, hasImage, hasDocument } = paramsToChatMessages(params);
-  const primaryModel = normalizeAlibabaDashScopeModel(params?.model || appSettings?.alibaba_model || 'qwen3.5-omni-flash', hasImage, hasDocument);
+  const { messages, hasDocument } = paramsToChatMessages(params);
+  const primaryModel = normalizeAlibabaDashScopeModel(params?.model, false, hasDocument);
   const webSearchEnabled = params?.config?.webSearch === true;
   const candidateModels = [primaryModel];
 
@@ -495,7 +474,7 @@ async function callAlibabaQwen(
     window.location.protocol === 'file:'
   );
 
-  const endpoints = resolveAlibabaEndpoints(appSettings, apiKey, isNative, options);
+  const endpoints = resolveAlibabaEndpoints(appSettings, isNative, options);
 
   let lastError: Error | null = null;
   let isRateLimited = false;
@@ -529,13 +508,12 @@ async function callAlibabaQwen(
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         if (callerSignal?.aborted) return { text: () => '', candidates: [] };
         try {
+          // The DashScope key is resolved server-side from Supabase api_keys
+          // (or server env); the browser never sends it in a header.
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
             'X-DashScope-WorkSpace': 'ws-o3v6mh0i8y9tqdfx',
           };
-          if (apiKey) {
-            headers['Authorization'] = `Bearer ${apiKey}`;
-          }
 
           // PDF understanding can take up to ~300s for first token
           const fetchController = new AbortController();
@@ -692,9 +670,8 @@ async function* callAlibabaQwenStream(
   appSettings: AppSettings,
   options?: AvelutAIOptions
 ): AsyncGenerator<any, void, unknown> {
-  const apiKey = getAlibabaApiKey(appSettings);
   const { messages, hasImage } = paramsToChatMessages(params);
-  const model = normalizeAlibabaDashScopeModel(params?.model || appSettings?.alibaba_model || 'qwen3.5-omni-flash', hasImage);
+  const model = normalizeAlibabaDashScopeModel(params?.model, hasImage);
   const webSearchEnabled = params?.config?.webSearch === true;
 
   const isNative = typeof window !== 'undefined' && (
@@ -702,7 +679,7 @@ async function* callAlibabaQwenStream(
     window.location.protocol === 'file:'
   );
 
-  const endpoints = resolveAlibabaEndpoints(appSettings, apiKey, isNative, options);
+  const endpoints = resolveAlibabaEndpoints(appSettings, isNative, options);
 
   const bodyPayload: any = {
     model,
@@ -732,14 +709,12 @@ async function* callAlibabaQwenStream(
   for (const endpoint of endpoints) {
     if (callerSignal?.aborted) return;
     try {
+      // No client-side Authorization header: key stays server-side.
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
         'X-DashScope-WorkSpace': 'ws-o3v6mh0i8y9tqdfx',
       };
-      if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey}`;
-      }
 
       const fetchController = new AbortController();
       const onCallerAbort = () => fetchController.abort();
@@ -889,11 +864,13 @@ export const createAvelutAI = (
   userProfile?: UserProfile | null,
   options?: AvelutAIOptions
 ): any => {
+  // Single chokepoint for every text call: ignore caller/legacy model names
+  // and always send the one canonical model to the server proxy.
   const normalizeParams = (params: any) => {
     if (typeof params === 'string') {
-      return { contents: params };
+      return { contents: params, model: AVELUT_TEXT_MODEL };
     }
-    return params;
+    return { ...(params || {}), model: AVELUT_TEXT_MODEL };
   };
 
   const generateContent = async (params: any) => {

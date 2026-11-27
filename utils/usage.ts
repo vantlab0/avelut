@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import type { UserProfile, AppSettings } from '../types';
 import { DEFAULT_USAGE_SETTINGS, DEFAULT_APP_SETTINGS } from './appSettings';
+import { AVELUT_TEXT_MODEL, normalizeTextModel } from '../lib/textModel';
 import { saveLocalCredits, recordLocalCreditDeduction } from '../services/creditsStorageService';
 import { notifyUserCreditsUpdated } from '../lib/supabaseRealtimeDb';
 
@@ -198,22 +199,16 @@ export const getFeatureCost = (
   return costs?.[feature] ?? defaults?.[feature] ?? (feature === 'live_tutorial_question' ? 50 : 1);
 };
 
+/**
+ * Every feature resolves to the same canonical text model. The feature and
+ * settings arguments remain for call-site compatibility but cannot select a
+ * different model (including the legacy `qwen/qwen3.7-flash` alias).
+ */
 export const getFeatureModel = (
-  feature: 'visual_solve' | 'chat_interaction' | 'flashcard_generation' | 'study_guide_extraction' | 'ai_quiz_generation' | 'study_guide_lesson' | 'title_generation',
-  appSettings?: AppSettings | null
-): string => {
-  const model = appSettings?.usage_settings?.feature_models?.[feature] || appSettings?.alibaba_model || DEFAULT_APP_SETTINGS.alibaba_model || 'qwen3.5-omni-flash';
-  const clean = (model || 'qwen3.5-omni-flash')
-    .replace(/^qwen\//i, '')
-    .replace(/^alibaba\//i, '')
-    .replace(/^google\//i, '')
-    .replace(/^openai\//i, '')
-    .replace(/^anthropic\//i, '')
-    .trim();
-  if (!clean.toLowerCase().startsWith('qwen')) {
-    return 'qwen3.5-omni-flash';
-  }
-  return clean;
+  _feature: 'visual_solve' | 'chat_interaction' | 'flashcard_generation' | 'study_guide_extraction' | 'ai_quiz_generation' | 'study_guide_lesson' | 'title_generation',
+  _appSettings?: AppSettings | null
+): typeof AVELUT_TEXT_MODEL => {
+  return normalizeTextModel(_appSettings?.usage_settings?.feature_models?.[_feature] as string | undefined);
 };
 
 export const AI_COSTS = {

@@ -3,19 +3,16 @@ import { db, auth, ref as dbRef, push, update, set } from '@/lib/backend';
 import { Type, createAvelutAI, getResponseText } from '../../../utils/inference';
 import { useToast } from '../../../hooks/useToast';
 import type { UserProfile } from '../../../types';
+import { AVELUT_TEXT_MODEL } from '../../../lib/textModel';
 
 interface NotificationsViewProps {
     allUsersList: UserProfile[];
-    aiApiKey?: string;
-    aiModel?: string;
     refreshSentNotifications?: () => void;
 }
 
-export const NotificationsView: React.FC<NotificationsViewProps> = ({ 
-    allUsersList, 
-    aiApiKey,
-    aiModel = 'qwen/qwen3.7-flash',
-    refreshSentNotifications 
+export const NotificationsView: React.FC<NotificationsViewProps> = ({
+    allUsersList,
+    refreshSentNotifications
 }) => {
     const { addToast } = useToast();
     const [notificationAudience, setNotificationAudience] = useState<'general' | 'personal'>('general');
@@ -23,16 +20,15 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
     const [selectedRecipientId, setSelectedRecipientId] = useState('');
     const [announcementTitle, setAnnouncementTitle] = useState('');
     const [announcementMessage, setAnnouncementMessage] = useState('');
-    const [notificationType, setNotificationType] = useState<'study_update' | 'exam_reminder' | 'welcome' | 'study_reminder' | 'study_partner_request' | 'messenger' | 'app_update' | 'general_info' | 'personal'>('general_info');
+    const [notificationType, setNotificationType] = useState<'study_update' | 'exam_reminder' | 'welcome' | 'study_reminder' | 'study_partner_request' | 'app_update' | 'general_info' | 'personal'>('general_info');
     const [notificationRoute, setNotificationRoute] = useState('dashboard');
     const [isSendingPush, setIsSendingPush] = useState(false);
 
-    const ai = createAvelutAI({ alibaba_api_key: aiApiKey, alibaba_model: aiModel } as any);
+    const ai = createAvelutAI({ alibaba_model: AVELUT_TEXT_MODEL } as any);
 
     const notificationRoutes = [
         { value: 'dashboard', label: 'Dashboard' },
         { value: 'study_guide', label: 'Study Guide' },
-        { value: 'messenger', label: 'Messenger' },
         { value: 'study_partners', label: 'Study Partners' },
         { value: 'leaderboard', label: 'Leaderboard' },
         { value: 'settings', label: 'Settings' },
@@ -44,7 +40,6 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
         { value: 'study_update', label: 'Study Update' },
         { value: 'study_reminder', label: 'Study Reminder' },
         { value: 'exam_reminder', label: 'Exam Reminder' },
-        { value: 'messenger', label: 'Messenger' },
         { value: 'study_partner_request', label: 'Study Partner Request' },
         { value: 'app_update', label: 'App Update' },
         { value: 'welcome', label: 'Welcome' },
@@ -165,8 +160,8 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
     };
 
     const handleSuggestAnnouncement = async () => {
-        if (!ai || !aiModel) {
-            addToast("AI features are unavailable because the Avelut AI API key or model is not configured in App Controls.", "error");
+        if (!ai) {
+            addToast("AI features are unavailable because the server-side AI configuration is missing.", "error");
             return;
         }
         setIsSendingPush(true);
@@ -174,7 +169,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
             const prompt = `Create a short notification title (max 8 words) and a concise notification message (max 200 characters) for a ${notificationType.replace('_', ' ')} notification to students. Return only a JSON object with keys "title" and "message".`;
 
             const response = await ai.models.generateContent({
-                model: aiModel,
+                model: AVELUT_TEXT_MODEL,
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 config: {
                     responseMimeType: "application/json",

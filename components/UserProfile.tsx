@@ -1,11 +1,9 @@
 import { db, equalTo, get, orderByChild, query, ref as dbRef, update, type AuthUser } from '@/lib/backend';
 import React, { useState, useEffect, useRef } from 'react';
 import type { UserProfile } from '../types';
-import { readCachedJson, writeCachedJson } from '../utils/cache';
 import { useToast } from '../hooks/useToast';
 import { Avatar } from './Avatar';
 import { VerificationBadge } from './VerificationBadge';
-import { SchoolHierarchySelector } from './SchoolHierarchySelector';
 import {
   UploadError,
   classifyUploadError,
@@ -25,6 +23,8 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
   const [newDisplayName, setNewDisplayName] = useState(userProfile.display_name);
   const [bio, setBio] = useState(userProfile.bio || '');
   const [contactDetails, setContactDetails] = useState(userProfile.contact_details || '');
+  // Keep the full settings object so legacy hierarchy keys survive updates,
+  // but only expose the contact visibility toggle to students.
   const [privacySettings, setPrivacySettings] = useState(userProfile.privacy_settings || {
     public_contact: true,
     public_school: true,
@@ -33,33 +33,6 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
   });
   const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{type: 'avatar' | 'cover' | null, progress: number}>({type: null, progress: 0});
-  
-  const [departmentName, setDepartmentName] = useState<string>(() => {
-    const cached = readCachedJson<any>(`avelut_dept_data_${userProfile.department_id}`, null);
-    return cached?.name || cached?.department_name || (userProfile.department_id ? userProfile.department_id.replace(/_/g, ' ') : '');
-  });
-  const [isDepartmentLoading, setIsDepartmentLoading] = useState(() => !departmentName);
-  
-  const [levels, setLevels] = useState<string[]>(() => {
-    const cached = readCachedJson<any>(`avelut_dept_data_${userProfile.department_id}`, null);
-    if (!cached?.levels) return [];
-    return Array.isArray(cached.levels) ? cached.levels : Object.keys(cached.levels);
-  });
-  const [isLevelsLoading, setIsLevelsLoading] = useState(() => levels.length === 0);
-  
-  const [isEditingAcademics, setIsEditingAcademics] = useState(false);
-  const [editSchoolId, setEditSchoolId] = useState(userProfile.school_id || '');
-  const [editCollegeId, setEditCollegeId] = useState(userProfile.college_id || '');
-  const [editDepartmentId, setEditDepartmentId] = useState(userProfile.department_id || '');
-  const [editLevel, setEditLevel] = useState(userProfile.level || '100');
-
-  const startEditingAcademics = () => {
-    setEditSchoolId(userProfile.school_id || '');
-    setEditCollegeId(userProfile.college_id || '');
-    setEditDepartmentId(userProfile.department_id || '');
-    setEditLevel(userProfile.level || '100');
-    setIsEditingAcademics(true);
-  };
 
   const [referralCodeInput, setReferralCodeInput] = useState('');
   const [isSubmittingReferral, setIsSubmittingReferral] = useState(false);
@@ -75,48 +48,6 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
       onProfileUpdate({ referral_code: newCode, referrals_count: 0 });
     }
   }, [user, userProfile.referral_code, onProfileUpdate]);
-
-  useEffect(() => {
-    const fetchDepartmentData = async () => {
-      if (!userProfile.school_id || !userProfile.college_id || !userProfile.department_id) {
-        setDepartmentName('Not Set');
-        setIsDepartmentLoading(false);
-        setIsLevelsLoading(false);
-        return;
-      }
-      if (!departmentName) setIsDepartmentLoading(true);
-      if (levels.length === 0) setIsLevelsLoading(true);
-      try {
-        const snapshot = await get(dbRef(db, `schools_data/${userProfile.school_id}/colleges/${userProfile.college_id}/departments/${userProfile.department_id}`));
-        const departmentData = snapshot.val();
-
-        if (departmentData) {
-          setDepartmentName(departmentData.name || departmentData.department_name || userProfile.department_id.replace(/_/g, ' '));
-          
-          let fetchedLevels: string[] = [];
-          if (Array.isArray(departmentData.levels)) {
-              fetchedLevels = departmentData.levels;
-          } else if (departmentData.levels && typeof departmentData.levels === 'object') {
-              fetchedLevels = Object.keys(departmentData.levels);
-          }
-          setLevels(fetchedLevels);
-        } else {
-          setDepartmentName(userProfile.department_id.replace(/_/g, ' '));
-          setLevels([]);
-        }
-      } catch (error) {
-        console.error("Failed to fetch department data:", error);
-        setDepartmentName(userProfile.department_id.replace(/_/g, ' '));
-        setLevels([]);
-        addToast("Could not load department details.", "error");
-      } finally {
-        setIsDepartmentLoading(false);
-        setIsLevelsLoading(false);
-      }
-    };
-
-    fetchDepartmentData();
-  }, [userProfile.school_id, userProfile.college_id, userProfile.department_id, addToast]);
 
   const handleSaveName = async () => {
     if (newDisplayName.trim() === '' || newDisplayName.trim() === userProfile.display_name) {
@@ -203,36 +134,6 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
       addToast('An error occurred. Please try again.', 'error');
     }
     setIsSubmittingReferral(false);
-  };
-
-  const handleLevelChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newLevel = e.target.value;
-    setIsSaving(true);
-    const result = await onProfileUpdate({ level: newLevel });
-    if (result.success) {
-      addToast('Level updated successfully!', 'success');
-    } else {
-      addToast(result.error || "Failed to save new level.", 'error');
-      e.target.value = userProfile.level || '';
-    }
-    setIsSaving(false);
-  };
-
-  const handleSaveAcademics = async () => {
-      setIsSaving(true);
-      const result = await onProfileUpdate({
-          school_id: editSchoolId,
-          college_id: editCollegeId,
-          department_id: editDepartmentId,
-          level: editLevel
-      });
-      if (result.success) {
-          addToast('Academic details updated successfully!', 'success');
-          setIsEditingAcademics(false);
-      } else {
-          addToast(result.error || "Failed to save academic details.", 'error');
-      }
-      setIsSaving(false);
   };
 
   const compressImage = (blob: Blob, maxWidth: number, maxHeight: number, quality: number = 0.8): Promise<Blob> => {
@@ -476,120 +377,8 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Left Column: Academic Profile & About */}
+                {/* Left Column: About & Contact */}
                 <div className="lg:col-span-2 space-y-4">
-                    {/* Academic Profile Card */}
-                    <div className="bg-white dark:bg-[#0A0A0A] p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-white/10">
-                        <div className="flex justify-between items-center mb-3">
-                            <div className="flex items-center gap-2">
-                                <i className="bi bi-mortarboard text-[#0066FF] text-base"></i>
-                                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Academic Details</h3>
-                            </div>
-                            {!isEditingAcademics ? (
-                                <button
-                                    onClick={startEditingAcademics}
-                                    className="px-3 py-1 rounded-lg text-xs font-bold text-[#0066FF] hover:bg-blue-50 dark:hover:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 transition cursor-pointer flex items-center gap-1"
-                                >
-                                    <i className="bi bi-pencil-square text-xs"></i>
-                                    <span>Edit Academic Info</span>
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={() => setIsEditingAcademics(false)}
-                                    className="px-3 py-1 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 border border-slate-200 dark:border-white/10 transition cursor-pointer"
-                                >
-                                    Cancel
-                                </button>
-                            )}
-                        </div>
-
-                        {isEditingAcademics ? (
-                            <div className="space-y-4 pt-1">
-                                <SchoolHierarchySelector
-                                    schoolId={editSchoolId}
-                                    setSchoolId={setEditSchoolId}
-                                    collegeId={editCollegeId}
-                                    setCollegeId={setEditCollegeId}
-                                    departmentId={editDepartmentId}
-                                    setDepartmentId={setEditDepartmentId}
-                                />
-
-                                {/* Academic Level Picker */}
-                                <div className="space-y-1.5 pt-1">
-                                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                        <i className="bi bi-layers text-[#0066FF]"></i>
-                                        <span>Select Academic Level</span>
-                                    </label>
-                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
-                                        {['100', '200', '300', '400', '500', '600', 'Postgraduate'].map(lvl => (
-                                            <button
-                                                key={lvl}
-                                                type="button"
-                                                onClick={() => setEditLevel(lvl)}
-                                                className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer text-center ${
-                                                    editLevel === lvl
-                                                        ? 'bg-[#0066FF] text-white border-[#0066FF]'
-                                                        : 'bg-slate-50 dark:bg-white/[0.04] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-slate-300'
-                                                }`}
-                                            >
-                                                {lvl === 'Postgraduate' ? 'Postgraduate' : `${lvl} Level`}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-2 justify-end pt-2 border-t border-slate-100 dark:border-white/5">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsEditingAcademics(false)}
-                                        disabled={isSaving}
-                                        className="px-3.5 py-1.5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-white/10 transition cursor-pointer"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button 
-                                        type="button"
-                                        onClick={handleSaveAcademics}
-                                        disabled={isSaving || !editSchoolId || !editCollegeId || !editDepartmentId}
-                                        className="px-4 py-1.5 bg-[#0066FF] hover:bg-[#0055D4] text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
-                                    >
-                                        {isSaving ? 'Saving...' : 'Save All Academic Details'}
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                <div className="p-3 bg-slate-50/80 dark:bg-white/[0.02] rounded-xl border border-slate-200/60 dark:border-white/5">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Institution / School</p>
-                                    <p className="text-slate-900 dark:text-white font-bold text-xs mt-0.5 capitalize">
-                                        {userProfile.school_id ? userProfile.school_id.replace(/_/g, ' ') : 'Not set'}
-                                    </p>
-                                </div>
-
-                                <div className="p-3 bg-slate-50/80 dark:bg-white/[0.02] rounded-xl border border-slate-200/60 dark:border-white/5">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faculty / College</p>
-                                    <p className="text-slate-900 dark:text-white font-bold text-xs mt-0.5 capitalize">
-                                        {userProfile.college_id ? userProfile.college_id.replace(/_/g, ' ') : 'Not set'}
-                                    </p>
-                                </div>
-
-                                <div className="p-3 bg-slate-50/80 dark:bg-white/[0.02] rounded-xl border border-slate-200/60 dark:border-white/5">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department</p>
-                                    <p className="text-slate-900 dark:text-white font-bold text-xs mt-0.5 capitalize">
-                                        {isDepartmentLoading ? 'Loading...' : (departmentName || (userProfile.department_id ? userProfile.department_id.replace(/_/g, ' ') : 'Not set'))}
-                                    </p>
-                                </div>
-
-                                <div className="p-3 bg-slate-50/80 dark:bg-white/[0.02] rounded-xl border border-slate-200/60 dark:border-white/5">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Academic Level</p>
-                                    <p className="text-slate-900 dark:text-white font-bold text-xs mt-0.5">
-                                        {userProfile.level ? `${userProfile.level} Level` : 'Not set'}
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
                     {/* About & Contact Card */}
                     <div className="bg-white dark:bg-[#0A0A0A] p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-white/10 space-y-4">
                         <div>
@@ -646,47 +435,6 @@ export const UserProfileScreen: React.FC<UserProfileProps> = ({ user, userProfil
                                 </button>
                             </div>
 
-                            <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-white/5">
-                                <div>
-                                    <p className="text-xs font-bold text-slate-900 dark:text-white">School Info</p>
-                                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Show institution</p>
-                                </div>
-                                <button
-                                    onClick={() => handleTogglePrivacy('public_school')}
-                                    disabled={isSaving}
-                                    className={`w-10 h-5.5 rounded-full transition-colors relative cursor-pointer ${privacySettings.public_school ? 'bg-[#0066FF]' : 'bg-slate-300 dark:bg-slate-700'}`}
-                                >
-                                    <span className={`absolute top-0.5 left-0.5 bg-white w-4.5 h-4.5 rounded-full transition-transform ${privacySettings.public_school ? 'translate-x-4.5' : 'translate-x-0'}`} />
-                                </button>
-                            </div>
-
-                            <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-white/5">
-                                <div>
-                                    <p className="text-xs font-bold text-slate-900 dark:text-white">Department</p>
-                                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Show department</p>
-                                </div>
-                                <button
-                                    onClick={() => handleTogglePrivacy('public_department')}
-                                    disabled={isSaving}
-                                    className={`w-10 h-5.5 rounded-full transition-colors relative cursor-pointer ${privacySettings.public_department ? 'bg-[#0066FF]' : 'bg-slate-300 dark:bg-slate-700'}`}
-                                >
-                                    <span className={`absolute top-0.5 left-0.5 bg-white w-4.5 h-4.5 rounded-full transition-transform ${privacySettings.public_department ? 'translate-x-4.5' : 'translate-x-0'}`} />
-                                </button>
-                            </div>
-
-                            <div className="flex items-center justify-between py-2">
-                                <div>
-                                    <p className="text-xs font-bold text-slate-900 dark:text-white">Academic Level</p>
-                                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Show level</p>
-                                </div>
-                                <button
-                                    onClick={() => handleTogglePrivacy('public_level')}
-                                    disabled={isSaving}
-                                    className={`w-10 h-5.5 rounded-full transition-colors relative cursor-pointer ${privacySettings.public_level ? 'bg-[#0066FF]' : 'bg-slate-300 dark:bg-slate-700'}`}
-                                >
-                                    <span className={`absolute top-0.5 left-0.5 bg-white w-4.5 h-4.5 rounded-full transition-transform ${privacySettings.public_level ? 'translate-x-4.5' : 'translate-x-0'}`} />
-                                </button>
-                            </div>
                         </div>
                     </div>
 

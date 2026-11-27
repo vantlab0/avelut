@@ -25,7 +25,7 @@ This custom AI agent acts as the Lead Full-Stack Engineer and UI/UX Designer for
 
 1. **Code Generation:** Always write modular React functional components using Hooks. Avoid unnecessary re-renders.
 2. **Styling Standards:** Use Tailwind CSS exclusively. Always include smooth transitions (`transition-all duration-300`), interactive hover states, and responsive design breakpoints (`md:`, `lg:`).
-3. **AI & Backend Integration:** * When implementing AI reasoning or vision features, use Alibaba Cloud DashScope (default model `qwen3.7-flash` or `qwen-plus`). Use Pinecone for semantic vector search.
+3. **AI & Backend Integration:** * When implementing AI reasoning or vision features, use Alibaba Cloud DashScope with the single canonical text model `qwen3.7-flash` (the legacy alias `qwen/qwen3.7-flash` is normalized to it). No other text model is selectable. Use Pinecone for semantic vector search.
    * Ensure all AI calls have proper loading states (e.g., pulsing dots, blur effects) integrated into the UI.
    * Use Supabase (`supabaseClient`, `supabaseRealtimeDb`) for all database, auth, and storage transactions.
 4. **UX First:** Never write a form or chat input without considering empty states, disabled states, and user feedback (e.g., clearing inputs immediately upon submission for snappy UX).

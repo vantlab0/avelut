@@ -1,16 +1,14 @@
 -- =============================================================================
--- FIX: Chat media / photo upload RLS on solution_shares bucket
+-- FIX: solution_shares storage RLS (generic upload/read policies)
 -- =============================================================================
 -- Problem:
---   Messenger uploads photos to paths like:
---     chat_files/<chatId>/<timestamp>_xxx.jpg
---     voice_notes/<chatId>/<timestamp>.webm
---   These go into the public "solution_shares" storage bucket.
---
---   Old INSERT policy required:
+--   The old INSERT policy required the first path segment to be the user UUID:
 --     (storage.foldername(name))[1] = auth.uid()::text
---   So the first path segment had to be the user UUID.
---   chat_files / voice_notes do not match → "new row violates row-level security policy"
+--   That blocked legitimate uploads to other paths in the public
+--   "solution_shares" bucket.
+--
+-- This migration keeps the bucket public for reads while allowing any
+-- authenticated user to upload/update/delete objects in that bucket.
 --
 -- Run this entire script in Supabase → SQL Editor → New query → Run.
 -- Safe to re-run (idempotent).
@@ -33,12 +31,12 @@ DROP POLICY IF EXISTS "Solution shares are publicly readable" ON storage.objects
 DROP POLICY IF EXISTS "Authenticated users can update solution_shares" ON storage.objects;
 DROP POLICY IF EXISTS "Authenticated users can delete own solution_shares paths" ON storage.objects;
 
--- Public read (bucket is public; getPublicUrl must work for everyone viewing chat images)
+-- Public read (bucket is public; getPublicUrl must work for everyone)
 CREATE POLICY "Solution shares are publicly readable"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'solution_shares');
 
--- Any signed-in user can upload chat media, voice notes, solution shares, temp uploads
+-- Any signed-in user can upload solution shares and other public assets
 CREATE POLICY "Authenticated users can upload to solution_shares"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (bucket_id = 'solution_shares');
@@ -49,7 +47,7 @@ ON storage.objects FOR UPDATE TO authenticated
 USING (bucket_id = 'solution_shares')
 WITH CHECK (bucket_id = 'solution_shares');
 
--- Optional cleanup: users can delete objects under chat_files / voice_notes / their uid
+-- Optional cleanup of solution_shares objects
 CREATE POLICY "Authenticated users can delete solution_shares objects"
 ON storage.objects FOR DELETE TO authenticated
 USING (bucket_id = 'solution_shares');
@@ -85,4 +83,4 @@ USING (
   AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- Done. After running, try sending a photo in messenger again while logged in.
+-- Done. Storage policies are now generic and safe to re-run.

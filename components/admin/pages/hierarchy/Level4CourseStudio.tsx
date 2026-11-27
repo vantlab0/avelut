@@ -23,6 +23,7 @@ import {
     ListTree
 } from 'lucide-react';
 import type { Course, Topic } from '../../../../types';
+import { AVELUT_TEXT_MODEL } from '../../../../lib/textModel';
 
 interface ExtendedTopic extends Topic {
     estimated_hours?: string;
@@ -114,11 +115,10 @@ export const Level4CourseStudio: React.FC<Level4CourseStudioProps> = ({
         addToast(`Successfully deleted ${selectedTopicIds.size} topic(s).`, 'success');
     };
 
-    const aiApiKey = appSettings.alibaba_api_key?.trim() || '';
     const aiClient = useRef<any>(null);
     useEffect(() => {
         aiClient.current = createAvelutAI(appSettings);
-    }, [aiApiKey, appSettings]);
+    }, [appSettings]);
 
     const loadCourseData = async () => {
         setIsLoading(true);
@@ -256,7 +256,7 @@ RULES:
   ]
 }`;
 
-            const modelName = appSettings.alibaba_model || 'qwen3.5-omni-flash';
+            const modelName = AVELUT_TEXT_MODEL;
             const response = await aiClient.current.models.generateContent({
                 model: modelName,
                 contents: [

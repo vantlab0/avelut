@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createAvelutAI, getResponseText, getResponseReasoningText, accumulateUsageMetadata, type AiUsageMetadata } from '../utils/inference';
 import { checkAICredits, deductAICredits, getFeatureCost, getFeatureModel, hasLiveTutorialAccess } from '../utils/usage';
+import { AVELUT_TEXT_MODEL } from '../lib/textModel';
 import { readCachedJson, writeCachedJson } from '../utils/cache';
 import { LimitExceededModal } from './LimitExceededModal';
 import { useAppSettings } from '../hooks/useAppSettings';
@@ -324,7 +325,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     setMessages([initialPlaceholder]);
 
     const socraticPrompt = buildSocraticSystemPrompt();
-    const chatModel = getFeatureModel('chat_interaction', appSettings) || 'qwen3.5-omni-flash';
+    const chatModel = getFeatureModel('chat_interaction', appSettings) || AVELUT_TEXT_MODEL;
 
     const aiParams = {
       model: chatModel,
@@ -449,7 +450,7 @@ export const CourseChatTutor: React.FC<CourseChatTutorProps> = ({
     abortControllerRef.current = abortController;
 
     const socraticPrompt = buildSocraticSystemPrompt();
-    const chatModel = getFeatureModel('chat_interaction', appSettings) || 'qwen3.8-omni-flash';
+    const chatModel = getFeatureModel('chat_interaction', appSettings) || AVELUT_TEXT_MODEL;
 
     const historyContents = messages
       .filter((m) => m.text && m.text.trim())

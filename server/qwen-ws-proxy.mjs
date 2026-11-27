@@ -18,16 +18,47 @@
  *   All messages are piped bidirectionally, zero transformation.
  *
  * RUNNING:
- *   ALIBABA_API_KEY=sk-... node server/qwen-ws-proxy.mjs
+ *   node server/qwen-ws-proxy.mjs
+ *   (key comes from Supabase api_keys first; ALIBABA_API_KEY env is fallback)
  *
  * PORT: 3001 (configurable via PORT_WS env var)
  */
 
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
+import { createClient } from '@supabase/supabase-js';
 
 const PORT = parseInt(process.env.PORT || process.env.PORT_WS || '3001', 10);
-const API_KEY = process.env.ALIBABA_API_KEY || process.env.VITE_ALIBABA_API_KEY || '';
+
+// DB-first key resolution with a short cache; env vars are fallback only.
+async function resolveApiKey() {
+  const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  let dbKey = '';
+  if (supabaseUrl && serviceKey) {
+    try {
+      const admin = createClient(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data, error } = await admin
+        .from('api_keys')
+        .select('api_key')
+        .eq('provider', 'alibaba')
+        .eq('is_active', true)
+        .maybeSingle();
+      if (error) {
+        console.warn('[qwen-ws-proxy] api_keys lookup failed, using env fallback:', error.message);
+      } else if (typeof data?.api_key === 'string') {
+        dbKey = data.api_key.trim();
+      }
+    } catch (error) {
+      console.warn('[qwen-ws-proxy] api_keys lookup error, using env fallback:', error?.message || error);
+    }
+  }
+  return dbKey || process.env.ALIBABA_API_KEY || process.env.VITE_ALIBABA_API_KEY || '';
+}
+
+const API_KEY = (await resolveApiKey()).trim();
 const WORKSPACE_ID = process.env.ALIBABA_WORKSPACE_ID || 'ws-o3v6mh0i8y9tqdfx';
 // Keep in sync with QWEN_REALTIME_MODEL in QwenRealtimeTeacherService.ts and api/qwen-realtime.ts
 const QWEN_REALTIME_MODEL = 'qwen3.8-omni-flash-realtime';

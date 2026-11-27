@@ -1,21 +1,26 @@
 import React, { useState } from 'react';
 import type { AppSettings } from '../../../types';
 import { createAvelutAI, getResponseText } from '../../../utils/inference';
+import { AVELUT_TEXT_MODEL } from '../../../lib/textModel';
 
 interface AIModelProviderSelectorProps {
   appSettings: Partial<AppSettings>;
-  onChange: (updated: Partial<AppSettings>) => void;
+  onChange?: (updated: Partial<AppSettings>) => void;
 }
 
+/**
+ * Read-only text model status. Avelut uses exactly one text model; there are
+ * no per-feature or provider model selectors. Provider keys live server-side
+ * in Supabase api_keys (with env fallback) and are never edited in the browser.
+ */
 export const AIModelProviderSelector: React.FC<AIModelProviderSelectorProps> = ({
   appSettings,
-  onChange,
+  onChange: _onChange,
 }) => {
+  void _onChange;
   const [testPrompt, setTestPrompt] = useState("Explain Newton's Second Law in 2 concise sentences with an equation.");
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ text: string; latencyMs: number; error?: string } | null>(null);
-
-  const activeModel = appSettings.alibaba_model || 'qwen3.5-omni-flash';
 
   const handleTestInference = async () => {
     setIsTesting(true);
@@ -25,7 +30,7 @@ export const AIModelProviderSelector: React.FC<AIModelProviderSelectorProps> = (
     try {
       const client = createAvelutAI(appSettings as AppSettings, null);
       if (!client) {
-        throw new Error('Alibaba client could not be instantiated. Please verify your Alibaba API Key.');
+        throw new Error('Alibaba client could not be instantiated. Check the server-side AI configuration.');
       }
 
       const response = await client.models.generateContent({
@@ -46,20 +51,6 @@ export const AIModelProviderSelector: React.FC<AIModelProviderSelectorProps> = (
     }
   };
 
-  const updateFeatureModel = (feature: string, model: string) => {
-    const usageSettings = appSettings.usage_settings || ({} as any);
-    const featureModels = { ...(usageSettings.feature_models || {}) };
-    featureModels[feature] = model;
-
-    onChange({
-      ...appSettings,
-      usage_settings: {
-        ...usageSettings,
-        feature_models: featureModels,
-      } as any,
-    });
-  };
-
   return (
     <div className="bg-white dark:bg-[#0A0A0A] p-6 sm:p-7 rounded-3xl border border-slate-200 dark:border-white/10 shadow-sm space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-white/10 pb-5">
@@ -73,102 +64,41 @@ export const AIModelProviderSelector: React.FC<AIModelProviderSelectorProps> = (
           </div>
         </div>
 
-        {/* Active Provider Badge */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50">
           <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
           <span className="text-xs font-bold text-amber-900 dark:text-amber-300">
-            Active: Alibaba Qwen ({activeModel})
+            Active: Alibaba Qwen ({AVELUT_TEXT_MODEL})
           </span>
         </div>
       </div>
 
-      {/* Provider Card */}
       <div className="p-5 rounded-2xl border-2 border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 shadow-md ring-2 ring-amber-500/20">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Alibaba Integration</span>
           <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider">Default & Active</span>
         </div>
         <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2 mb-1">
-          <i className="bi bi-lightning-charge-fill text-amber-500"></i> Qwen 3.5 Omni Flash Reasoning & Vision
+          <i className="bi bi-lightning-charge-fill text-amber-500"></i> {AVELUT_TEXT_MODEL}
         </h4>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-          High-performance flagship reasoning and vision analysis routed through Alibaba Cloud DashScope.
+          The single canonical text model for all Avelut AI features. Model selection is locked; caller-supplied
+          models and legacy aliases are normalized to this value on the server.
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          {['qwen3.5-omni-flash', 'qwen3.8-flash', 'qwen3.8-max'].map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => onChange({ ...appSettings, alibaba_model: m })}
-              className={`px-2.5 py-1 text-xs font-mono rounded-lg transition border cursor-pointer ${
-                activeModel === m
-                  ? 'bg-amber-500 text-white border-amber-500'
-                  : 'bg-white dark:bg-[#0A0A0A] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-amber-400'
-              }`}
-            >
-              {m}
-            </button>
-          ))}
+          <span className="px-2.5 py-1 text-xs font-mono rounded-lg bg-amber-500 text-white border border-amber-500">
+            {AVELUT_TEXT_MODEL}
+          </span>
         </div>
       </div>
 
-      {/* Provider Credentials & Parameters */}
-      <div className="space-y-4 pt-2">
-        <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Alibaba Credentials</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Alibaba API Key</label>
-            <input
-              type="password"
-              placeholder="sk-..."
-              value={appSettings.alibaba_api_key || ''}
-              onChange={(e) => onChange({ ...appSettings, alibaba_api_key: e.target.value })}
-              className="w-full p-3 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs outline-none focus:border-amber-500"
-            />
-            <p className="text-[11px] text-slate-400">Server env key: ALIBABA_API_KEY (never VITE_-prefixed). Leave blank to use the server key.</p>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Primary Model Name</label>
-            <input
-              type="text"
-              placeholder="qwen3.5-omni-flash"
-              value={appSettings.alibaba_model || 'qwen3.5-omni-flash'}
-              onChange={(e) => onChange({ ...appSettings, alibaba_model: e.target.value })}
-              className="w-full p-3 rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs outline-none focus:border-amber-500"
-            />
-            <p className="text-[11px] text-slate-400">Configured to: qwen3.5-omni-flash</p>
-          </div>
-        </div>
+      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 space-y-2">
+        <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Credentials</h4>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          The DashScope API key is managed server-side in the Supabase <code>api_keys</code> table (provider{' '}
+          <code>alibaba</code>) with a server environment-variable fallback. It cannot be viewed or changed here.
+        </p>
       </div>
 
-      {/* Per-Feature Model Overrides */}
-      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 space-y-4">
-        <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Feature Model Overrides (Alibaba)</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { key: 'chat_interaction', label: 'Avelut AI Chat' },
-            { key: 'visual_solve', label: 'Visual Solver' },
-            { key: 'study_guide_extraction', label: 'Syllabus Extraction' },
-            { key: 'ai_quiz_generation', label: 'Quiz Generation' },
-            { key: 'flashcard_generation', label: 'Flashcard Gen' },
-            { key: 'title_generation', label: 'Title Summaries' },
-          ].map((item) => (
-            <div key={item.key} className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{item.label}</label>
-              <input
-                type="text"
-                placeholder="qwen3.5-omni-flash"
-                value={(appSettings.usage_settings?.feature_models as any)?.[item.key] || 'qwen3.5-omni-flash'}
-                onChange={(e) => updateFeatureModel(item.key, e.target.value)}
-                className="w-full p-2.5 rounded-xl bg-white dark:bg-[#0A0A0A] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs outline-none focus:border-amber-500"
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Live AI Test Prompt & Latency Checker */}
       <div className="p-5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/30 space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-black uppercase tracking-wider text-amber-900 dark:text-amber-300 flex items-center gap-1.5">

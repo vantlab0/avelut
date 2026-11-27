@@ -14,7 +14,6 @@ import CourseChatTutor from './CourseChatTutor';
 import { supabaseDataService } from '../services/supabaseDataService';
 import {
     normalizeLevelValue,
-    normalizeDepartmentValue,
     normalizeTopicId,
     sanitizeTopicMetadata,
     normalizeCourse,
@@ -62,6 +61,61 @@ export const formatLastVisited = (timestamp?: number | null): string | null => {
     if (diffDays < 7) return `Visited ${diffDays}d ago`;
     if (diffDays < 30) return `Visited ${Math.floor(diffDays / 7)}w ago`;
     return `Visited ${new Date(timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+};
+
+// General students own their courses directly. Legacy school/department paths
+// are still written when an older profile has the full hierarchy, so catalog
+// and admin features keep working unchanged.
+const getUserCourseListPath = (uid: string) => `user_courses/${uid}/course_list`;
+
+const getLegacyDepartmentPath = (profile: UserProfile): string | null => {
+    if (!profile.school_id || !profile.college_id || !profile.department_id) return null;
+    return `${profile.school_id}/colleges/${profile.college_id}/departments/${profile.department_id}`;
+};
+
+const getHierarchyFields = (profile: UserProfile) => ({
+    ...(profile.school_id ? { school_id: profile.school_id } : {}),
+    ...(profile.department_id ? { department_id: profile.department_id } : {}),
+});
+
+const buildCourseWritePaths = (
+    profile: UserProfile,
+    courseId: string,
+    courseData: Record<string, any>,
+    level: string,
+    departmentId?: string
+) => {
+    const updates: Record<string, any> = {
+        [`${getUserCourseListPath(profile.uid)}/${courseId}`]: courseData,
+    };
+    const deptPath = getLegacyDepartmentPath(profile);
+    const legacyDeptId = departmentId || profile.department_id;
+    if (deptPath) {
+        updates[`schools_data/${deptPath}/levels/${level || '100lvl'}/courses/${courseId}`] = courseData;
+        if (legacyDeptId) {
+            updates[`departments_data/${legacyDeptId}/course_list/${courseId}`] = courseData;
+        }
+    }
+    return updates;
+};
+
+const buildTopicWritePaths = (profile: UserProfile, target: Course, updatedTopics: any[]) => {
+    const courseId = target.course_id;
+    const updates: Record<string, any> = {
+        [`${getUserCourseListPath(profile.uid)}/${courseId}/topics`]: updatedTopics,
+    };
+    const deptId = profile.department_id;
+    const deptPath = getLegacyDepartmentPath(profile);
+    if (deptId) {
+        updates[`departments_data/${deptId}/course_list/${courseId}/topics`] = updatedTopics;
+    }
+    if (deptPath) {
+        updates[`schools_data/${deptPath}/levels/${target.level || '100lvl'}/courses/${courseId}/topics`] = updatedTopics;
+    }
+    if (target.textbook_shared_key) {
+        updates[`textbook_contexts/shared/${target.textbook_shared_key}/syllabus`] = updatedTopics;
+    }
+    return updates;
 };
 
 // --- SKELETON LOADER ---
@@ -282,7 +336,7 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
 
     // Reset the custom header IMMEDIATELY when leaving this view (e.g. pressing the
     // back arrow to Dashboard) so the default heading text and right-side icons
-    // (calendar, messenger, notification bell) are restored without delay.
+    // are restored without delay.
     useEffect(() => {
         return () => {
             if (setCustomHeaderConfig) {
@@ -381,9 +435,6 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
             addToast('Please enter a course code/name', 'error');
             return;
         }
-        if (!userProfile.school_id || !userProfile.college_id || !userProfile.department_id || !userProfile.level) {
-            return addToast('Please complete your profile (School, College, Department, Level) first.', 'error');
-        }
 
         const cost = getFeatureCost('study_guide_extraction', appSettings) || 0;
         const creditCheck = checkAICredits(userProfile, cost, appSettings);
@@ -397,7 +448,7 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
         try {
             const ai = createAvelutAI(appSettings, userProfile);
             if (!ai) throw new Error('Avelut AI is not configured in App Controls.');
-            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
+            const aiModel = getFeatureModel('study_guide_extraction', appSettings);
 
             const prompt = `Based on this course code/name: "${manualCourseCode}", generate a short, one-line professional course description. Return a JSON object with 'course_name' (guessed full name if possible, else the code), 'course_code' (standardized uppercase code), and 'description'.`;
 
@@ -432,31 +483,26 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
             }
 
             const courseId = courseCode.toLowerCase().replace(/\s+/g, '');
+            const courseLevel = userProfile.level || '100lvl';
             const courseData = {
                 course_id: courseId,
                 course_name: courseName,
                 course_code: courseCode.toUpperCase(),
                 description,
-                level: userProfile.level,
+                level: courseLevel,
                 course_status: 'active'
             };
 
-            const updates: any = {};
-            const deptPath = `${userProfile.school_id}/colleges/${userProfile.college_id}/departments/${userProfile.department_id}`;
-            updates[`schools_data/${deptPath}/levels/${userProfile.level}/courses/${courseId}`] = courseData;
-            updates[`departments_data/${userProfile.department_id}/course_list/${courseId}`] = courseData;
-
-            await update(dbRef(db), updates);
+            await update(dbRef(db), buildCourseWritePaths(userProfile, courseId, courseData, courseLevel));
             await supabaseDataService.upsertCourse({
                 course_id: courseId,
                 course_code: courseCode.toUpperCase(),
                 course_name: courseName,
                 title: courseName,
                 code: courseCode.toUpperCase(),
-                level: userProfile.level,
+                level: courseLevel,
                 description,
-                department_id: userProfile.department_id,
-                school_id: userProfile.school_id,
+                ...getHierarchyFields(userProfile),
             });
             setCourses(prev => {
                 const next = [courseData as Course, ...prev.filter(c => c.course_id !== courseId)];
@@ -483,10 +529,7 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
         const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif|bmp|gif)$/i.test(file.name);
 
         if (!isPdf && !isImage) {
-            return addToast('Please upload a PDF or image of your course form.', 'error');
-        }
-        if (!userProfile.school_id || !userProfile.college_id || !userProfile.department_id || !userProfile.level) {
-            return addToast('Please complete your profile (School, College, Department, Level) first.', 'error');
+            return addToast('Please upload a PDF or image of your course list.', 'error');
         }
 
         const cost = getFeatureCost('study_guide_extraction', appSettings) || 0;
@@ -500,16 +543,16 @@ const StudyGuideContent: React.FC<StudyGuideProps> = ({ userProfile, userProgres
         setIsExtractingCourses(true);
         try {
             const ai = createAvelutAI(appSettings, userProfile);
-            // Prefer Alibaba Omni model (qwen3.5-omni-flash). Do not force VL-only models.
-            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
+            // Text extraction always uses the configured Avelut text model.
+            const aiModel = getFeatureModel('study_guide_extraction', appSettings);
 
-            const prompt = `Analyze this university course form, registration slip, curriculum document, course outline, or timetable carefully.
+            const prompt = `Analyze this school course list, curriculum handout, course outline, or timetable carefully.
 Extract EVERY course listed on the document.
 
 INSTRUCTIONS:
-1. For each course, extract the course code, course name, level, course unit (if available), and topics/syllabus items if they are present in the document.
-2. For the "level" field, identify the level (e.g., "100lvl", "200lvl", "300lvl", "400lvl", "500lvl") from document headers or course code digits (101-199 -> "100lvl", 201-299 -> "200lvl", etc.). Fall back to "${userProfile.level || '100lvl'}" if not found.
-3. Clean up course codes (e.g. "MEE 301") and course titles (clean title in CAPITAL LETTERS, e.g. "FLUID MECHANICS").
+1. For each course, extract the course code, course name, year group/level, course unit (if available), and topics/syllabus items if they are present in the document.
+2. For the "level" field, identify the year group or level from document headers or course code digits. Use the app's internal labels ("100lvl" to "600lvl") when the document uses numeric levels. Fall back to "${userProfile.level || '100lvl'}" if not found.
+3. Clean up course codes (e.g. "MTH 101") and course titles (clean title in CAPITAL LETTERS, e.g. "FLUID MECHANICS").
 4. If the document is a course outline/syllabus for a course, include the course and extract its topics into the "topics" array with topic_name and optional topic_context.
 
 Return ONLY a JSON object with a "courses" array.`;
@@ -594,8 +637,7 @@ Return ONLY a JSON object with a "courses" array.`;
                     throw new Error("No valid courses could be identified in the uploaded document.");
                 }
 
-                const updates: any = {};
-                const deptPath = `${userProfile.school_id}/colleges/${userProfile.college_id}/departments/${userProfile.department_id}`;
+                const updates: Record<string, any> = {};
 
                 const newExtractedCourses: Course[] = validCourses.map((c: any) => {
                     const rawCode = (c.course_code || c.code || '').trim().toUpperCase();
@@ -618,8 +660,7 @@ Return ONLY a JSON object with a "courses" array.`;
                         course_status: 'active',
                         topics: extractedTopics,
                     };
-                    updates[`schools_data/${deptPath}/levels/${courseLevel}/courses/${courseId}`] = courseData;
-                    updates[`departments_data/${userProfile.department_id}/course_list/${courseId}`] = courseData;
+                    Object.assign(updates, buildCourseWritePaths(userProfile, courseId, courseData, courseLevel));
                     return courseData;
                 });
                 await update(dbRef(db), updates);
@@ -633,9 +674,8 @@ Return ONLY a JSON object with a "courses" array.`;
                             title: c.course_name,
                             code: c.course_code,
                             level: c.level,
-                            description: `Extracted course for ${userProfile.department_id}`,
-                            department_id: userProfile.department_id,
-                            school_id: userProfile.school_id,
+                            description: `Extracted course: ${c.course_name}`,
+                            ...getHierarchyFields(userProfile),
                         });
                         if (Array.isArray(c.topics) && c.topics.length > 0) {
                             await Promise.all(c.topics.map((t, idx) => supabaseDataService.upsertTopic({
@@ -693,10 +733,6 @@ Return ONLY a JSON object with a "courses" array.`;
             addToast('Please enter a course code (e.g., MTH101)', 'error');
             return;
         }
-        if (!userProfile.school_id || !userProfile.college_id || !userProfile.department_id || !userProfile.level) {
-            addToast('Please complete your profile (School, College, Department, Level) first.', 'error');
-            return;
-        }
 
         setIsSavingCourseForm(true);
         try {
@@ -707,7 +743,7 @@ Return ONLY a JSON object with a "courses" array.`;
                 try {
                     const ai = createAvelutAI(appSettings, userProfile);
                     if (ai) {
-                        const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
+                        const aiModel = getFeatureModel('study_guide_extraction', appSettings);
                         const prompt = `Based on this course code: "${code}", generate a standard course name and 1-line description. Return JSON with 'course_name' and 'description'.`;
                         const res = await attemptApiCall(() => ai.models.generateContent({
                             model: aiModel,
@@ -739,7 +775,7 @@ Return ONLY a JSON object with a "courses" array.`;
             }
 
             if (!courseName) courseName = code;
-            if (!description) description = `${code} course syllabus for ${userProfile.department_id}`;
+            if (!description) description = `${code} course syllabus`;
 
             const courseId = code.toLowerCase().replace(/\s+/g, '');
             const courseLevel = manualCourseForm.level || userProfile.level || '100lvl';
@@ -754,11 +790,7 @@ Return ONLY a JSON object with a "courses" array.`;
                 topics: [],
             };
 
-            const updates: any = {};
-            const deptPath = `${userProfile.school_id}/colleges/${userProfile.college_id}/departments/${userProfile.department_id}`;
-            updates[`schools_data/${deptPath}/levels/${courseLevel}/courses/${courseId}`] = courseData;
-            updates[`departments_data/${userProfile.department_id}/course_list/${courseId}`] = courseData;
-            await update(dbRef(db), updates);
+            await update(dbRef(db), buildCourseWritePaths(userProfile, courseId, courseData, courseLevel));
 
             await supabaseDataService.upsertCourse({
                 course_id: courseId,
@@ -768,8 +800,7 @@ Return ONLY a JSON object with a "courses" array.`;
                 code: code,
                 level: courseLevel,
                 description,
-                department_id: userProfile.department_id,
-                school_id: userProfile.school_id,
+                ...getHierarchyFields(userProfile),
             });
 
             setCourses(prev => {
@@ -813,15 +844,15 @@ Return ONLY a JSON object with a "courses" array.`;
         try {
             const ai = createAvelutAI(appSettings, userProfile);
             if (!ai) throw new Error('AI service is not configured in App Controls.');
-            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
+            const aiModel = getFeatureModel('study_guide_extraction', appSettings);
 
             const prompt = `You are an academic curriculum and syllabus specialist.
-Generate a comprehensive, well-structured list of syllabus topics for this university course.
+Generate a comprehensive, well-structured list of syllabus topics for this course.
 
 Course name: ${target.course_name}
 Course code: ${target.course_code || target.course_id}
-Level: ${target.level || userProfile.level || '100lvl'}
-Department: ${userProfile.department_id || 'General'}
+Year group / level: ${target.level || userProfile.level || '100lvl'}
+Subject / class: ${userProfile.department_id || 'General'}
 
 Return ONLY a JSON object with a "topics" array. Each topic must have:
 - topic_name: clear, standardized topic title
@@ -917,7 +948,7 @@ Generate 8-15 logical, sequential topics covering the full course scope.`;
         try {
             const ai = createAvelutAI(appSettings, userProfile);
             if (!ai) throw new Error('AI service is not configured in App Controls.');
-            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
+            const aiModel = getFeatureModel('study_guide_extraction', appSettings);
 
             const fileName = docUploadFile.name.toLowerCase();
             const isPdf = fileName.endsWith('.pdf') || docUploadFile.type === 'application/pdf';
@@ -1056,20 +1087,7 @@ Return a JSON object containing a "topics" array.`;
             const cleanSelected = selected.map(({ selected: _, ...rest }) => rest);
             const updatedTopics = mergeTopics(existingTopics, cleanSelected);
 
-            const deptId = userProfile.department_id;
-            const courseId = target.course_id;
-            const updates: any = {};
-            if (deptId && courseId) {
-                updates[`departments_data/${deptId}/course_list/${courseId}/topics`] = updatedTopics;
-            }
-            if (userProfile.school_id && userProfile.college_id && deptId && target.level) {
-                const deptPath = `${userProfile.school_id}/colleges/${userProfile.college_id}/departments/${deptId}`;
-                updates[`schools_data/${deptPath}/levels/${target.level}/courses/${courseId}/topics`] = updatedTopics;
-            }
-            if (target.textbook_shared_key) {
-                updates[`textbook_contexts/shared/${target.textbook_shared_key}/syllabus`] = updatedTopics;
-            }
-            await update(dbRef(db), updates);
+            await update(dbRef(db), buildTopicWritePaths(userProfile, target, updatedTopics));
 
             const updatedCourse: Course = { ...target, topics: updatedTopics };
             setCourses(prev => {
@@ -1136,20 +1154,7 @@ Return a JSON object containing a "topics" array.`;
 
             const updatedTopics = [...existingTopics, newTopic];
 
-            const deptId = userProfile.department_id;
-            const courseId = target.course_id;
-            const updates: any = {};
-            if (deptId && courseId) {
-                updates[`departments_data/${deptId}/course_list/${courseId}/topics`] = updatedTopics;
-            }
-            if (userProfile.school_id && userProfile.college_id && deptId && target.level) {
-                const deptPath = `${userProfile.school_id}/colleges/${userProfile.college_id}/departments/${deptId}`;
-                updates[`schools_data/${deptPath}/levels/${target.level}/courses/${courseId}/topics`] = updatedTopics;
-            }
-            if (target.textbook_shared_key) {
-                updates[`textbook_contexts/shared/${target.textbook_shared_key}/syllabus`] = updatedTopics;
-            }
-            await update(dbRef(db), updates);
+            await update(dbRef(db), buildTopicWritePaths(userProfile, target, updatedTopics));
 
             const updatedCourse: Course = { ...target, topics: updatedTopics };
             setCourses(prev => {
@@ -1183,7 +1188,7 @@ Return a JSON object containing a "topics" array.`;
         try {
             const ai = createAvelutAI(appSettings, userProfile);
             if (!ai) throw new Error('AI service not available.');
-            const aiModel = getFeatureModel('study_guide_extraction', appSettings) || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
+            const aiModel = getFeatureModel('study_guide_extraction', appSettings);
             const prompt = `Write a concise 2-sentence academic overview/scope for the topic "${manualTopicForm.topic_name}" in the course "${target?.course_name || 'Academic Studies'}". Return only the text.`;
             const res = await attemptApiCall(() => ai.models.generateContent({
                 model: aiModel,
@@ -1213,67 +1218,68 @@ Return a JSON object containing a "topics" array.`;
                 setIsLoading(true);
             }
             try {
-                const normalizedUserDepartment = normalizeDepartmentValue(userProfile.department_id);
                 const normalizedUserLevel = normalizeLevelValue(userProfile.level);
 
-                if (!normalizedUserDepartment) {
-                    setCourses([]);
-                    setIsLoading(false);
-                    return;
-                }
+                // General students see the shared catalog plus their own courses.
+                // Legacy hierarchy fields, when present, still narrow the catalog.
+                const [supabaseCourses, userCoursesSnap] = await Promise.all([
+                    supabaseDataService.fetchCourses(userProfile.department_id, userProfile.level),
+                    get(dbRef(db, getUserCourseListPath(userProfile.uid))),
+                ]);
 
-                // 1. Fetch courses directly from Supabase courses table (filtered by department & level)
-                const supabaseCourses = await supabaseDataService.fetchCourses(
-                    userProfile.department_id,
-                    userProfile.level
-                );
-
-                // 2. Also query department data via RTDB shim (which bridges to Supabase)
-                let resolvedDepartmentData: any = null;
-                const deptCoursesSnap = await get(dbRef(db, `departments_data/${userProfile.department_id}`));
-                if (deptCoursesSnap.exists()) {
-                    resolvedDepartmentData = deptCoursesSnap.val();
-                }
-
-                const allDepartmentCourses: any[] = resolvedDepartmentData?.course_list
-                    ? (Array.isArray(resolvedDepartmentData.course_list)
-                        ? resolvedDepartmentData.course_list
-                        : Object.values(resolvedDepartmentData.course_list))
-                    : [];
-                const coursesForLevel = allDepartmentCourses.filter((course) => (
-                    normalizeLevelValue(course.level) === normalizedUserLevel
-                ));
-
-                // 3. Merge Supabase courses + department courses
                 const mergedCoursesMap = new Map<string, Course>();
 
-                // Add Supabase courses first
                 supabaseCourses.forEach((c) => {
                     if (c && c.course_id) {
                         mergedCoursesMap.set(c.course_id.toLowerCase(), c);
                     }
                 });
 
-                // Merge in any courses from course_list
-                coursesForLevel.forEach((c: any) => {
-                    const normId = (c.course_id || c.course_code || '').toLowerCase().trim();
+                const mergeStoredCourse = (c: any) => {
+                    const normId = (c?.course_id || c?.course_code || '').toLowerCase().trim();
                     if (!normId) return;
-                    if (!mergedCoursesMap.has(normId)) {
-                        mergedCoursesMap.set(normId, {
-                            ...c,
-                            course_id: normId,
-                            course_name: c.course_name || c.title || normId.toUpperCase(),
-                            course_code: c.course_code || c.code || normId.toUpperCase(),
-                            level: c.level || userProfile.level || '100lvl',
-                            semester: c.semester === 'second' || c.semester === 2 ? 'second' : 'first',
-                            topics: Array.isArray(c.topics) ? c.topics : [],
-                        });
+                    if (mergedCoursesMap.has(normId)) return;
+                    const normalized = normalizeCourse(c, normId, userProfile.level || '100lvl');
+                    if (!normalized) return;
+                    mergedCoursesMap.set(normId, {
+                        ...normalized,
+                        course_code: normalized.course_code || c.course_code || c.code || normId.toUpperCase(),
+                        semester: c.semester === 'second' || c.semester === 2 ? 'second' : 'first',
+                    });
+                };
+
+                // 1. Courses saved directly to this student's account.
+                const userCourses = userCoursesSnap.exists()
+                    ? (Array.isArray(userCoursesSnap.val())
+                        ? userCoursesSnap.val()
+                        : Object.values(userCoursesSnap.val() || {}))
+                    : [];
+                userCourses.forEach((c: any) => {
+                    if (c && !Array.isArray(c.topics)) {
+                        mergeStoredCourse({ ...c, topics: [] });
+                    } else {
+                        mergeStoredCourse(c);
                     }
                 });
 
+                // 2. Legacy department catalog for older profiles only.
+                if (userProfile.department_id) {
+                    const deptCoursesSnap = await get(dbRef(db, `departments_data/${userProfile.department_id}`));
+                    const resolvedDepartmentData = deptCoursesSnap.exists() ? deptCoursesSnap.val() : null;
+                    const allDepartmentCourses: any[] = resolvedDepartmentData?.course_list
+                        ? (Array.isArray(resolvedDepartmentData.course_list)
+                            ? resolvedDepartmentData.course_list
+                            : Object.values(resolvedDepartmentData.course_list))
+                        : [];
+                    const coursesForLevel = normalizedUserLevel
+                        ? allDepartmentCourses.filter((course) => normalizeLevelValue(course.level) === normalizedUserLevel)
+                        : allDepartmentCourses;
+                    coursesForLevel.forEach(mergeStoredCourse);
+                }
+
                 const rawCourseList = Array.from(mergedCoursesMap.values());
 
-                // 4. Enrich syllabus topics (from textbook_contexts if topics are empty)
+                // Enrich syllabus topics (from textbook_contexts if topics are empty)
                 const enrichedCourses: Course[] = await Promise.all(
                     rawCourseList.map(async (course) => {
                         try {
@@ -1291,12 +1297,14 @@ Return a JSON object containing a "topics" array.`;
                                 }
                             }
 
-                            const perDeptRef = dbRef(db, `textbook_contexts/${userProfile.department_id}/${course.level}/${course.course_name}`);
-                            const perDeptSnap = await get(perDeptRef);
-                            if (perDeptSnap.exists()) {
-                                const val = perDeptSnap.val();
-                                const syllabus = Array.isArray(val.syllabus) ? val.syllabus.map((t: any, i: number) => sanitizeTopicMetadata(t, i)) : [];
-                                if (syllabus.length > 0) return { ...course, topics: syllabus };
+                            if (userProfile.department_id) {
+                                const perDeptRef = dbRef(db, `textbook_contexts/${userProfile.department_id}/${course.level}/${course.course_name}`);
+                                const perDeptSnap = await get(perDeptRef);
+                                if (perDeptSnap.exists()) {
+                                    const val = perDeptSnap.val();
+                                    const syllabus = Array.isArray(val.syllabus) ? val.syllabus.map((t: any, i: number) => sanitizeTopicMetadata(t, i)) : [];
+                                    if (syllabus.length > 0) return { ...course, topics: syllabus };
+                                }
                             }
 
                             // Return course as-is if no topics exist (do not inject synthetic default topics)
@@ -1798,18 +1806,19 @@ Return a JSON object containing a "topics" array.`;
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                                            Level
+                                            Year group
                                         </label>
                                         <select
                                             value={manualCourseForm.level}
                                             onChange={(e) => setManualCourseForm(f => ({ ...f, level: e.target.value }))}
                                             className="w-full bg-slate-50 dark:bg-[#1C1C1C] border border-slate-200 dark:border-[#2A2A2A] rounded-2xl px-3 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-[#3A3A3A] transition-all"
                                         >
-                                            <option value="100lvl">100 Level</option>
-                                            <option value="200lvl">200 Level</option>
-                                            <option value="300lvl">300 Level</option>
-                                            <option value="400lvl">400 Level</option>
-                                            <option value="500lvl">500 Level</option>
+                                            <option value="100lvl">Year 7</option>
+                                            <option value="200lvl">Year 8</option>
+                                            <option value="300lvl">Year 9</option>
+                                            <option value="400lvl">Year 10</option>
+                                            <option value="500lvl">Year 11</option>
+                                            <option value="600lvl">Year 12</option>
                                         </select>
                                     </div>
 
@@ -2294,7 +2303,7 @@ Return a JSON object containing a "topics" array.`;
                                 course={course}
                                 onClick={() => setTopicPickerCourse(course)}
                                 userProgress={userProgress}
-                                onUpload={(files) => uploadTextbook(course, getCourseMergeKey(course) || course.course_name, files, false, userProfile.department_id)}
+                                onUpload={(files) => uploadTextbook(course, getCourseMergeKey(course) || course.course_name, files, false)}
                                 isUploading={isUploadingCourseKey === (getCourseMergeKey(course) || course.course_name)}
                                 uploadProgress={uploadProgress}
                             />

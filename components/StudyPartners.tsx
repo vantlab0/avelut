@@ -10,6 +10,22 @@ interface StudyPartnersProps {
     onNavigate: (route: string) => void;
 }
 
+const YEAR_GROUP_LABELS: Record<string, string> = {
+    '100': 'Year 7',
+    '200': 'Year 8',
+    '300': 'Year 9',
+    '400': 'Year 10',
+    '500': 'Year 11',
+    '600': 'Year 12',
+};
+
+const formatYearGroup = (level?: string): string | null => {
+    if (!level) return null;
+    const normalized = level.toLowerCase().replace(/(level|lvl)$/, '').trim();
+    if (/postgrad/i.test(normalized)) return YEAR_GROUP_LABELS['600'];
+    return YEAR_GROUP_LABELS[normalized] || level;
+};
+
 export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNavigate }) => {
     const { addToast } = useToast();
     const [activeTab, setActiveTab] = useState<'find' | 'requests'>('find');
@@ -19,17 +35,17 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
     const [levelFilter, setLevelFilter] = useState<string>('all');
     
     const [allUsers, setAllUsers] = useState<UserProfile[]>(() => 
-        readCachedJson<UserProfile[]>(`messenger_users_v2`, [])
+        readCachedJson<UserProfile[]>(`study_partners_users_v2`, [])
     );
     const [studyPartners, setStudyPartners] = useState<Record<string, boolean>>(() => 
-        readCachedJson<Record<string, boolean>>(`messenger_${userProfile.uid}_study_partners`, {})
+        readCachedJson<Record<string, boolean>>(`study_partners_${userProfile.uid}_connections`, {})
     );
     const [partnerRequests, setPartnerRequests] = useState<Record<string, any>>(() => 
-        readCachedJson<Record<string, any>>(`messenger_${userProfile.uid}_partner_requests`, {})
+        readCachedJson<Record<string, any>>(`study_partners_${userProfile.uid}_requests`, {})
     );
     const [missingProfiles, setMissingProfiles] = useState<Record<string, UserProfile>>({});
 
-    // Fetch users (same as Messenger logic)
+    // Fetch users for study partner discovery
     useEffect(() => {
         if (!auth.currentUser) return;
         const usersRef = dbRef(db, 'users');
@@ -46,7 +62,7 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
                     })) as UserProfile[];
                 }
                 setAllUsers(usersList);
-                writeCachedJson(`messenger_users_v2`, usersList);
+                writeCachedJson(`study_partners_users_v2`, usersList);
             }
         });
 
@@ -54,14 +70,14 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
         const unsubPartners = onValue(partnersRef, (snapshot) => {
             const data = snapshot.exists() ? snapshot.val() : {};
             setStudyPartners(data);
-            writeCachedJson(`messenger_${userProfile.uid}_study_partners`, data);
+            writeCachedJson(`study_partners_${userProfile.uid}_connections`, data);
         });
 
         const requestsRef = dbRef(db, `partner_requests/${auth.currentUser.uid}`);
         const unsubRequests = onValue(requestsRef, (snapshot) => {
             const data = snapshot.exists() ? snapshot.val() : {};
             setPartnerRequests(data);
-            writeCachedJson(`messenger_${userProfile.uid}_partner_requests`, data);
+            writeCachedJson(`study_partners_${userProfile.uid}_requests`, data);
         });
 
         return () => {
@@ -245,7 +261,7 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
             users = users.filter(u => u.level === levelFilter || (u.level && u.level.startsWith(levelFilter)));
         }
 
-        // Universal Search: Name, Department, School, College, Level
+        // Universal Search: name, school, subject, class, year group
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase().trim();
             users = users.filter(u => {
@@ -257,7 +273,7 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
                 const college = (u.college_id || '').toLowerCase();
                 const collegeReadable = college.replace(/_/g, ' ');
                 const level = (u.level || '').toLowerCase();
-                const levelReadable = `${level} level`;
+                const levelReadable = (formatYearGroup(u.level) || '').toLowerCase();
 
                 return name.includes(q) ||
                        dept.includes(q) || deptReadable.includes(q) ||
@@ -286,7 +302,7 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
                 </button>
                 <div className="flex-1">
                     <h1 className="text-xl font-black text-[#212529] dark:text-white">Study Partners</h1>
-                    <p className="text-xs font-semibold text-[#6C757D] dark:text-gray-400">Discover and connect with students across any school and faculty</p>
+                    <p className="text-xs font-semibold text-[#6C757D] dark:text-gray-400">Discover and connect with students from any class or year group</p>
                 </div>
             </div>
 
@@ -320,7 +336,7 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
                             <div className="relative">
                                 <input
                                     type="text"
-                                    placeholder="Search by name, university, college, department, or level..."
+                                    placeholder="Search by name, school, subject, class, or year group..."
                                     value={searchQuery}
                                     onChange={e => setSearchQuery(e.target.value)}
                                     className="w-full bg-white dark:bg-[#0A0A0A] text-sm font-semibold text-slate-900 dark:text-white pl-10 pr-10 py-3.5 rounded-2xl border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-1 focus:ring-[#0066FF] transition placeholder:text-slate-400"
@@ -349,7 +365,7 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
                                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                                         }`}
                                     >
-                                        All Universities
+                                        All Schools
                                     </button>
                                     {userProfile.school_id && (
                                         <button
@@ -360,7 +376,7 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
                                                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                                             }`}
                                         >
-                                            My Campus
+                                            My School
                                         </button>
                                     )}
                                     {userProfile.college_id && (
@@ -372,7 +388,7 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
                                                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                                             }`}
                                         >
-                                            My Faculty
+                                            My Group
                                         </button>
                                     )}
                                 </div>
@@ -398,14 +414,13 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
                                         onChange={e => setLevelFilter(e.target.value)}
                                         className="bg-white dark:bg-[#0A0A0A] border border-slate-200 dark:border-white/10 rounded-xl py-1 px-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-[#0066FF] cursor-pointer"
                                     >
-                                        <option value="all">Any Level</option>
-                                        <option value="100">100 Level</option>
-                                        <option value="200">200 Level</option>
-                                        <option value="300">300 Level</option>
-                                        <option value="400">400 Level</option>
-                                        <option value="500">500 Level</option>
-                                        <option value="600">600 Level</option>
-                                        <option value="Postgraduate">Postgraduate</option>
+                                        <option value="all">Any Year Group</option>
+                                        <option value="100">Year 7</option>
+                                        <option value="200">Year 8</option>
+                                        <option value="300">Year 9</option>
+                                        <option value="400">Year 10</option>
+                                        <option value="500">Year 11</option>
+                                        <option value="600">Year 12</option>
                                     </select>
                                 </div>
                             </div>
@@ -433,29 +448,29 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
                                                     {u.display_name}
                                                 </h4>
                                                 
-                                                {/* Institutional Context Badges */}
+                                                {/* School Context Badges */}
                                                 <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                                     {u.school_id && (
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 dark:bg-blue-950/40 text-[#0066FF] dark:text-blue-300 border border-blue-100 dark:border-blue-900/30 capitalize">
-                                                            <span>🏛️</span>
-                                                            <span className="truncate max-w-[130px]">{u.school_id.replace(/_/g, ' ')}</span>
+                                                            <span>🏫</span>
+                                                            <span className="truncate max-w-[130px]">School: {u.school_id.replace(/_/g, ' ')}</span>
                                                         </span>
                                                     )}
                                                     {u.college_id && (
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-white/5 capitalize">
-                                                            <span>🏢</span>
-                                                            <span className="truncate max-w-[120px]">{u.college_id.replace(/_/g, ' ')}</span>
+                                                            <span>👥</span>
+                                                            <span className="truncate max-w-[120px]">Group: {u.college_id.replace(/_/g, ' ')}</span>
                                                         </span>
                                                     )}
                                                     {u.department_id && (
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-white/5 capitalize">
                                                             <span>📚</span>
-                                                            <span className="truncate max-w-[140px]">{u.department_id.replace(/_/g, ' ')}</span>
+                                                            <span className="truncate max-w-[140px]">Subject: {u.department_id.replace(/_/g, ' ')}</span>
                                                         </span>
                                                     )}
                                                     {u.level && (
                                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/30">
-                                                            {u.level}L
+                                                            {formatYearGroup(u.level)}
                                                         </span>
                                                     )}
                                                 </div>
@@ -510,7 +525,7 @@ export const StudyPartners: React.FC<StudyPartnersProps> = ({ userProfile, onNav
                             {filteredUsers.length === 0 && (
                                 <div className="text-center py-10 bg-white dark:bg-[#0A0A0A] border border-slate-200 dark:border-white/10 rounded-2xl p-6">
                                     <p className="text-slate-500 dark:text-slate-400 font-medium text-sm">No students found matching your criteria.</p>
-                                    <p className="text-xs text-slate-400 mt-1">Try searching by university name, college, department, or level.</p>
+                                    <p className="text-xs text-slate-400 mt-1">Try searching by school, subject, class, or year group.</p>
                                 </div>
                             )}
                         </div>

@@ -6,6 +6,7 @@ import { useApiLimiter } from './useApiLimiter';
 import { useAppSettings } from './useAppSettings';
 import { useToast } from './useToast';
 import type { Course, Topic, AppSettings } from '../types';
+import { AVELUT_TEXT_MODEL } from '../lib/textModel';
 
 const LEVELS = ['100lvl', '200lvl', '300lvl', '400lvl', '500lvl'] as const;
 const SEMESTERS = ['first', 'second'] as const;
@@ -117,7 +118,7 @@ export const useSharedTextbookUpload = () => {
     const { addToast } = useToast();
     const { attemptApiCall } = useApiLimiter();
     const { settings: appSettings } = useAppSettings();
-    const aiModel = appSettings?.usage_settings?.feature_models?.study_guide_extraction || appSettings?.alibaba_model || 'qwen3.5-omni-flash';
+    const aiModel = AVELUT_TEXT_MODEL;
     const ai = useMemo(() => createAvelutAI(appSettings, null), [appSettings]);
 
     const [uploadProgress, setUploadProgress] = useState<{ status: string; percent: number } | null>(null);

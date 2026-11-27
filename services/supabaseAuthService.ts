@@ -15,6 +15,22 @@ export interface AuthResponse {
   error?: string | null;
 }
 
+// Legacy profiles may still carry a school hierarchy. New users do not need one,
+// so only map hierarchy columns when a value actually exists.
+const mapLegacyHierarchy = (data: any): Partial<UserProfile> => {
+  const hierarchy: Partial<UserProfile> = {};
+  const schoolId = data?.school_id || data?.schoolId;
+  const collegeId = data?.college_id || data?.collegeId || data?.faculty_id;
+  const departmentId = data?.department_id || data?.departmentId || data?.department;
+  const level = data?.level || data?.academic_level;
+
+  if (schoolId) hierarchy.school_id = schoolId;
+  if (collegeId) hierarchy.college_id = collegeId;
+  if (departmentId) hierarchy.department_id = departmentId;
+  if (level) hierarchy.level = level;
+  return hierarchy;
+};
+
 class SupabaseAuthService {
   /**
    * Listen to auth state changes
@@ -99,18 +115,21 @@ class SupabaseAuthService {
         return { user: null, profile: null, error: 'Signup failed. Please try again.' };
       }
 
-      // Upsert profile in Supabase
+      // New students are ready to use the app immediately; no school
+      // hierarchy fields are seeded. Legacy values are preserved if supplied.
+      const { school_id, college_id, department_id, level, ...otherMetadata } = metadata;
       const profile: UserProfile = {
         uid: user.id,
         email: user.email || email,
         display_name: fullName,
-        school_id: metadata.school_id || '',
-        department_id: metadata.department_id || '',
-        level: metadata.level || '100',
         current_streak: 0,
         last_activity_date: Date.now(),
         notifications_enabled: false,
-        ...metadata,
+        ...(school_id ? { school_id } : {}),
+        ...(college_id ? { college_id } : {}),
+        ...(department_id ? { department_id } : {}),
+        ...(level ? { level } : {}),
+        ...otherMetadata,
         is_admin: false,
         role: 'user',
       };
@@ -232,12 +251,10 @@ class SupabaseAuthService {
 
       return {
         uid: data.id,
-        email: data.email,
-        display_name: data.full_name,
-        photo_url: data.avatar_url,
-        school_id: data.school_id,
-        department_id: data.department_id,
-        level: data.level,
+        email: data.email || '',
+        display_name: data.full_name || data.username || data.display_name || 'User',
+        photo_url: data.avatar_url || data.photo_url || '',
+        ...mapLegacyHierarchy(data),
         current_streak: data.streak || 0,
         last_activity_date: Date.now(),
         notifications_enabled: Boolean(data.notifications_enabled),
@@ -257,18 +274,23 @@ class SupabaseAuthService {
     if (!userId || !isSupabaseConfigured) return;
 
     try {
-      await supabase.from('profiles').upsert({
+      const payload: Record<string, any> = {
         id: userId,
         email: profile.email,
         full_name: profile.display_name,
         avatar_url: profile.photo_url,
-        school_id: profile.school_id,
-        department_id: profile.department_id,
-        level: profile.level,
         is_admin: profile.is_admin ?? false,
         role: profile.role || (profile.is_admin ? 'superadmin' : 'user'),
         updated_at: new Date().toISOString(),
-      });
+      };
+      // Do not seed empty hierarchy columns for new users. Existing legacy
+      // values are only written when the profile actually contains them.
+      if (profile.school_id) payload.school_id = profile.school_id;
+      if (profile.college_id) payload.college_id = profile.college_id;
+      if (profile.department_id) payload.department_id = profile.department_id;
+      if (profile.level) payload.level = profile.level;
+
+      await supabase.from('profiles').upsert(payload);
     } catch (err) {
       console.warn('[SupabaseAuth] Profile upsert error:', err);
     }

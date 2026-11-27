@@ -3,6 +3,7 @@
  * Alibaba Cloud DashScope TTS only.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getAlibabaApiKey } from "../_shared/alibabaConfig.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -49,8 +50,8 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 async function ttsShort(text: string, voice: string): Promise<{ audioBase64: string; mimeType: string }> {
-  const alibabaKey = env("ALIBABA_API_KEY", "VITE_ALIBABA_API_KEY");
-  if (!alibabaKey) throw new Error("TTS unavailable: set ALIBABA_API_KEY");
+  const alibabaKey = await getAlibabaApiKey();
+  if (!alibabaKey) throw new Error("TTS unavailable: configure api_keys or ALIBABA_API_KEY");
 
   const workspaceId =
     env("ALIBABA_WORKSPACE_ID", "VITE_ALIBABA_WORKSPACE_ID") || "ws-o3v6mh0i8y9tqdfx";

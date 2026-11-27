@@ -2,11 +2,14 @@
  * lesson-prep-worker — PRODUCTION
  * Alibaba Cloud DashScope / Model Studio only.
  *
- * Secrets (mirror Vercel):
- *   ALIBABA_API_KEY, ALIBABA_WORKSPACE_ID, ALIBABA_OPENAI_COMPATIBLE_URL, ALIBABA_DASHSCOPE_URL
+ * Alibaba key: active Supabase `api_keys` row first; env fallback:
+ *   ALIBABA_API_KEY (or VITE_ALIBABA_API_KEY), ALIBABA_WORKSPACE_ID,
+ *   ALIBABA_OPENAI_COMPATIBLE_URL, ALIBABA_DASHSCOPE_URL
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getAlibabaApiKey } from "../_shared/alibabaConfig.ts";
+import { AVELUT_TEXT_MODEL } from "../_shared/textModel.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -78,12 +81,14 @@ async function chatCompletion(
 ): Promise<string> {
   const temperature = opts?.temperature ?? 0.7;
   const max_tokens = opts?.max_tokens ?? 8192;
-  const alibabaKey = env("ALIBABA_API_KEY", "VITE_ALIBABA_API_KEY");
+  const alibabaKey = await getAlibabaApiKey();
   if (!alibabaKey) {
-    throw new Error("No LLM key: set ALIBABA_API_KEY (same as Vercel)");
+    throw new Error("No LLM key: add the alibaba row to api_keys or set ALIBABA_API_KEY");
   }
 
-  const model = opts?.model || "qwen3.5-omni-flash";
+  // All text requests use exactly the canonical text model.
+  void opts?.model;
+  const model = AVELUT_TEXT_MODEL;
   const workspaceId =
     env("ALIBABA_WORKSPACE_ID", "VITE_ALIBABA_WORKSPACE_ID") || "ws-o3v6mh0i8y9tqdfx";
   const baseUrl =
@@ -153,9 +158,9 @@ async function synthesizeSpeech(
   const trimmed = text.trim();
   if (!trimmed) throw new Error("Empty speech text");
 
-  const alibabaKey = env("ALIBABA_API_KEY", "VITE_ALIBABA_API_KEY");
+  const alibabaKey = await getAlibabaApiKey();
   if (!alibabaKey) {
-    throw new Error("TTS unavailable: set ALIBABA_API_KEY");
+    throw new Error("TTS unavailable: configure api_keys or ALIBABA_API_KEY");
   }
 
   const workspaceId =

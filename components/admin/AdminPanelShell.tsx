@@ -16,6 +16,7 @@ import { Shield } from "lucide-react";
 import { getWindowPathname } from "../../utils/pathname";
 import { APP_SETTINGS_PATH, DEFAULT_APP_SETTINGS, DEFAULT_USAGE_SETTINGS } from "../../utils/appSettings";
 import { getFeatureModel } from "../../utils/usage";
+import { AVELUT_TEXT_MODEL } from "../../lib/textModel";
 import { isR2Configured, uploadToR2, deleteFromR2 } from "../../services/cloudflareR2Service";
 import { supabaseStorageService } from "../../services/supabaseStorageService";
 import { sanitizePathSegment } from "../../lib/supabaseRealtimeDb";
@@ -87,8 +88,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
         const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
         const { settings: appSettings, isLoading: isAppSettingsLoading } = useAppSettings();
-        const aiModel = appSettings.alibaba_model || 'qwen3.5-omni-flash';
-        const aiApiKey = (appSettings.alibaba_api_key || '').trim();
+        const aiModel = AVELUT_TEXT_MODEL;
         const ai = useMemo(() => createAvelutAI(appSettings, null), [appSettings]);
         const [isSavingAppSettings, setIsSavingAppSettings] = useState(false);
         const [isTestingAppSettings, setIsTestingAppSettings] = useState(false);
@@ -1061,13 +1061,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         };
 
         const handleSaveAppSettings = async () => {
+            // Drop the legacy client-side secret field before persisting.
+            const { alibaba_api_key: _legacyAlibabaKey, ...draftWithoutSecret } = appSettingsDraft;
+            void _legacyAlibabaKey;
             const nextSettings = {
-                ...appSettingsDraft,
+                ...draftWithoutSecret,
                 primary_ai_provider: 'alibaba_qwen',
-                alibaba_model: (appSettingsDraft.alibaba_model || 'qwen3.5-omni-flash').trim(),
-                alibaba_api_key: (appSettingsDraft.alibaba_api_key || '').trim(),
-                alibaba_model: (appSettingsDraft.alibaba_model || 'qwen3.7-flash').trim(),
-                alibaba_api_key: (appSettingsDraft.alibaba_api_key || '').trim(),
+                alibaba_model: AVELUT_TEXT_MODEL,
                 paystack_public_key: (appSettingsDraft.paystack_public_key || '').trim(),
                 custom_user_limit_rpm: appSettingsDraft.custom_user_limit_rpm ?? 10,
                 custom_user_limit_tpm: appSettingsDraft.custom_user_limit_tpm ?? 250000,
@@ -1093,16 +1093,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         };
 
         const handleTestAvelutSettings = async () => {
-            const modelToTest = (appSettingsDraft.alibaba_model || 'qwen3.5-omni-flash').trim();
-            const apiKeyToTest = (appSettingsDraft.alibaba_api_key || '').trim();
-            if (!apiKeyToTest) {
-                addToast('Add an Alibaba API key before running the hello test.', 'error');
-                return;
-            }
+            const modelToTest = AVELUT_TEXT_MODEL;
 
             setIsTestingAppSettings(true);
             try {
-                const testClient = createAvelutAI({ alibaba_api_key: apiKeyToTest, alibaba_model: modelToTest });
+                const testClient = createAvelutAI(appSettingsDraft as any, null);
                 const response = await testClient.models.generateContent({
                     model: modelToTest,
                     contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
@@ -1792,7 +1787,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             }
 
             setIsPQProcessing(true);
-            const extractionModel = 'qwen3.8-flash';
+            const extractionModel = AVELUT_TEXT_MODEL;
             let uploadedKey: string | null = null;
             let uploadedBucket: string | null = null;
 
@@ -2824,8 +2819,6 @@ FORMAT:
                 {activeTab === 'notifications' && (
                     <NotificationsView
                         allUsersList={scopedUsersList}
-                        aiApiKey={aiApiKey}
-                        aiModel={aiModel}
                         refreshSentNotifications={fetchSentNotifications}
                     />
                 )}

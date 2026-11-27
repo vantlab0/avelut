@@ -9,7 +9,7 @@
 
 import { readCachedJson, writeCachedJson } from '../../utils/cache';
 import { createAvelutAI, getResponseText } from '../../utils/inference';
-import { getFeatureModel } from '../../utils/usage';
+import { AVELUT_TEXT_MODEL } from '../../lib/textModel';
 import { cleanAndParseJson } from '../../utils/jsonUtils';
 import type { AppSettings, UserProfile } from '../../types';
 
@@ -128,10 +128,7 @@ Rules:
 - Keep pedagogicalGoal, speechFocus, and boardVisualPlan concise (1-2 sentences each) for speed.`;
 
   try {
-    const textModel =
-      getFeatureModel('chat_interaction', appSettings) ||
-      appSettings?.alibaba_model ||
-      'qwen3.5-omni-flash';
+    const textModel = AVELUT_TEXT_MODEL;
 
     const ai = createAvelutAI(appSettings, userProfile, { feature: 'chat_interaction' });
     const fetchPromise = ai.models.generateContent({

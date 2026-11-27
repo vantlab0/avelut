@@ -193,11 +193,11 @@ export const PublicProfile: React.FC<PublicProfileProps> = ({ targetUid, onNavig
                     {!isSelf && (
                         <div className="mb-8 w-full flex justify-center">
                             {connectionStatus === 'connected' ? (
-                                <button 
-                                    onClick={() => onNavigate(`messenger`)} // Ideally would open chat directly if we have chatId
-                                    className="w-full sm:w-auto px-8 py-3 bg-[#212529] hover:bg-black text-white font-black rounded-2xl shadow-lg transition"
+                                <button
+                                    disabled
+                                    className="w-full sm:w-auto px-8 py-3 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-black rounded-2xl cursor-default"
                                 >
-                                    Message
+                                    Connected
                                 </button>
                             ) : connectionStatus === 'sent' ? (
                                 <button disabled className="w-full sm:w-auto px-8 py-3 bg-neutral-200 text-neutral-500 font-black rounded-2xl cursor-not-allowed">

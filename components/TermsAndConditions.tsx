@@ -100,7 +100,7 @@ export default function TermsAndConditions() {
               <section id="services" className="scroll-mt-28">
                 <h3 className="text-xl font-bold text-white mb-4">2. Description of Services</h3>
                 <p className="text-slate-300 leading-relaxed mb-4">
-                  AVELUT is an AI-powered personalized study ecosystem designed to assist university students in their learning roadmap. The Platform provides tools including:
+                  AVELUT is an AI-powered personalized study ecosystem designed to assist secondary-school students in their learning roadmap. The Platform provides tools including:
                 </p>
                 <ul className="list-disc pl-5 space-y-2 text-slate-300 mb-4">
                   <li><strong>AVELUT AI Chat Companion:</strong> Natural language chat interface answering academic questions grounded in your syllabus.</li>
@@ -119,7 +119,7 @@ export default function TermsAndConditions() {
                   To access AVELUT, you must create a secure user account utilizing our authentication portal. You represent and warrant that:
                 </p>
                 <ul className="list-disc pl-5 space-y-2 text-slate-300 mb-4">
-                  <li>You will provide accurate, current, and complete registration information (including university department and academic level).</li>
+                  <li>You will provide accurate, current, and complete registration information when required by your school.</li>
                   <li>You are responsible for maintaining the confidentiality of your credentials and all activities occurring under your account.</li>
                   <li>You will notify us immediately of any unauthorized use of your credentials or security breach.</li>
                 </ul>
@@ -130,7 +130,7 @@ export default function TermsAndConditions() {
                 <div className="rounded-2xl border border-red-500/20 bg-red-950/10 p-5 mb-4">
                   <p className="text-sm font-semibold text-red-400 uppercase tracking-wider mb-2">Crucial Academic Compliance Notice</p>
                   <p className="text-slate-300 leading-relaxed text-sm">
-                    AVELUT is built as a study aid, explanation companion, and research reference. We strongly endorse academic integrity. <strong>You agree that you will not use AVELUT to engage in plagiarism, cheat during active exams, write papers for submission, or violate your university's student code of conduct.</strong>
+                    AVELUT is built as a study aid, explanation companion, and research reference. We strongly endorse academic integrity. <strong>You agree that you will not use AVELUT to engage in plagiarism, cheat during active exams, write papers for submission, or violate your school's code of conduct.</strong>
                   </p>
                 </div>
                 <p className="text-slate-300 leading-relaxed">

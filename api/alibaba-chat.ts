@@ -1,3 +1,6 @@
+import { getAlibabaApiKey } from '../lib/server/alibabaConfig';
+import { AVELUT_TEXT_MODEL } from '../lib/textModel';
+
 export const maxDuration = 60;
 
 export async function OPTIONS() {
@@ -6,7 +9,7 @@ export async function OPTIONS() {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept, X-DashScope-WorkSpace, HTTP-Referer, X-Title',
+      'Access-Control-Allow-Headers': 'Content-Type, Accept, X-DashScope-WorkSpace, HTTP-Referer, X-Title',
     },
   });
 }
@@ -16,7 +19,7 @@ const DASHSCOPE_BASE_URLS = [
   'https://dashscope.aliyuncs.com/compatible-mode/v1',
 ];
 
-export const DEFAULT_MODEL = 'qwen3.5-omni-flash';
+export const DEFAULT_MODEL = AVELUT_TEXT_MODEL;
 
 
 
@@ -24,16 +27,20 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const incomingAuth = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim() || '';
-    const validClientKey = incomingAuth && incomingAuth !== 'undefined' && incomingAuth !== 'null' && incomingAuth.length > 10
-      ? incomingAuth
-      : '';
-
-    const alibabaApiKey =
-      process.env.ALIBABA_API_KEY ||
-      process.env.VITE_ALIBABA_API_KEY ||
-      validClientKey ||
-      'sk-ws-H.DIPYRHM.G84f.MEUCIQDZhIC9AXqAS4TPj_UNF1fMPFym2ozZsAtCnsSfX69kQgIgSvk9u7N7s6vb9oZTdxxDiXn9qVi88UEeAGWVh3kmBZ8';
+    // DB-first key resolution. Client-supplied Authorization is ignored.
+    const alibabaApiKey = await getAlibabaApiKey();
+    if (!alibabaApiKey) {
+      return new Response(
+        JSON.stringify({ error: 'Avelut AI key is not configured on the server.' }),
+        {
+          status: 503,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
+      );
+    }
 
     const workspaceId =
       req.headers.get('x-dashscope-workspace') ||
@@ -49,17 +56,9 @@ export async function POST(req: Request) {
       )
     );
 
-    let rawModel = (body.model ? String(body.model).trim() : '');
-    rawModel = rawModel
-      .replace(/^qwen\//i, '')
-      .replace(/^alibaba\//i, '')
-      .replace(/^google\//i, '')
-      .replace(/^openai\//i, '')
-      .replace(/^anthropic\//i, '')
-      .replace(/^meta-llama\//i, '');
-
-    const isQwenModel = rawModel.toLowerCase().startsWith('qwen');
-    const model = isQwenModel ? rawModel : DEFAULT_MODEL;
+    // Requested models (including legacy qwen/qwen3.7-flash) are ignored:
+    // all text traffic uses exactly the canonical text model.
+    const model = AVELUT_TEXT_MODEL;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), hasDocument ? 55000 : 25000);

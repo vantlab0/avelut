@@ -17,7 +17,7 @@ import type { AppSettings, UserProfile } from '../../types';
 import { MermaidBoardService } from './visual-engine/MermaidBoardService';
 import { LlmSvgObjectCache } from './visual-engine/LlmSvgObjectCache';
 import { createAvelutAI, getResponseText } from '../../utils/inference';
-import { getFeatureModel } from '../../utils/usage';
+import { AVELUT_TEXT_MODEL } from '../../lib/textModel';
 
 export const QWEN_REALTIME_MODEL = 'qwen3.8-omni-flash-realtime';
 export const QWEN_FALLBACK_MODEL = 'qwen-omni-turbo-realtime';
@@ -1865,10 +1865,7 @@ export class QwenRealtimeTeacherService {
             message: 'Illustration failed: missing application settings.',
           };
         } else {
-          const textModel =
-            getFeatureModel('chat_interaction', this.appSettings) ||
-            this.appSettings?.alibaba_model ||
-            'qwen3.5-omni-flash';
+          const textModel = AVELUT_TEXT_MODEL;
 
           const ai = createAvelutAI(this.appSettings, this.userProfile, { feature: 'chat_interaction' });
 

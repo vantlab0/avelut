@@ -4,6 +4,7 @@ import { useToast } from '../../../hooks/useToast';
 import type { AppSettings, EmailConfig, UsageSettings, TierConfig } from '../../../types';
 import { VoiceProviderSelector } from '../primitives/VoiceProviderSelector';
 import { AIModelProviderSelector } from '../primitives/AIModelProviderSelector';
+import { AVELUT_TEXT_MODEL } from '../../../lib/textModel';
 
 export const SystemSettingsView: React.FC = () => {
     const { addToast } = useToast();
@@ -380,14 +381,10 @@ export const SystemSettingsView: React.FC = () => {
 
                         <div>
                             <h4 className="font-bold text-slate-900 dark:text-white mb-4 border-b border-slate-200 dark:border-slate-800 pb-2">Feature AI Models</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {Object.keys(appSettings.usage_settings?.feature_costs || {}).concat('title_generation').map((key) => (
-                                    <div key={key} className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{key.replace(/_/g, ' ')} Model</label>
-                                        <input type="text" placeholder="e.g. qwen/qwen3.7-flash" value={(appSettings.usage_settings?.feature_models as any)?.[key] || ''} onChange={e => updateUsageSetting('feature_models', key, e.target.value)} className="w-full p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl outline-none focus:border-amber-500 text-sm" />
-                                    </div>
-                                ))}
-                            </div>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">
+                                Model selection is locked. Every feature uses <code>{AVELUT_TEXT_MODEL}</code>; no per-feature
+                                overrides are available.
+                            </p>
                         </div>
 
                         <div>
@@ -424,10 +421,11 @@ export const SystemSettingsView: React.FC = () => {
                             <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                 <i className="bi bi-cpu-fill text-amber-500"></i> Avelut AI (Alibaba Qwen)
                             </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <input type="text" placeholder="Global Primary Model (qwen3.5-omni-flash)" value={appSettings.alibaba_model || ''} onChange={e => setAppSettings({...appSettings, alibaba_model: e.target.value})} className="p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl outline-none focus:border-amber-500 text-sm" />
-                                <input type="password" placeholder="Alibaba API Key (sk-...)" value={appSettings.alibaba_api_key || ''} onChange={e => setAppSettings({...appSettings, alibaba_api_key: e.target.value})} className="p-3 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl outline-none focus:border-amber-500 text-sm md:col-span-2" />
-                            </div>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">
+                                Text model is locked to <code>{AVELUT_TEXT_MODEL}</code> for every feature. The DashScope API key is
+                                managed server-side in the Supabase <code>api_keys</code> table (provider <code>alibaba</code>) with a
+                                server environment-variable fallback, and cannot be set here.
+                            </p>
                         </div>
 
                         {/* Google Auth */}

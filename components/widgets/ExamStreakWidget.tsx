@@ -17,12 +17,12 @@ interface ExamTarget {
 const PRESET_EXAMS = [
   'Physics WAEC/GCSE',
   'Mathematics WAEC',
-  'Chemistry JAMB',
+  'Chemistry Final Exam',
   'Biology GCSE',
   'English Language WAEC',
-  'Physics JAMB',
+  'Physics Final Exam',
   'Further Maths GCSE',
-  'University Finals',
+  'Final Exams',
 ];
 
 export const ExamStreakWidget: React.FC<ExamStreakWidgetProps> = ({

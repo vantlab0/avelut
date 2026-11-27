@@ -6,6 +6,8 @@ import {
   WEB_SEARCH_UNAVAILABLE_INSTRUCTION,
   isWebSearchConfigured,
 } from '../lib/server/web-search';
+import { getAlibabaApiKey } from '../lib/server/alibabaConfig';
+import { AVELUT_TEXT_MODEL } from '../lib/textModel';
 
 export const maxDuration = 60;
 
@@ -15,7 +17,7 @@ export async function OPTIONS() {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept, X-DashScope-WorkSpace, HTTP-Referer, X-Title',
+      'Access-Control-Allow-Headers': 'Content-Type, Accept, X-DashScope-WorkSpace, HTTP-Referer, X-Title',
     },
   });
 }
@@ -24,20 +26,13 @@ export async function POST(req: Request) {
   try {
     const { messages, model: requestedModel, web_search } = await req.json();
 
-    const incomingAuth = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim() || '';
-    const validClientKey = incomingAuth && incomingAuth !== 'undefined' && incomingAuth !== 'null' && incomingAuth.length > 10
-      ? incomingAuth
-      : '';
-
-    const alibabaApiKey =
-      process.env.ALIBABA_API_KEY ||
-      process.env.VITE_ALIBABA_API_KEY ||
-      validClientKey;
+    // DB-first key resolution; never trust a browser-supplied key.
+    const alibabaApiKey = await getAlibabaApiKey();
 
     if (!alibabaApiKey) {
       return new Response(
         JSON.stringify({
-          error: 'Avelut AI is not configured on this deployment. Add ALIBABA_API_KEY on the server.',
+          error: 'Avelut AI is not configured on this deployment. Add the alibaba row to Supabase api_keys or set ALIBABA_API_KEY on the server.',
           code: 'AI_NOT_CONFIGURED',
         }),
         {
@@ -55,7 +50,9 @@ export async function POST(req: Request) {
       apiKey: alibabaApiKey,
     });
 
-    const modelName = requestedModel || 'qwen3.5-omni-flash';
+    // Requested model is intentionally ignored; all text chat uses one model.
+    void requestedModel;
+    const modelName = AVELUT_TEXT_MODEL;
     const browseRequested = web_search === true || web_search === 'true';
     const searchAvailable = browseRequested && isWebSearchConfigured();
 

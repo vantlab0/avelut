@@ -4,7 +4,7 @@ import { CameraIcon } from './icons/CameraIcon';
 import { ShutterIcon } from './icons/ShutterIcon';
 import { StudyGuideIcon } from './icons/StudyGuideIcon';
 import { AIIcon } from './icons/AIIcon';
-import { ChatsIcon } from './icons/ChatsIcon';
+import { CalendarIcon } from './icons/CalendarIcon';
 import { ShieldCheckIcon } from './icons/ShieldCheckIcon';
 import type { UserProfile } from '../types';
 import { triggerHaptic } from '../utils/capacitorUtils';
@@ -32,7 +32,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
     { id: 'study_guide', icon: <StudyGuideIcon />, label: 'Guide' },
     { id: 'live_tutorial_setup', icon: <Play className="w-6 h-6" />, label: 'Tutorial' },
     { id: 'chat', icon: <AIIcon />, label: 'AI' },
-    { id: 'messenger', icon: <ChatsIcon />, label: 'Chats' },
+    { id: 'timetable', icon: <CalendarIcon />, label: 'Calendar' },
   ];
 
   const adminNavItems = [

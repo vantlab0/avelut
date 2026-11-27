@@ -9,7 +9,3 @@ verify_jwt = false
 
 [functions.lesson-feedback-speech]
 verify_jwt = true
-
-[functions.push-on-message]
-# Database Webhooks do not send a user JWT
-verify_jwt = false

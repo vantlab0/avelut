@@ -1,19 +1,10 @@
-import { auth, db, push, ref as dbRef, serverTimestamp as serverTimestamp, set } from '@/lib/backend';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import type { Notification } from '../types';
 import { NotificationBellIcon } from './icons/NotificationBellIcon';
 import { clearDeliveredNotifications } from '../utils/nativeNotifications';
-import { useToast } from '../hooks/useToast';
 import { NotificationTypeIcon, resolveNotificationRoute, timeAgo } from '../utils/notificationUtils';
 
 export { NotificationTypeIcon, resolveNotificationRoute, timeAgo };
-
-const Send: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <line x1="22" y1="2" x2="11" y2="13" />
-    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-  </svg>
-);
 
 interface NotificationsProps {
   notifications: Notification[];
@@ -23,59 +14,9 @@ interface NotificationsProps {
 }
 
 export const Notifications: React.FC<NotificationsProps> = ({ notifications, onMarkAllAsRead, onMarkAsRead, onNavigate }) => {
-    const { addToast } = useToast();
-    const [replyingTo, setReplyingTo] = useState<string | null>(null);
-    const [replyText, setReplyText] = useState('');
-
     useEffect(() => {
         clearDeliveredNotifications();
     }, []);
-
-    const handleActionClick = (notification: Notification, action: string, e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent the notification click handler from firing
-        
-        if (action === 'reply') {
-            setReplyingTo(replyingTo === notification.id ? null : notification.id);
-            setReplyText('');
-            return;
-        }
-
-        const route = resolveNotificationRoute(notification);
-        if (action === 'navigate' && route) {
-            onMarkAsRead(notification.id);
-            onNavigate(route);
-        }
-    };
-
-    const handleSendReply = async (notification: Notification, e: React.MouseEvent) => {
-        e.stopPropagation();
-        
-        if (!auth.currentUser || !notification.sender_id || !replyText.trim()) return;
-
-        const currentUserId = auth.currentUser.uid;
-        const targetUserId = notification.sender_id;
-        const chatId = [currentUserId, targetUserId].sort().join('_');
-
-        try {
-            const messagesRef = dbRef(db, `messages/${chatId}`);
-            const newMessageRef = push(messagesRef);
-            
-            await set(newMessageRef, {
-                sender_id: currentUserId,
-                text: replyText.trim(),
-                timestamp: serverTimestamp(),
-                status: 'sent'
-            });
-
-            addToast('Reply sent', 'success');
-            setReplyingTo(null);
-            setReplyText('');
-            onMarkAsRead(notification.id);
-        } catch (error) {
-            console.error("Failed to send reply:", error);
-            addToast('Failed to send reply', 'error');
-        }
-    };
 
     const handleNotificationClick = (notification: Notification) => {
         onMarkAsRead(notification.id);
@@ -140,31 +81,6 @@ export const Notifications: React.FC<NotificationsProps> = ({ notifications, onM
                                         {notification.message}
                                     </p>
 
-                                    {/* Inline Reply Input */}
-                                    {replyingTo === notification.id && (
-                                        <div 
-                                            className="mt-3 flex items-center gap-2 animate-in slide-in-from-top-2 duration-200"
-                                            onClick={(e) => e.stopPropagation()} // Keep clicks inside the input from triggering navigation
-                                        >
-                                            <input 
-                                                type="text"
-                                                value={replyText}
-                                                onChange={(e) => setReplyText(e.target.value)}
-                                                placeholder="Type your reply..."
-                                                className="flex-1 bg-white dark:bg-black border border-gray-200  dark:text-white text-sm rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-lime-500 focus:border-transparent outline-none transition-all shadow-sm"
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter') handleSendReply(notification, e as any);
-                                                }}
-                                            />
-                                            <button 
-                                                onClick={(e) => handleSendReply(notification, e)}
-                                                disabled={!replyText.trim()}
-                                                className="p-2.5 rounded-xl bg-lime-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-lime-700 transition-colors shadow-sm"
-                                            >
-                                                <Send className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </div>

@@ -21,6 +21,7 @@ import {
     Globe
 } from 'lucide-react';
 import type { Course } from '../../../types';
+import { AVELUT_TEXT_MODEL } from '../../../lib/textModel';
 
 const LEVELS = ['100lvl', '200lvl', '300lvl', '400lvl', '500lvl'];
 
@@ -89,11 +90,10 @@ export const HybridCourseDrawer: React.FC<HybridCourseDrawerProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const aiApiKey = appSettings.alibaba_api_key?.trim() || '';
     const aiClient = useRef<any>(null);
     useEffect(() => {
         aiClient.current = createAvelutAI(appSettings);
-    }, [aiApiKey, appSettings]);
+    }, [appSettings]);
 
     const toggleDeptSelection = (deptId: string) => {
         if (deptId === currentDeptId) return; // Always keep current department selected
@@ -226,11 +226,8 @@ OUTPUT ONLY A VALID JSON OBJECT:
   ]
 }`;
 
-            // Prefer qwen3.5-omni-flash (app standard). Never force qwen-vl-plus.
-            const modelName =
-              appSettings?.usage_settings?.feature_models?.study_guide_extraction ||
-              appSettings?.alibaba_model ||
-              'qwen3.5-omni-flash';
+            // One canonical text model for all extraction requests.
+            const modelName = AVELUT_TEXT_MODEL;
 
             // Build parts: images go as vision input; PDFs are text-extracted so DashScope
             // does not receive illegal application/pdf inside image_url.

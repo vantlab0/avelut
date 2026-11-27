@@ -12,7 +12,6 @@
  */
 
 import { avelutBoardController } from './AvelutBoardController';
-import { getAlibabaApiKey } from '../../utils/appSettings';
 import { BOARD_DESIGNER_SYSTEM_PROMPT } from './boardDesignerPrompt';
 import type { AppSettings } from '../../types';
 
@@ -101,7 +100,7 @@ export class AvelutBoardVisualizerService {
   private buildDesignerUserPrompt(req: StructuredDiagramRequest): string {
     return `Design a ${req.template} for the topic: "${req.topic}".
 
-Teaching context: ${req.context || 'general university lecture'}
+Teaching context: ${req.context || 'general secondary-school lesson'}
 
 Constraints:
 - max_nodes: ${req.constraints.max_nodes ?? 8}

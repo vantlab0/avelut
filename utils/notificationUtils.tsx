@@ -34,7 +34,6 @@ const isKnownRouteTarget = (route: string): boolean => {
   return new Set([
     'chat',
     'study_guide',
-    'messenger',
     'study_partners',
     'leaderboard',
     'settings',
@@ -51,7 +50,6 @@ export const NotificationTypeIcon: React.FC<{ type: Notification['type']; classN
     case 'study_update':
     case 'study_reminder':
       return <StudyGuideIcon className={className} />;
-    case 'messenger':
     case 'study_partner_request':
     case 'personal':
       return <NotificationBellIcon className={className} />;
@@ -85,14 +83,12 @@ export const resolveNotificationRoute = (notification: Notification): string | n
       return 'exam';
     case 'study_partner_request':
       return 'study_partners';
-    case 'messenger':
-      return 'messenger';
     case 'app_update':
     case 'welcome':
     case 'general_info':
       return 'chat';
     case 'personal':
-      return 'messenger';
+      return 'chat';
     default:
       return 'chat';
   }

@@ -6,10 +6,10 @@ import type { LessonDurationMode } from '../components/tutorial/LessonDurationMo
 import { getDurationProfile } from './durationTeachingProfiles';
 import { ILLUSTRATION_FIRST_PROMPT_BLOCK } from './boardIllustrationRules';
 
-export const TEACHING_DIRECTOR_SYSTEM_PROMPT = `You are Avelut's AI Teaching Director performing as a world-class university lecturer at a live digital chalkboard.
+export const TEACHING_DIRECTOR_SYSTEM_PROMPT = `You are Avelut's AI Teaching Director performing as a world-class teacher at a live digital chalkboard.
 
 CORE PHILOSOPHY:
-- You are an EDUCATIONAL SCIENTIFIC ILLUSTRATOR and LECTURER, NOT a text generator or icon picker.
+- You are an EDUCATIONAL SCIENTIFIC ILLUSTRATOR and TEACHER, NOT a text generator or icon picker.
 - You talk directly to the student in natural spoken language.
 - BOARD PRIORITY: illustrations first (path/line/arrow/circle). Text is secondary.
 - NEVER put giant walls of text on the board. Speech carries verbal depth.
@@ -38,7 +38,7 @@ export function buildTeachingStructurePrompt(params: {
 ${courseName ? `Course: ${courseName}\n` : ''}${syllabusContext ? `Syllabus/Context: ${syllabusContext}\n` : ''}Student Name: ${resolvedName}
 TARGET DURATION MODE: ${durationMode} minutes
 
-You are an expert university professor planning a live lesson for ~${durationMode} minutes of content.
+You are an expert secondary-school teacher planning a live lesson for ~${durationMode} minutes of content.
 
 MANDATORY BOARD COUNT: You MUST generate EXACTLY ${expectedCount} boards (from board_1 to board_${expectedCount}) inside the "boards" array. Generating only 3, 4, or 5 boards is STRICTLY PROHIBITED.
 ${profile.boardCountHint}
@@ -192,7 +192,7 @@ export function buildSingleBoardPrompt(params: {
   const name = studentName || 'Student';
   const profile = getDurationProfile(durationMode);
 
-  return `Perform as a live university lecturer for Board ${currentBoardPlan.board_number} of ${fullStructure.boards?.length || 5}: "${currentBoardPlan.title}" on the topic "${topic}".
+  return `Perform as a live teacher for Board ${currentBoardPlan.board_number} of ${fullStructure.boards?.length || 5}: "${currentBoardPlan.title}" on the topic "${topic}".
 
 DURATION MODE: ${durationMode} minutes
 TONE: ${profile.toneRules}
@@ -351,13 +351,13 @@ Question: "${params.question}"
 Expected Concepts: ${JSON.stringify(params.expectedConcepts || [])}
 Student's Answer: "${params.studentAnswer}"
 
-Provide encouraging, concise lecturer feedback.
+Provide encouraging, concise teacher feedback.
 
 JSON OUTPUT SCHEMA:
 {
   "isCorrect": boolean,
   "score": "correct" | "partially_correct" | "misconception",
-  "spokenFeedback": "1 to 3 warm lecturer sentences",
+  "spokenFeedback": "1 to 3 warm teacher sentences",
   "boardActions": [],
   "followUpObjective": "brief next step"
 }`;
@@ -377,7 +377,7 @@ ${ILLUSTRATION_FIRST_PROMPT_BLOCK}
 
 JSON OUTPUT SCHEMA:
 {
-  "spokenAnswer": "80 to 120 words of clear lecturer speech.",
+  "spokenAnswer": "80 to 120 words of clear teacher speech.",
   "boardActions": [
     {
       "id": "ask_draw",

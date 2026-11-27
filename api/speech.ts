@@ -1,3 +1,5 @@
+import { getAlibabaApiKey } from '../lib/server/alibabaConfig';
+
 export const maxDuration = 45;
 
 export async function OPTIONS() {
@@ -113,13 +115,13 @@ async function handleTtsSynthesis(
   withTimestamps: boolean,
   isPrivate = false
 ) {
-  // Alibaba Cloud DashScope TTS — NEVER hardcode keys (repo is public)
-  const alibabaKey = process.env.ALIBABA_API_KEY || process.env.VITE_ALIBABA_API_KEY || '';
+  // Alibaba Cloud DashScope TTS — DB-first key, env fallback; never hardcoded.
+  const alibabaKey = await getAlibabaApiKey();
 
   if (!alibabaKey) {
     return new Response(
       JSON.stringify({
-        error: 'TTS unavailable: set ALIBABA_API_KEY in server environment. No hardcoded key fallback.',
+        error: 'TTS unavailable: add the alibaba row to Supabase api_keys or set ALIBABA_API_KEY in the server environment. No hardcoded key fallback.',
       }),
       {
         status: 503,

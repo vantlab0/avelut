@@ -1,4 +1,4 @@
-import { auth, db, signOut, get, off, onAuthStateChanged, onDisconnect, onValue, push, ref as dbRef, serverTimestamp, set, type AuthUser, update, updateProfile, supabase, markChatAsRead } from '@/lib/backend';
+import { auth, db, signOut, get, off, onAuthStateChanged, onDisconnect, onValue, ref as dbRef, serverTimestamp, type AuthUser, update, updateProfile, supabase } from '@/lib/backend';
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
 import { readCachedJson, writeCachedJson, clearCachedKey, initCacheFromSqlite } from './utils/cache';
 import { DEFAULT_USAGE_SETTINGS } from './utils/appSettings';
@@ -8,7 +8,6 @@ import { Login } from './components/Login';
 import { SignUp } from './components/SignUp';
 import { AdminLogin } from './components/AdminLogin';
 import { UploadCenter } from './components/UploadCenter';
-import { Onboarding } from './components/Onboarding';
 
 import { createAvelutAI } from './utils/inference';
 import { Capacitor, registerPlugin } from '@capacitor/core';
@@ -290,7 +289,6 @@ const ALLOWED_ROUTE_ITEMS = new Set([
     'study_guide',
     'notebooks',
     'chat',
-    'messenger',
     'history',
     'feedback',
     'settings',
@@ -785,7 +783,6 @@ const App: React.FC = () => {
     const isSidebarSwipeDisabled =
         activeItem === 'voice_tutorial' ||
         activeItem === 'live_tutorial_setup' ||
-        activeItem === 'messenger' ||
         activeItem === 'study_guide';
 
     const { mainRef, overlayRef, sidebarRef, containerRef } = useSidebarGesture({
@@ -932,57 +929,20 @@ const App: React.FC = () => {
             } catch {}
         }
     }, []);
-    const [pendingMessengerChatId, setPendingMessengerChatId] = useState<string | null>(null);
     const [pendingDeepLink, setPendingDeepLink] = useState<{
         route?: string;
-        chatId?: string;
         courseId?: string;
         topicId?: string;
         tutorialId?: string;
         sessionId?: string;
         actionId?: string;
-        replyText?: string;
     } | null>(null);
 
     useEffect(() => {
         if (!user || isAuthChecking || isLoading || isProfileLoading || !pendingDeepLink) return;
 
-        const { route, chatId, courseId, topicId, tutorialId, sessionId, actionId, replyText } = pendingDeepLink;
+        const { route, courseId, topicId, tutorialId, sessionId, actionId } = pendingDeepLink;
         setPendingDeepLink(null);
-
-        if ((actionId === 'reply_action' || actionId === 'reply') && replyText && chatId) {
-            (async () => {
-                try {
-                    const messagesRef = dbRef(db, `messages/${chatId}`);
-                    const newMsgRef = push(messagesRef);
-                    await set(newMsgRef, {
-                        senderId: user.uid,
-                        text: replyText,
-                        timestamp: Date.now(),
-                        isRead: false
-                    });
-                    addToast('Reply sent ✓', 'success');
-                } catch (e) {
-                    console.error('Failed to send inline reply:', e);
-                    addToast('Failed to send reply', 'error');
-                }
-            })();
-            setActiveItem('messenger');
-            setPendingMessengerChatId(chatId);
-            return;
-        }
-
-        if ((actionId === 'mark_read' || actionId === 'mark_as_read') && chatId) {
-            markChatAsRead(chatId, user.uid).catch(console.warn);
-            addToast('Marked as read ✓', 'success');
-            return;
-        }
-
-        if (chatId || actionId === 'open_chat' || actionId === 'messenger' || route === 'messenger') {
-            setActiveItem('messenger');
-            if (chatId) setPendingMessengerChatId(chatId);
-            return;
-        }
 
         if (actionId === 'open_study_guide' || actionId === 'study_guide' || route === 'study_guide' || courseId || topicId) {
             setActiveItem('study_guide');
@@ -994,19 +954,16 @@ const App: React.FC = () => {
             return;
         }
 
-        if (route && ['chat', 'study_guide', 'study_partners', 'messenger', 'notifications', 'leaderboard', 'timetable', 'billing'].includes(route)) {
+        if (route && ['chat', 'study_guide', 'study_partners', 'notifications', 'leaderboard', 'timetable', 'billing'].includes(route)) {
             setActiveItem(route);
         }
     }, [user, isAuthChecking, isLoading, isProfileLoading, pendingDeepLink]);
 
-    const currentPageLabel = activeItem === 'messenger'
-        ? 'Messenger'
-        : activeItem === 'study_partners'
-            ? 'Study Partners'
-            : (navigationItems.find(item => item.id === activeItem)?.label || 'Dashboard');
+    const currentPageLabel = activeItem === 'study_partners'
+        ? 'Study Partners'
+        : (navigationItems.find(item => item.id === activeItem)?.label || 'Dashboard');
 
     const [isNotificationsPanelOpen, setIsNotificationsPanelOpen] = useState(false);
-    const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
     const [showPrivacyModal, setShowPrivacyModal] = useState(false);
     const [isTourOpen, setIsTourOpen] = useState(false);
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -1030,34 +987,6 @@ const App: React.FC = () => {
     ]);
     const isUploadCenterRoute = getWindowPathname().startsWith('/upload-center');
     const isAdminRoute = getWindowPathname().startsWith('/admin');
-
-    const applyMessengerTarget = useCallback((chatId: string | null | undefined) => {
-        if (!chatId) return;
-        setActiveItem('messenger');
-        setPendingMessengerChatId(chatId);
-    }, [setActiveItem]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        const url = new URL(window.location.href);
-        const chatId = url.searchParams.get('openMessengerChatId');
-        if (chatId) {
-            applyMessengerTarget(chatId);
-            url.searchParams.delete('openMessengerChatId');
-            window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-        }
-
-        const handleServiceWorkerMessage = (event: MessageEvent) => {
-            const data = event.data || {};
-            if (data?.type === 'open-messenger-chat' && data.chatId) {
-                applyMessengerTarget(String(data.chatId));
-            }
-        };
-
-        navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage);
-        return () => navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage);
-    }, [applyMessengerTarget]);
 
     const { attemptApiCall } = useApiLimiter();
     const tourStatusRef = useRef<'unknown' | 'checked' | 'shown'>('unknown');
@@ -1106,7 +1035,7 @@ const App: React.FC = () => {
               setExamHistory(cachedExams);
             }
 
-            initNativeNotifications(currentUser, addToast, setActiveItem, setPendingMessengerChatId);
+            initNativeNotifications(currentUser, addToast, setActiveItem);
             cloudSyncEngine.start(currentUser.uid);
           }
           setIsAuthChecking(false);
@@ -1127,7 +1056,7 @@ const App: React.FC = () => {
                     return;
                 }
                 const route = url.pathname.replace(/^\//, '').split('/')[0];
-                if (['chat', 'study_guide', 'study_partners', 'messenger', 'notifications', 'leaderboard', 'timetable', 'billing'].includes(route)) {
+                if (['chat', 'study_guide', 'study_partners', 'notifications', 'leaderboard', 'timetable', 'billing'].includes(route)) {
                     setActiveItem(route);
                     return;
                 }
@@ -1140,54 +1069,29 @@ const App: React.FC = () => {
             }
             if (isCustomScheme && url.host === 'action') {
                 const actionId = url.searchParams.get('id') || url.searchParams.get('actionId') || undefined;
-                const replyText = url.searchParams.get('replyText') || undefined;
-                const chatId = url.searchParams.get('chatId') || undefined;
                 const courseId = url.searchParams.get('courseId') || undefined;
                 const topicId = url.searchParams.get('topicId') || undefined;
                 const tutorialId = url.searchParams.get('tutorialId') || undefined;
                 const sessionId = url.searchParams.get('sessionId') || undefined;
                 const route = url.searchParams.get('route') || undefined;
 
-                const deepLinkObj = { route, chatId, courseId, topicId, tutorialId, sessionId, actionId, replyText };
+                const deepLinkObj = { route, courseId, topicId, tutorialId, sessionId, actionId };
 
                 if (!user || isAuthChecking || isLoading || isProfileLoading) {
                     setPendingDeepLink(deepLinkObj);
                     return;
                 }
 
-                if (actionId === 'reply_action' && replyText && chatId && user) {
-                     try {
-                         const messagesRef = dbRef(db, `messages/${chatId}`);
-                         const newMsgRef = push(messagesRef);
-                         await set(newMsgRef, {
-                             senderId: user.uid,
-                             text: replyText,
-                             timestamp: Date.now(),
-                             isRead: false
-                         });
-                         addToast('Reply sent ✓', 'success');
-                     } catch (e) {
-                         console.error('Failed to send inline reply:', e);
-                         addToast('Failed to send reply', 'error');
-                     }
-                } else if (actionId === 'open_chat' && chatId) {
-                     setActiveItem('messenger');
-                     setPendingMessengerChatId(chatId);
-                } else if (actionId === 'timetable') {
+                if (actionId === 'timetable') {
                      setActiveItem('timetable');
                 } else if (actionId === 'study_guide') {
                      setActiveItem('study_guide');
                 } else if (actionId === 'study_partners') {
                      setActiveItem('study_partners');
-                } else if (actionId === 'messenger') {
-                     setActiveItem('messenger');
                 } else if (actionId === 'notifications') {
                      setActiveItem('notifications');
                 } else if (actionId === 'leaderboard') {
                      setActiveItem('leaderboard');
-                } else if (chatId) {
-                     setActiveItem('messenger');
-                     setPendingMessengerChatId(chatId);
                 } else if (actionId) {
                      setActiveItem(actionId);
                 }
@@ -1201,7 +1105,7 @@ const App: React.FC = () => {
                     setActiveItem('billing');
                     return;
                 }
-                if (['chat', 'study_guide', 'study_partners', 'messenger', 'notifications', 'leaderboard', 'timetable'].includes(target)) {
+                if (['chat', 'study_guide', 'study_partners', 'notifications', 'leaderboard', 'timetable'].includes(target)) {
                     setActiveItem(target);
                 }
             }
@@ -1326,44 +1230,32 @@ const App: React.FC = () => {
                     return;
                 }
 
-                const hasOnboardingFields = !!(data.department_id && data.school_id && data.college_id);
-                const isLikelyPartialOptimistic = !hasOnboardingFields && !data.created_at && !data.is_activated;
-                const hasPriorCompleteProfile = !!(userProfileRef.current?.department_id);
-                const isPartialUpdate = isLikelyPartialOptimistic && hasPriorCompleteProfile;
+                writeCachedJson(cacheKey, data);
+                setUserProfile(data as UserProfile);
+                userProfileRef.current = data as UserProfile;
 
-                if (!isPartialUpdate) {
-                    writeCachedJson(cacheKey, data);
-                    setUserProfile(data as UserProfile);
-                    userProfileRef.current = data as UserProfile;
-
-                    if (!data.department_id) {
-                        setActiveItem('onboarding');
-                        sessionStorage.removeItem('just_signed_up');
+                if (tourStatusRef.current === 'unknown') {
+                    if (data.privacy_consent?.granted && !data.has_completed_tour) {
+                        startTour();
+                        tourStatusRef.current = 'shown';
                     } else {
-                        if (tourStatusRef.current === 'unknown') {
-                            if (data.privacy_consent?.granted && !data.has_completed_tour) {
-                                startTour();
-                                tourStatusRef.current = 'shown';
-                            } else {
-                                tourStatusRef.current = 'checked';
-                            }
-                        }
+                        tourStatusRef.current = 'checked';
+                    }
+                }
+
+                if (!sessionStorage.getItem('session_notifications_sent')) {
+                    sessionStorage.setItem('session_notifications_sent', 'true');
+                    const today = new Date().toISOString().split('T')[0];
+                    const lastLoginStr = localStorage.getItem('last_login_date');
+                    const currentAppVersion = "5.1.0";
+                    const lastSeenVersion = localStorage.getItem('last_seen_app_version');
+
+                    if (lastLoginStr !== today) {
+                        localStorage.setItem('last_login_date', today);
                     }
 
-                    if (!sessionStorage.getItem('session_notifications_sent')) {
-                        sessionStorage.setItem('session_notifications_sent', 'true');
-                        const today = new Date().toISOString().split('T')[0];
-                        const lastLoginStr = localStorage.getItem('last_login_date');
-                        const currentAppVersion = "5.1.0";
-                        const lastSeenVersion = localStorage.getItem('last_seen_app_version');
-
-                        if (lastLoginStr !== today) {
-                            localStorage.setItem('last_login_date', today);
-                        }
-
-                        if (lastSeenVersion !== currentAppVersion) {
-                            localStorage.setItem('last_seen_app_version', currentAppVersion);
-                        }
+                    if (lastSeenVersion !== currentAppVersion) {
+                        localStorage.setItem('last_seen_app_version', currentAppVersion);
                     }
                 }
                 setIsProfileLoading(false);
@@ -1392,9 +1284,6 @@ const App: React.FC = () => {
                 setUserProfile(defaultProfile);
                 userProfileRef.current = defaultProfile;
                 setIsProfileLoading(false);
-                if (!defaultProfile.department_id) {
-                    setActiveItem('onboarding');
-                }
             }
         }, (error) => {
             console.error("Error fetching user profile:", error);
@@ -1499,7 +1388,6 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (!userProfile?.uid) {
-            setUnreadMessagesCount(0);
             setNotifications([]);
             return;
         }
@@ -1519,17 +1407,8 @@ const App: React.FC = () => {
             writeCachedJson(cacheKeyNotif, truncatedNotif);
         });
 
-        const userChatsRef = dbRef(db, `user_chats/${userProfile.uid}`);
-        const unsubscribeUnreadCount = onValue(userChatsRef, (snapshot) => {
-            const data = snapshot.val() || {};
-            let totalUnread = 0;
-            Object.values(data).forEach((chat: any) => { totalUnread += (chat.unreadCount || 0); });
-            setUnreadMessagesCount(totalUnread);
-        });
-
         return () => {
             off(notificationsRef, 'value', unsubscribeNotifications);
-            off(userChatsRef, 'value', unsubscribeUnreadCount);
         };
     }, [userProfile?.uid, isReadyForBackgroundSync]);
 
@@ -1674,60 +1553,6 @@ const App: React.FC = () => {
         }
     };
 
-    const handleOnboardingComplete = async (profileData: { schoolId: string; collegeId: string; departmentId: string; level: string }) => {
-        if (!user) return;
-        const now = Date.now();
-        const displayName = user.displayName || 'AVELITE';
-        const photoURL = user.photoURL || '';
-        const userProfileData: Omit<UserProfile, 'privacy_consent'> = {
-            uid: user.uid,
-            display_name: displayName,
-            photo_url: photoURL,
-            school_id: profileData.schoolId,
-            college_id: profileData.collegeId,
-            department_id: profileData.departmentId,
-            level: profileData.level,
-            current_streak: 0,
-            last_activity_date: now,
-            notifications_enabled: false,
-            is_online: true,
-            last_seen: now,
-            has_completed_tour: false,
-            is_activated: true,
-            subscription_status: 'free',
-            ai_credits_balance: typeof userProfile?.ai_credits_balance === 'number'
-                ? userProfile.ai_credits_balance
-                : (typeof (userProfile as any)?.ai_credits === 'number' ? (userProfile as any).ai_credits : 50),
-        };
-        try {
-            const userRef = dbRef(db, `users/${user.uid}`);
-            await update(userRef, userProfileData);
-
-            try {
-                const notificationRef = dbRef(db, `notifications/${user.uid}`);
-                const newNotifRef = push(notificationRef);
-                await set(newNotifRef, {
-                    type: 'welcome',
-                    title: 'Welcome to AVELUT!',
-                    message: 'Your learning journey starts now. Explore the study guide to begin.',
-                    is_read: false,
-                    timestamp: serverTimestamp(),
-                    route: 'study_guide',
-                    audience: 'single',
-                    category: 'welcome'
-                });
-            } catch (notifErr) {
-                console.warn("Could not dispatch welcome notification (non-blocking):", notifErr);
-            }
-
-            setUserProfile(prev => ({...prev, ...userProfileData } as UserProfile));
-            setActiveItem('chat');
-            addToast("Profile completed successfully!", "success");
-        } catch (error: any) {
-            console.error("Failed to complete onboarding:", error.message || error);
-            addToast(error.message || "Could not save your profile.", "error");
-        }
-    };
 
     const handleMarkNotificationRead = async (id: string) => {
         if (!user) return;
@@ -1812,7 +1637,6 @@ const App: React.FC = () => {
       { target: 'body', title: '👋 Welcome to AVELUT!', content: "Let's take a quick tour of your new learning dashboard.", placement: 'center' },
       { target: '[data-tour-id="dashboard-content"]', title: '📊 Your Dashboard', content: 'View your progress, streaks, and personalized lessons.', placement: 'bottom' },
       { target: isMobile ? '[data-tour-id="bottomnav-notebooks"]' : '[data-tour-id="sidebar-notebooks"]', title: '📚 Notebooks', content: 'Access your personal notebooks and study materials anytime.', placement: isMobile ? 'top' : 'right' },
-      { target: isMobile ? '[data-tour-id="bottomnav-messenger"]' : '[data-tour-id="header-messenger"]', title: '🤝 Messenger', content: 'Connect with other learners and chat privately.', placement: isMobile ? 'top' : 'bottom' },
       ...(isMobile ? [{ target: '[data-tour-id="mobile-menu-button"]', title: '⚙️ Main Menu', content: 'Access your settings, help, and logout options from here.', placement: 'bottom' as const }] : [{ target: '[data-tour-id="sidebar-settings"]', title: '⚙️ Settings', content: 'Update your info and view your achievements.', placement: 'top' as const }]),
       { target: 'body', title: "🎉 You're all set!", content: 'Enjoy exploring your learning journey. Tap "Finish" to start!', placement: 'center' },
     ];
@@ -2062,7 +1886,6 @@ const App: React.FC = () => {
                 isCollapsed={isDesktopSidebarCollapsed}
                 onToggleCollapse={() => setIsDesktopSidebarCollapsed(prev => !prev)}
                 unreadCount={unreadCount}
-                unreadMessagesCount={unreadMessagesCount}
                 recentConversations={recentConversations}
                 activeConversationId={activeConversationId}
                 onSelectConversation={(id) => {
@@ -2105,9 +1928,7 @@ const App: React.FC = () => {
                     onMarkAllAsRead={handleMarkAllNotificationsRead}
                     onMarkAsRead={handleMarkNotificationRead}
                     onMenuClick={handleToggleMenu}
-                    onMessengerClick={() => setActiveItem('messenger')}
                     onCalendarClick={() => setIsCalendarOpen(true)}
-                    unreadMessagesCount={unreadMessagesCount}
                     userProfile={userProfile}
                     leftActions={customHeaderConfig?.leftActions}
                     rightActions={customHeaderConfig?.rightActions}
@@ -2126,7 +1947,7 @@ const App: React.FC = () => {
                 <div
                     id="main-scroll-container"
                     className={
-                        activeItem === 'chat' || activeItem === 'messenger' || activeItem === 'voice_tutorial' || activeItem === 'study_guide'
+                        activeItem === 'chat' || activeItem === 'voice_tutorial' || activeItem === 'study_guide'
                         ? "flex-1 min-h-0 overflow-hidden flex flex-col"
                         : "flex-1 min-h-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden content-with-bottom-nav isolate"
                     }
@@ -2140,9 +1961,6 @@ const App: React.FC = () => {
                             appSettings={appSettings}
                             userProgress={userProgress}
                             dashboardData={dashboardData}
-                            initialMessengerChatId={pendingMessengerChatId}
-                            onClearMessengerChatId={() => setPendingMessengerChatId(null)}
-                            unreadMessagesCount={unreadMessagesCount}
                             handleLogout={handleLogout}
                             handleProfileUpdate={handleProfileUpdate}
                             handleDeleteAccount={handleAccountDeletion}
@@ -2150,7 +1968,6 @@ const App: React.FC = () => {
                             triggerScanRef={triggerScanRef}
                             onNavigate={setActiveItem}
                             setCustomHeaderConfig={setCustomHeaderConfig}
-                            handleOnboardingComplete={handleOnboardingComplete}
                             notifications={notifications}
                             onMarkAsRead={handleMarkNotificationRead}
                             onMarkAllAsRead={handleMarkAllNotificationsRead}

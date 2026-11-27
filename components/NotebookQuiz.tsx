@@ -8,6 +8,7 @@ import { useAppSettings } from '../hooks/useAppSettings';
 import { useToast } from '../hooks/useToast';
 import type { UserProfile } from '../types';
 import type { Notebook, NotebookChapter } from '../services/notebookStorageService';
+import { AVELUT_TEXT_MODEL } from '../lib/textModel';
 
 interface QuizQuestion {
   id: number;
@@ -214,7 +215,7 @@ RULES:
 ]`;
 
       const response = await ai.models.generateContent({
-        model: 'qwen/qwen3.7-flash',
+        model: AVELUT_TEXT_MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',

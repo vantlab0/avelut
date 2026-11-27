@@ -23,7 +23,7 @@ export const DURATION_PROFILES: Record<LessonDurationMode, DurationTeachingProfi
   15: {
     minutes: 15,
     boardCountHint: 'Plan EXACTLY 8 boards (board_1 to board_8). Each board MUST last ~2 minutes of teaching speech (~200-260 words per board).',
-    speechWordRange: '200 to 260 words per board (~2 minutes of spoken lecturer explanation per board)',
+    speechWordRange: '200 to 260 words per board (~2 minutes of spoken teacher explanation per board)',
     toneRules: 'Efficient coach. Minimal small talk. Clear, direct, and thorough step-by-step teaching.',
     pacingRules: 'Paced teaching (~2 mins per board); short 1-2s reflection pause after key formulas or diagrams.',
     structureExtra: `STEP TYPES: prefer hook, concept, definition, worked_example, summary. EXACTLY 8 boards total.
@@ -36,8 +36,8 @@ ${SHARED_ILLUSTRATION}`,
   30: {
     minutes: 30,
     boardCountHint: 'Plan EXACTLY 15 boards (board_1 to board_15) covering intuition through application. Each board MUST last ~2 minutes of teaching speech (~220-280 words per board).',
-    speechWordRange: '220 to 280 words per board (~2 minutes of spoken lecturer explanation per board)',
-    toneRules: 'Friendly university tutor. Occasional encouragement. Address the student by name occasionally.',
+    speechWordRange: '220 to 280 words per board (~2 minutes of spoken teacher explanation per board)',
+    toneRules: 'Friendly secondary-school tutor. Occasional encouragement. Address the student by name occasionally.',
     pacingRules: 'Paced teaching (~2 mins per board); short reflection pauses after key diagrams or formulas (pauseAfterMs 1500-3500).',
     structureExtra: `Include intuition, mechanism, worked_example, misconception_check, and question boards. EXACTLY 15 boards total. Each board MUST be ~2 minutes of active teaching.
 visual_purpose must describe a drawable figure for almost every board.
@@ -51,7 +51,7 @@ ${SHARED_ILLUSTRATION}`,
     minutes: 60,
     boardCountHint:
       'Plan EXACTLY 30 boards (board_1 to board_30) organized into 4-6 chapters/sections. Each board MUST last ~2 minutes of teaching speech (~240-320 words per board). Full live lecture.',
-    speechWordRange: '240 to 320 words per board (~2 minutes of spoken lecturer explanation per board)',
+    speechWordRange: '240 to 320 words per board (~2 minutes of spoken teacher explanation per board)',
     toneRules: `REAL HUMAN LECTURER:
 - Talk to the student by name.
 - Light academic jokes and asides, then continue the syllabus.
@@ -65,7 +65,7 @@ ${SHARED_ILLUSTRATION}`,
 Sequence: hook -> intuition -> core -> worked example -> trap -> practice -> summary. Each board is a ~2-minute deep dive.
 3-6 question or misconception_check boards.
 ${SHARED_ILLUSTRATION}`,
-    boardExtra: `SPEECH BEATS (4-8): ~2 minutes of rich lecturer speech + visual drawing triggers.
+    boardExtra: `SPEECH BEATS (4-8): ~2 minutes of rich teacher speech + visual drawing triggers.
 BOARD: progressive path draws first; secondary title/bullets/formula only.
 ${SHARED_ILLUSTRATION}`,
   },

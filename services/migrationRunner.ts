@@ -203,32 +203,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. Messenger & Social Collaboration
-CREATE TABLE IF NOT EXISTS public.messenger_conversations (
-    id TEXT PRIMARY KEY,
-    user1_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    user2_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    last_message_preview TEXT,
-    last_message_sender UUID REFERENCES public.profiles(id),
-    last_message_time TIMESTAMPTZ DEFAULT NOW(),
-    unread_user1 INTEGER DEFAULT 0,
-    unread_user2 INTEGER DEFAULT 0,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.messenger_messages (
-    id TEXT PRIMARY KEY,
-    conversation_id TEXT NOT NULL REFERENCES public.messenger_conversations(id) ON DELETE CASCADE,
-    sender_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    recipient_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    message_type TEXT DEFAULT 'text', -- 'text' | 'image' | 'voice' | 'file'
-    text_content TEXT,
-    media_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    is_delivered BOOLEAN DEFAULT FALSE,
-    is_read BOOLEAN DEFAULT FALSE
-);
-
+-- 6. Social Collaboration
 CREATE TABLE IF NOT EXISTS public.study_partners (
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     partner_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -273,8 +248,6 @@ CREATE INDEX IF NOT EXISTS idx_courses_dept ON public.courses(department_id, lev
 CREATE INDEX IF NOT EXISTS idx_user_progress_user ON public.user_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_exam_history_user ON public.exam_history(user_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id, is_read, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_messenger_messages_convo ON public.messenger_messages(conversation_id, created_at ASC);
-CREATE INDEX IF NOT EXISTS idx_messenger_conv_users ON public.messenger_conversations(user1_id, user2_id);
 
 -- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -291,8 +264,6 @@ ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.exam_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messenger_conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messenger_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.study_partners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
@@ -324,29 +295,6 @@ ON public.exam_history FOR ALL TO authenticated USING (auth.uid() = user_id) WIT
 -- Notifications Policies
 CREATE POLICY "Users can view and update their own notifications"
 ON public.notifications FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
--- Messenger Conversations Policies
-CREATE POLICY "Users can view conversations they belong to"
-ON public.messenger_conversations FOR SELECT TO authenticated
-USING (auth.uid() = user1_id OR auth.uid() = user2_id);
-
-CREATE POLICY "Users can create or update their conversations"
-ON public.messenger_conversations FOR ALL TO authenticated
-USING (auth.uid() = user1_id OR auth.uid() = user2_id)
-WITH CHECK (auth.uid() = user1_id OR auth.uid() = user2_id);
-
--- Messenger Messages Policies
-CREATE POLICY "Users can view messages sent or received"
-ON public.messenger_messages FOR SELECT TO authenticated
-USING (auth.uid() = sender_id OR auth.uid() = recipient_id);
-
-CREATE POLICY "Users can send messages"
-ON public.messenger_messages FOR INSERT TO authenticated
-WITH CHECK (auth.uid() = sender_id);
-
-CREATE POLICY "Users can update received messages"
-ON public.messenger_messages FOR UPDATE TO authenticated
-USING (auth.uid() = recipient_id OR auth.uid() = sender_id);
 
 -- Study Partners Policies
 CREATE POLICY "Users can manage their study partners"
@@ -412,8 +360,6 @@ WITH CHECK (bucket_id = 'solution_shares' AND (storage.foldername(name))[1] = au
 
 ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messenger_messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messenger_conversations;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.user_progress;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.subscriptions;
 `
@@ -643,49 +589,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.materials;
   },
   {
     id: '20260905_messenger_notifications.sql',
-    title: 'Messenger Notifications',
+    title: 'Notifications and Social Tables',
     sql: `
--- Avelut: Messenger + notifications on Supabase (Realtime / WebSockets)
+-- Avelut: notifications and social tables on Supabase (Realtime / WebSockets)
 -- Safe to re-run. Compatible with existing \`reports.reporter_id\` column.
-
--- Chats (1:1 for now; extendable to groups)
-create table if not exists public.chats (
-  id uuid primary key default gen_random_uuid(),
-  is_group boolean default false,
-  title text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-
-create table if not exists public.chat_members (
-  chat_id uuid references public.chats(id) on delete cascade,
-  user_id uuid references auth.users(id) on delete cascade,
-  other_user_id uuid,
-  last_message_text text,
-  last_message_at timestamptz,
-  last_message_sender_id uuid,
-  last_message_is_read boolean default true,
-  unread_count int default 0,
-  created_at timestamptz default now(),
-  primary key (chat_id, user_id)
-);
-
-create index if not exists chat_members_user_idx on public.chat_members(user_id);
-create index if not exists chat_members_updated_idx on public.chat_members(user_id, last_message_at desc nulls last);
-
-create table if not exists public.messages (
-  id uuid primary key default gen_random_uuid(),
-  chat_id uuid not null references public.chats(id) on delete cascade,
-  sender_id uuid not null references auth.users(id) on delete cascade,
-  text text,
-  media_url text,
-  media_type text,
-  reply_to uuid references public.messages(id) on delete set null,
-  is_deleted boolean default false,
-  created_at timestamptz default now()
-);
-
-create index if not exists messages_chat_created_idx on public.messages(chat_id, created_at desc);
 
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
@@ -781,33 +688,10 @@ begin
 end \$\$;
 
 -- RLS
-alter table public.chats enable row level security;
-alter table public.chat_members enable row level security;
-alter table public.messages enable row level security;
 alter table public.notifications enable row level security;
 alter table public.reports enable row level security;
 alter table public.study_partners enable row level security;
 alter table public.user_blocks enable row level security;
-
-drop policy if exists chat_members_select on public.chat_members;
-create policy chat_members_select on public.chat_members for select using (auth.uid() = user_id);
-
-drop policy if exists chat_members_all on public.chat_members;
-create policy chat_members_all on public.chat_members for all using (auth.uid() = user_id);
-
-drop policy if exists messages_select on public.messages;
-create policy messages_select on public.messages for select using (
-  exists (select 1 from public.chat_members m where m.chat_id = messages.chat_id and m.user_id = auth.uid())
-);
-
-drop policy if exists messages_insert on public.messages;
-create policy messages_insert on public.messages for insert with check (
-  auth.uid() = sender_id and
-  exists (select 1 from public.chat_members m where m.chat_id = messages.chat_id and m.user_id = auth.uid())
-);
-
-drop policy if exists messages_update on public.messages;
-create policy messages_update on public.messages for update using (auth.uid() = sender_id);
 
 drop policy if exists notifications_own on public.notifications;
 create policy notifications_own on public.notifications for all using (auth.uid() = user_id);
@@ -822,25 +706,9 @@ create policy study_partners_own on public.study_partners for all using (auth.ui
 drop policy if exists user_blocks_own on public.user_blocks;
 create policy user_blocks_own on public.user_blocks for all using (auth.uid() = user_id);
 
-drop policy if exists chats_select on public.chats;
-create policy chats_select on public.chats for select using (
-  exists (select 1 from public.chat_members m where m.chat_id = chats.id and m.user_id = auth.uid())
-);
-
-drop policy if exists chats_insert on public.chats;
-create policy chats_insert on public.chats for insert with check (true);
-
 -- Realtime publication (ignore if already added)
 do \$\$
 begin
-  begin
-    alter publication supabase_realtime add table public.messages;
-  exception when duplicate_object then null;
-  end;
-  begin
-    alter publication supabase_realtime add table public.chat_members;
-  exception when duplicate_object then null;
-  end;
   begin
     alter publication supabase_realtime add table public.notifications;
   exception when duplicate_object then null;
@@ -1014,176 +882,6 @@ CREATE POLICY "study_partners_all" ON public.study_partners
   FOR ALL TO authenticated
   USING (auth.uid() = user_id OR auth.uid() = partner_id)
   WITH CHECK (auth.uid() = user_id OR auth.uid() = partner_id);
-`
-  },
-  {
-    id: '20260909_fix_messenger_delivery.sql',
-    title: 'Fix Messenger Delivery',
-    sql: `
--- Make direct chats and message delivery atomic under RLS.
-
-alter table public.chats add column if not exists direct_key text;
-create unique index if not exists chats_direct_key_unique
-  on public.chats (direct_key)
-  where direct_key is not null;
-
-create or replace function public.get_or_create_direct_chat(p_other_user_id uuid)
-returns uuid
-language plpgsql
-security definer
-set search_path = public
-as \$\$
-declare
-  v_user_id uuid := auth.uid();
-  v_chat_id uuid;
-  v_direct_key text;
-begin
-  if v_user_id is null then
-    raise exception 'Authentication is required';
-  end if;
-
-  if p_other_user_id is null or p_other_user_id = v_user_id then
-    raise exception 'A different recipient is required';
-  end if;
-
-  if not exists (select 1 from auth.users where id = p_other_user_id) then
-    raise exception 'Recipient does not exist';
-  end if;
-
-  v_direct_key := least(v_user_id::text, p_other_user_id::text) || ':' || greatest(v_user_id::text, p_other_user_id::text);
-
-  select id into v_chat_id
-  from public.chats
-  where direct_key = v_direct_key;
-
-  if v_chat_id is null then
-    insert into public.chats (direct_key)
-    values (v_direct_key)
-    on conflict (direct_key) where direct_key is not null do update
-    set direct_key = excluded.direct_key
-    returning id into v_chat_id;
-  end if;
-
-  insert into public.chat_members (chat_id, user_id, other_user_id)
-  values
-    (v_chat_id, v_user_id, p_other_user_id),
-    (v_chat_id, p_other_user_id, v_user_id)
-  on conflict (chat_id, user_id) do update
-  set other_user_id = excluded.other_user_id;
-
-  return v_chat_id;
-end;
-\$\$;
-
-create or replace function public.send_chat_message(
-  p_chat_id uuid,
-  p_message_id uuid,
-  p_sender_id uuid,
-  p_text text,
-  p_media_url text,
-  p_media_type text,
-  p_reply_to uuid,
-  p_created_at timestamptz
-)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as \$\$
-declare
-  v_created_at timestamptz := coalesce(p_created_at, now());
-  v_summary text;
-  v_inserted_message_id uuid;
-begin
-  if auth.uid() is null or auth.uid() <> p_sender_id then
-    raise exception 'Sender must be the authenticated user';
-  end if;
-
-  if not exists (
-    select 1
-    from public.chat_members
-    where chat_id = p_chat_id and user_id = p_sender_id
-  ) then
-    raise exception 'Sender is not a chat member';
-  end if;
-
-  insert into public.messages (
-    id,
-    chat_id,
-    sender_id,
-    text,
-    media_url,
-    media_type,
-    reply_to,
-    created_at
-  )
-  values (
-    p_message_id,
-    p_chat_id,
-    p_sender_id,
-    coalesce(p_text, ''),
-    p_media_url,
-    p_media_type,
-    p_reply_to,
-    v_created_at
-  )
-  on conflict (id) do nothing
-  returning id into v_inserted_message_id;
-
-  if v_inserted_message_id is null then
-    return;
-  end if;
-
-  v_summary := case
-    when p_media_type = 'voice' then 'Voice message'
-    when p_media_type = 'image' then 'Image file'
-    when p_media_type = 'file' then 'Document file'
-    when coalesce(p_text, '') <> '' then p_text
-    else 'Media'
-  end;
-
-  update public.chat_members
-  set
-    last_message_text = v_summary,
-    last_message_at = v_created_at,
-    last_message_sender_id = p_sender_id,
-    last_message_is_read = user_id = p_sender_id,
-    unread_count = case
-      when user_id = p_sender_id then 0
-      else unread_count + 1
-    end
-  where chat_id = p_chat_id;
-end;
-\$\$;
-
-revoke all on function public.get_or_create_direct_chat(uuid) from public;
-revoke all on function public.send_chat_message(uuid, uuid, uuid, text, text, text, uuid, timestamptz) from public;
-grant execute on function public.get_or_create_direct_chat(uuid) to authenticated;
-grant execute on function public.send_chat_message(uuid, uuid, uuid, text, text, text, uuid, timestamptz) to authenticated;
-
--- The RPCs above exclusively create memberships and update recipient previews.
--- Clients may only update or hide their own inbox entry.
-drop policy if exists chat_members_all on public.chat_members;
-drop policy if exists chat_members_insert on public.chat_members;
-drop policy if exists chat_members_update on public.chat_members;
-drop policy if exists chat_members_delete on public.chat_members;
-create policy chat_members_update on public.chat_members
-  for update using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-create policy chat_members_delete on public.chat_members
-  for delete using (auth.uid() = user_id);
-
--- Message body/content cannot be inserted or edited through the client;
--- senders may only soft-delete their own messages.
-drop policy if exists messages_insert on public.messages;
-drop policy if exists messages_update on public.messages;
-create policy messages_update on public.messages
-  for update using (auth.uid() = sender_id)
-  with check (auth.uid() = sender_id and is_deleted = true);
-
-drop policy if exists chats_insert on public.chats;
-create policy chats_insert on public.chats
-  for insert with check (false);
 `
   },
   {

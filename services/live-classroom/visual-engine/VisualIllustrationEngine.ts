@@ -2,7 +2,7 @@
  * VisualIllustrationEngine.ts
  *
  * Async AI Visual Illustration Engine for Avelut Live Classroom.
- * Powered by Qwen 3.8 Flash (Text).
+ * Powered by the canonical Avelut text model (qwen3.7-flash).
  *
  * Architecture:
  *   Realtime Teacher (qwen3.8-omni-flash-realtime)
@@ -12,7 +12,7 @@
  *          └────── Transcript deltas ───→ Rolling Sentence Buffer
  *                                                │
  *                                                ▼
- *                                       Visual Director (qwen3.8-flash)
+ *                                       Visual Director (qwen3.7-flash)
  *                                                │
  *                                                ▼
  *                                         IllustrationSpec (JSON)
@@ -34,7 +34,7 @@ import type {
 } from './types';
 import { SvgRenderer } from './SvgRenderer';
 import { createAvelutAI, getResponseText } from '../../../utils/inference';
-import { getFeatureModel } from '../../../utils/usage';
+import { AVELUT_TEXT_MODEL } from '../../../lib/textModel';
 import type { AppSettings, UserProfile } from '../../../types';
 
 export interface VisualEngineCallbacks {
@@ -273,10 +273,7 @@ export class VisualIllustrationEngine {
       }
       this.activeAbortController = new AbortController();
 
-      const defaultModel =
-        getFeatureModel('chat_interaction', this.appSettings) ||
-        this.appSettings?.alibaba_model ||
-        'qwen3.5-omni-flash';
+      const defaultModel = AVELUT_TEXT_MODEL;
 
       console.log(`[VisualEngine] Requesting illustration decision from ${defaultModel}...`);
       this.callbacks.onStatusChange?.('generating');
@@ -372,7 +369,7 @@ export class VisualIllustrationEngine {
   }
 
   /**
-   * Directly command the text model (qwen3.8-flash) to generate a structured educational illustration
+   * Directly command the canonical text model (qwen3.7-flash) to generate a structured educational illustration
    * for a specific concept, stage, or formula, rather than passively guessing phrases.
    */
   public async illustrateConcept(
@@ -409,10 +406,7 @@ export class VisualIllustrationEngine {
 
       this.callbacks.onStatusChange?.('generating');
 
-      const defaultModel =
-        getFeatureModel('chat_interaction', this.appSettings) ||
-        this.appSettings?.alibaba_model ||
-        'qwen3.5-omni-flash';
+      const defaultModel = AVELUT_TEXT_MODEL;
 
       const ai = createAvelutAI(this.appSettings || ({} as any), this.userProfile, {
         feature: 'live_classroom_visual',

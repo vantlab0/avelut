@@ -268,30 +268,6 @@ export const HistorySkeleton: React.FC = () => (
 );
 
 // ---------------------------------------------------------------------------
-// MESSENGER skeleton (chat list)
-// ---------------------------------------------------------------------------
-const ChatRowSkeleton: React.FC = () => (
-    <div className="flex items-center gap-3 px-4 py-3">
-        <SkeletonAvatar size={48} />
-        <div className="flex-1 space-y-2">
-            <div className="flex justify-between">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-3.5 w-10" />
-            </div>
-            <Skeleton className="h-3.5 w-48" />
-        </div>
-    </div>
-);
-
-export const MessengerSkeleton: React.FC = () => (
-    <div className="space-y-1 py-2">
-        {Array.from({ length: 8 }).map((_, i) => (
-            <ChatRowSkeleton key={i} />
-        ))}
-    </div>
-);
-
-// ---------------------------------------------------------------------------
 // SETTINGS skeleton
 // ---------------------------------------------------------------------------
 export const SettingsSkeleton: React.FC = () => (

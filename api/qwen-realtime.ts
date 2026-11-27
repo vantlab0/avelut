@@ -24,6 +24,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { Socket } from 'net';
+import { getAlibabaApiKey } from '../lib/server/alibabaConfig';
 
 // ── Vercel config: Node.js runtime, 5-min max (Pro tier) ─────────────────────
 export const config = {
@@ -51,11 +52,9 @@ function getDashScopeUrl(targetModel?: string | null): string {
 const wss = new WebSocketServer({ noServer: true });
 
 // ── Handler ───────────────────────────────────────────────────────────────────
-export default function handler(req: IncomingMessage, res: ServerResponse) {
-  const apiKey =
-    process.env.ALIBABA_API_KEY ||
-    process.env.VITE_ALIBABA_API_KEY ||
-    '';
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
+  // DB-first resolution; browser never provides the DashScope secret.
+  const apiKey = await getAlibabaApiKey();
 
   // ── Health check (GET without Upgrade header) ────────────────────────────
   if (req.method === 'GET' && req.headers.upgrade?.toLowerCase() !== 'websocket') {
@@ -67,7 +66,7 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
   // ── Guard: key must be configured on the server ──────────────────────────
   if (!apiKey) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'ALIBABA_API_KEY is not configured on the server.' }));
+    res.end(JSON.stringify({ error: 'No Alibaba key configured: add the alibaba row to Supabase api_keys or set ALIBABA_API_KEY on the server.' }));
     return;
   }
 

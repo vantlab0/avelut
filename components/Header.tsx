@@ -23,9 +23,7 @@ export interface HeaderProps {
   onMarkAllAsRead?: () => void;
   onMarkAsRead?: (id: string) => void;
   onMenuClick: () => void;
-  onMessengerClick?: () => void;
   onCalendarClick?: () => void;
-  unreadMessagesCount?: number;
   rightActions?: React.ReactNode;
   leftActions?: React.ReactNode;
   userProfile?: UserProfile;
@@ -52,9 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
   onMarkAllAsRead,
   onMarkAsRead,
   onMenuClick,
-  onMessengerClick,
   onCalendarClick,
-  unreadMessagesCount = 0,
   rightActions,
   leftActions,
   userProfile,
@@ -102,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
             title="Menu"
           >
             <Menu className="w-[22px] h-[22px] text-[#171717] dark:text-neutral-100" strokeWidth={1.9} />
-            {(unreadCount > 0 || unreadMessagesCount > 0) && (
+            {unreadCount > 0 && (
               <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />

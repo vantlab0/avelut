@@ -11,7 +11,6 @@ import { supabase } from '@/lib/backend';
 
 type AddToastFn = (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 type SetActiveItemFn = (item: string) => void;
-type SetPendingChatIdFn = (chatId: string | null) => void;
 
 export interface ReminderSession {
   id: string;
@@ -31,7 +30,6 @@ let actionHandle: PluginListenerHandle | null = null;
 
 let navigationHandlers: {
   setActiveItem?: SetActiveItemFn;
-  setPendingChatId?: SetPendingChatIdFn;
   addToast?: AddToastFn;
 } = {};
 
@@ -282,10 +280,9 @@ export async function sendTestNotification(): Promise<{ success: boolean; messag
 export const initNativeNotifications = async (
   user: AuthUser | null,
   addToast: AddToastFn,
-  setActiveItem: SetActiveItemFn,
-  setPendingChatId: SetPendingChatIdFn
+  setActiveItem: SetActiveItemFn
 ): Promise<void> => {
-  navigationHandlers = { addToast, setActiveItem, setPendingChatId };
+  navigationHandlers = { addToast, setActiveItem };
 
   if (!user || !isNative()) return;
 
@@ -347,12 +344,6 @@ export const initNativeNotifications = async (
           const data = action.notification?.data || {};
           if (data.route && navigationHandlers.setActiveItem) {
             navigationHandlers.setActiveItem(data.route);
-          }
-          if (data.chatId && navigationHandlers.setPendingChatId) {
-            navigationHandlers.setPendingChatId(data.chatId);
-            if (navigationHandlers.setActiveItem) {
-              navigationHandlers.setActiveItem('messenger');
-            }
           }
         } catch (err) {
           console.warn('[FCM] Action handler error:', err);

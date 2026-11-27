@@ -19,7 +19,6 @@ export interface SidebarProps {
   items?: NavItem[];
   secondaryItems?: NavItem[];
   unreadCount?: number;
-  unreadMessagesCount?: number;
   recentConversations?: ChatConversation[];
   onSelectConversation?: (id: string) => void;
   onNewChat?: () => void;
@@ -113,14 +112,6 @@ const NAV_THEME: Record<
     activeBorder: 'border-purple-200 dark:border-purple-500/30',
     activeText: 'text-purple-700 dark:text-purple-300',
     badgeBg: 'bg-purple-600',
-  },
-  messenger: {
-    iconBg: 'bg-teal-50 dark:bg-teal-500/15',
-    iconText: 'text-teal-600 dark:text-teal-400',
-    activeBg: 'bg-teal-50/80 dark:bg-teal-500/10',
-    activeBorder: 'border-teal-200 dark:border-teal-500/30',
-    activeText: 'text-teal-700 dark:text-teal-300',
-    badgeBg: 'bg-teal-600',
   },
   playground: {
     iconBg: 'bg-red-50 dark:bg-red-500/15',
@@ -464,7 +455,6 @@ const SidebarPanel: React.FC<{
   onDeleteConversation?: (id: string) => void;
   onPinConversation?: (id: string, isPinned: boolean) => void;
   activeConversationId?: string | null;
-  unreadMessagesCount: number;
   brandTitle: string;
   onClose?: () => void;
 }> = ({
@@ -479,7 +469,6 @@ const SidebarPanel: React.FC<{
   onDeleteConversation,
   onPinConversation,
   activeConversationId,
-  unreadMessagesCount,
   brandTitle,
   onClose,
 }) => {
@@ -521,12 +510,12 @@ const SidebarPanel: React.FC<{
   const [convoToAddToProject, setConvoToAddToProject] = useState<ChatConversation | null>(null);
   const [projectNameInput, setProjectNameInput] = useState('');
   const [savedProjects, setSavedProjects] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return ['Computer Science', 'Semester 1', 'Exam Prep'];
+    if (typeof window === 'undefined') return ['Computer Science', 'Study Basics', 'Exam Prep'];
     try {
       const raw = localStorage.getItem(`avelut_chat_projects_${userProfile?.uid || 'anon'}`);
-      return raw ? JSON.parse(raw) : ['Computer Science', 'Semester 1', 'Exam Prep'];
+      return raw ? JSON.parse(raw) : ['Computer Science', 'Study Basics', 'Exam Prep'];
     } catch {
-      return ['Computer Science', 'Semester 1', 'Exam Prep'];
+      return ['Computer Science', 'Study Basics', 'Exam Prep'];
     }
   });
 
@@ -675,35 +664,6 @@ const SidebarPanel: React.FC<{
       }
     },
     [userProfile?.uid, addToast]
-  );
-
-  const handleForwardChat = useCallback(
-    async (convo: ChatConversation) => {
-      try {
-        const uid = userProfile?.uid || 'anon';
-        const messages = await getLocalMessages(convo.id);
-        const excerpt = messages
-          .slice(-3)
-          .map((m) => `${m.sender === 'user' ? 'Me' : 'Avelut'}: ${m.text.slice(0, 100)}`)
-          .join('\n');
-
-        const forwardPackage = {
-          type: 'chat_forward',
-          conversationId: convo.id,
-          title: convo.title,
-          excerpt,
-          timestamp: Date.now(),
-        };
-
-        localStorage.setItem('pending_forward_chat', JSON.stringify(forwardPackage));
-        addToast('Chat prepared. Select a partner to forward to!', 'info');
-        onItemClick('messenger');
-      } catch (err) {
-        console.error('[Sidebar] Forward chat error:', err);
-        addToast('Could not prepare chat forward.', 'error');
-      }
-    },
-    [userProfile?.uid, onItemClick, addToast]
   );
 
   const handleDeleteChat = useCallback(
@@ -880,7 +840,6 @@ const SidebarPanel: React.FC<{
               label={item.label}
               active={activeItem === item.id}
               onClick={() => onItemClick(item.id)}
-              badge={item.id === 'messenger' ? unreadMessagesCount : undefined}
             />
           ))}
         </div>
@@ -1236,7 +1195,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   items,
   secondaryItems,
   unreadCount = 0,
-  unreadMessagesCount = 0,
   recentConversations,
   onSelectConversation,
   onNewChat,
@@ -1301,7 +1259,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onDeleteConversation={onDeleteConversation}
             onPinConversation={onPinConversation}
             activeConversationId={activeConversationId}
-            unreadMessagesCount={unreadMessagesCount}
             brandTitle={brandTitle}
             onClose={onCloseMobileSidebar}
           />
@@ -1326,7 +1283,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onDeleteConversation={onDeleteConversation}
             onPinConversation={onPinConversation}
             activeConversationId={activeConversationId}
-            unreadMessagesCount={unreadMessagesCount}
             brandTitle={brandTitle}
           />
         </div>

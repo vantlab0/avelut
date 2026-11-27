@@ -23,7 +23,7 @@ The `QwenRealtimeTeacherService` registers three tools for the AI Teacher:
 - Model calls `illustrate_object({ object_description })`.
 - `QwenRealtimeTeacherService` receives call, invokes `LlmSvgObjectCache.getOrGenerate()`.
 - The cache checks memory, then `localStorage` (cross-session SSR persistence).
-- On miss, it asks the non-realtime `qwen3.8-flash` model to generate raw SVG syntax.
+- On miss, it asks the canonical non-realtime text model (`qwen3.7-flash`) to generate raw SVG syntax.
 - Returns SVG, updates caches, and renders overlay via `AvelutBoardController.setSvgIllustration()`.
 
 ### 3. Word Wrap Labeling

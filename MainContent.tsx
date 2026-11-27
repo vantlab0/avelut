@@ -11,7 +11,6 @@ import {
     UserProfileSkeleton,
     HistorySkeleton,
     SettingsSkeleton,
-    MessengerSkeleton,
     PageSkeleton,
 } from './components/Skeleton';
 
@@ -24,10 +23,8 @@ const Settings = lazy(() => import('./components/Settings').then(module => ({ de
 const UserProfilePage = lazy(() => import('./components/UserProfile').then(module => ({ default: module.UserProfileScreen })));
 const BillingSettingsPage = lazy(() => import('./components/BillingSettings').then(module => ({ default: module.BillingSettingsScreen })));
 const Help = lazy(() => import('./components/Help'));
-const Messenger = lazy(() => import('./components/Messenger').then(module => ({ default: module.Messenger })));
 import AvelutAI from './components/AvelutAI';
 const AdminPanel = lazy(() => import('./components/AdminPanel').then(module => ({ default: module.AdminPanel })));
-const Onboarding = lazy(() => import('./components/Onboarding').then(module => ({ default: module.Onboarding })));
 const History = lazy(() => import('./components/History').then(module => ({ default: module.History })));
 const StudyPartners = lazy(() => import('./components/StudyPartners').then(module => ({ default: module.StudyPartners })));
 const PublicProfile = lazy(() => import('./components/PublicProfile').then(module => ({ default: module.PublicProfile })));
@@ -44,7 +41,6 @@ const skeletonMap: Record<string, React.ReactNode> = {
     user_profile:   <UserProfileSkeleton />,
     settings:       <SettingsSkeleton />,
     history:        <div className="max-w-7xl mx-auto px-4 py-8"><HistorySkeleton /></div>,
-    messenger:      <MessengerSkeleton />,
     feedback:       <PageSkeleton />,
     voice_tutorial: <PageSkeleton />,
     playground:     <PageSkeleton />,
@@ -65,9 +61,6 @@ interface MainContentProps {
     appSettings: AppSettings;
     userProgress: UserProgress;
     dashboardData: DashboardData | null;
-    initialMessengerChatId?: string | null;
-    onClearMessengerChatId?: () => void;
-    unreadMessagesCount?: number;
     handleLogout: () => void;
     handleProfileUpdate: (updatedData: Partial<UserProfile>) => Promise<{ success: boolean; error?: string; }>;
     handleDeleteAccount: () => Promise<{ success: boolean; error?: string; }>;
@@ -75,7 +68,6 @@ interface MainContentProps {
     triggerScanRef?: React.MutableRefObject<(() => void) | null>;
     onNavigate?: (tab: string) => void;
     setCustomHeaderConfig: (config: any) => void;
-    handleOnboardingComplete?: (profileData: { schoolId: string; collegeId: string; departmentId: string; level: string }) => Promise<void>;
     notifications?: any[];
     onMarkAsRead?: (id: string) => void;
     onMarkAllAsRead?: () => void;
@@ -94,9 +86,6 @@ export const MainContent: React.FC<MainContentProps> = ({
     appSettings,
     userProgress,
     dashboardData,
-    initialMessengerChatId,
-    onClearMessengerChatId,
-    unreadMessagesCount = 0,
     handleLogout,
     handleProfileUpdate,
     handleDeleteAccount,
@@ -104,7 +93,6 @@ export const MainContent: React.FC<MainContentProps> = ({
     triggerScanRef,
     onNavigate,
     setCustomHeaderConfig,
-    handleOnboardingComplete,
     notifications = [],
     onMarkAsRead,
     onMarkAllAsRead,
@@ -120,12 +108,6 @@ export const MainContent: React.FC<MainContentProps> = ({
             <SectionErrorBoundary activeItem={activeItem} onNavigate={onNavigate} sectionName={activeItem}>
                 {(() => {
                     switch (activeItem) {
-                    case 'onboarding':
-                        return (
-                            <div className="p-4 sm:p-6 md:p-10 max-w-7xl mx-auto min-h-[calc(100vh-140px)] flex items-center justify-center">
-                                <Onboarding user={user!} onOnboardingComplete={handleOnboardingComplete!} />
-                            </div>
-                        );
                     case 'dashboard':
                         // Fallthrough redirect
                     case 'chat':
@@ -134,7 +116,6 @@ export const MainContent: React.FC<MainContentProps> = ({
                                 userProfile={userProfile}
                                 onNavigate={onNavigate}
                                 setCustomHeaderConfig={setCustomHeaderConfig}
-                                unreadMessagesCount={unreadMessagesCount}
                                 onConversationsUpdate={onConversationsUpdate}
                                 onOpenMenu={onOpenMenu}
                                 activeConversationId={activeConversationId}
@@ -203,19 +184,6 @@ export const MainContent: React.FC<MainContentProps> = ({
                         return <Help onStartTour={startTour} />;
                     case 'feedback':
                         return <Feedback userProfile={userProfile} />;
-                    case 'messenger':
-                        if (!userProfile) {
-                            return <MessengerSkeleton />;
-                        }
-                        return (
-                            <Messenger
-                                userProfile={userProfile}
-                                initialChatId={initialMessengerChatId}
-                                onNavigate={onNavigate}
-                                setCustomHeaderConfig={setCustomHeaderConfig}
-                                onClearInitialChatId={onClearMessengerChatId}
-                            />
-                        );
                     case 'admin':
                         return userProfile.is_admin
                             ? <AdminPanel userProfile={userProfile} />
@@ -223,7 +191,6 @@ export const MainContent: React.FC<MainContentProps> = ({
                                 userProfile={userProfile}
                                 onNavigate={onNavigate}
                                 setCustomHeaderConfig={setCustomHeaderConfig}
-                                unreadMessagesCount={unreadMessagesCount}
                                 onConversationsUpdate={onConversationsUpdate}
                                 onOpenMenu={onOpenMenu}
                             />;
@@ -255,7 +222,6 @@ export const MainContent: React.FC<MainContentProps> = ({
                             userProfile={userProfile}
                             onNavigate={onNavigate}
                             setCustomHeaderConfig={setCustomHeaderConfig}
-                            unreadMessagesCount={unreadMessagesCount}
                             onConversationsUpdate={onConversationsUpdate}
                             onOpenMenu={onOpenMenu}
                             activeConversationId={activeConversationId}

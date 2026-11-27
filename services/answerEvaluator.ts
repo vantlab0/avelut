@@ -17,6 +17,7 @@
 import type { QuestionType } from '../types/learningQuestion';
 import type { MisconceptionType } from './masteryModel';
 import { cleanAndParseJson } from '../utils/jsonUtils';
+import { AVELUT_TEXT_MODEL } from '../lib/textModel';
 
 // ── Evaluation result ───────────────────────────────────────────────────────
 
@@ -154,8 +155,10 @@ export async function evaluateWithAI(
     expectedAnswer: string,
     conceptContext: string,
     aiClient: any,
-    model: string,
+    _model?: string,
 ): Promise<EvaluationResult> {
+    // Caller model params are accepted for compatibility but ignored.
+    void _model;
     const prompt = `You are evaluating a student's answer in a STEM tutoring session.
 
 CONCEPT CONTEXT: ${conceptContext}
@@ -182,7 +185,7 @@ IMPORTANT: Be encouraging but honest. If the student is wrong, classify the erro
 
     try {
         const result = await aiClient.models.generateContent({
-            model,
+            model: AVELUT_TEXT_MODEL,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { responseMimeType: 'application/json', temperature: 0.2 },
         });
@@ -245,7 +248,7 @@ export async function evaluateStudentAnswer(
     studentAnswer: string,
     dialogueContext: string,
     aiClient: any,
-    model: string = 'qwen3.5-omni-flash'
+    model: string = AVELUT_TEXT_MODEL
 ): Promise<{
     isCorrect: boolean;
     misconceptionType?: MisconceptionType;

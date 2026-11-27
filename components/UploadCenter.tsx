@@ -1,4 +1,4 @@
-import { auth as auth, createUserWithEmailAndPassword, db, deleteObject, signOut, get, getDownloadURL, onAuthStateChanged, onValue, push, ref as dbRef, ref as storageRef, remove, set, signInWithEmailAndPassword, storage, update, uploadBytes } from '@/lib/backend';
+import { auth as auth, createUserWithEmailAndPassword, db, deleteObject, signOut, get, getDownloadURL, onAuthStateChanged, onValue, push, ref as dbRef, ref as storageRef, set, signInWithEmailAndPassword, storage, update, uploadBytes } from '@/lib/backend';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createAvelutAI, getResponseText, Type } from '../utils/inference';
 import { useToast } from '../hooks/useToast';
@@ -21,7 +21,6 @@ import {
   validateCourseUploadMetadata,
 } from '../utils/courseExtraction';
 import { PageSkeleton } from './Skeleton';
-import { SchoolHierarchySelector } from './SchoolHierarchySelector';
 import { UploadCloud, X, LayoutDashboard, BookOpen, FolderOpen, FileQuestion, List, Menu, HardDrive, ChevronRight, Plus, Trash2, Layers } from 'lucide-react';
 
 function uint8ToBase64(bytes: Uint8Array): string {
@@ -34,7 +33,38 @@ function uint8ToBase64(bytes: Uint8Array): string {
     return window.btoa(binary);
 }
 
-const LEVELS = ['100lvl', '200lvl', '300lvl', '400lvl', '500lvl'] as const;
+const LEVELS = ['100lvl', '200lvl', '300lvl', '400lvl', '500lvl', '600lvl'] as const;
+
+// General students upload by subject/topic. Legacy school/college/department
+// paths are still used when a catalog hierarchy is available.
+const GENERAL_CATALOG_ID = 'general';
+
+const toPathSegment = (value?: string, fallback = GENERAL_CATALOG_ID) => {
+  const slug = (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return slug || fallback;
+};
+
+const getLegacyDepartmentPath = (schoolId?: string, collegeId?: string, departmentId?: string): string | null => {
+  if (!schoolId || !collegeId || !departmentId) return null;
+  return `${schoolId}/colleges/${collegeId}/departments/${departmentId}`;
+};
+
+const getGeneralDepartmentPath = (subject?: string) =>
+  `${GENERAL_CATALOG_ID}/colleges/${GENERAL_CATALOG_ID}/departments/${toPathSegment(subject || GENERAL_CATALOG_ID)}`;
+
+const formatCatalogLabel = (id: string, label?: string) => {
+  if (label) return label;
+  return id === GENERAL_CATALOG_ID ? 'General Subjects' : id;
+};
+
+const formatLevelLabel = (level: string) => {
+  const match = /^(\d+)lvl$/.exec(level);
+  return match ? `Year ${parseInt(match[1], 10) / 100 + 6}` : level;
+};
 
 type AuthMode = 'login' | 'signup';
 type UploadCenterView = 'dashboard' | 'departments' | 'requests' | 'courses' | 'past_questions';
@@ -326,6 +356,9 @@ export const UploadCenter: React.FC = () => {
   const [selectedCollegeId, setSelectedCollegeId] = useState<string>('');
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
   const [selectedLevel, setSelectedLevel] = useState<(typeof LEVELS)[number]>('100lvl');
+  const [uploadSubject, setUploadSubject] = useState('');
+  const [uploadTopic, setUploadTopic] = useState('');
+  const [personalCourses, setPersonalCourses] = useState<Course[]>([]);
   
   const [newCourseName, setNewCourseName] = useState('');
   const [newCourseCode, setNewCourseCode] = useState('');
@@ -357,6 +390,43 @@ export const UploadCenter: React.FC = () => {
     if (pathname.startsWith('/upload-center/departments')) return 'departments';
     return 'dashboard';
   }, [pathname]);
+
+  const uploadContext = useMemo(() => {
+    const legacyPath = getLegacyDepartmentPath(selectedSchoolId, selectedCollegeId, selectedDepartmentId);
+    if (legacyPath) {
+      return {
+        deptPath: legacyPath,
+        departmentId: selectedDepartmentId,
+        subjectId: toPathSegment(selectedDepartmentId, uploadSubject || GENERAL_CATALOG_ID),
+        isLegacy: true,
+      };
+    }
+    const subjectId = toPathSegment(uploadSubject || GENERAL_CATALOG_ID);
+    return {
+      deptPath: getGeneralDepartmentPath(subjectId),
+      departmentId: subjectId,
+      subjectId,
+      isLegacy: false,
+    };
+  }, [selectedSchoolId, selectedCollegeId, selectedDepartmentId, uploadSubject]);
+
+  const resolveUploadContext = (deptPath?: string) => {
+    const isLegacyPath = Boolean(
+      deptPath &&
+      deptPath.includes('/colleges/') &&
+      deptPath.includes('/departments/') &&
+      !deptPath.startsWith(`${GENERAL_CATALOG_ID}/`)
+    );
+    if (isLegacyPath && deptPath) {
+      return {
+        deptPath,
+        departmentId: deptPath.split('/').pop() || GENERAL_CATALOG_ID,
+        subjectId: toPathSegment(deptPath.split('/').pop() || GENERAL_CATALOG_ID),
+        isLegacy: true,
+      };
+    }
+    return uploadContext;
+  };
 
   useEffect(() => {
     const handlePopState = () => setPathname(getWindowPathname());
@@ -421,10 +491,11 @@ export const UploadCenter: React.FC = () => {
   const loadCatalog = async () => {
     setIsCatalogLoading(true);
     try {
-      const [schoolsSnap, deptsSnap, pqSnap] = await Promise.all([
+      const [schoolsSnap, deptsSnap, pqSnap, personalCoursesSnap] = await Promise.all([
         get(dbRef(db, 'schools_data')),
         get(dbRef(db, 'departments_data')),
-        get(dbRef(db, 'past_questions'))
+        get(dbRef(db, 'past_questions')),
+        user ? get(dbRef(db, `user_courses/${user.uid}/course_list`)) : Promise.resolve(null),
       ]);
       
       if (pqSnap.exists()) {
@@ -432,6 +503,14 @@ export const UploadCenter: React.FC = () => {
       } else {
           setPqIndex({});
       }
+
+      const personalCourseValues = personalCoursesSnap && personalCoursesSnap.exists() ? personalCoursesSnap.val() : {};
+      setPersonalCourses(
+        (Object.values(personalCourseValues || {}) as Course[]).map((course) => ({
+          ...course,
+          topics: Array.isArray(course.topics) ? course.topics : [],
+        }))
+      );
       
       const newSchoolsData = schoolsSnap.exists() ? schoolsSnap.val() : {};
       const oldDeptsData = deptsSnap.exists() ? deptsSnap.val() : {};
@@ -566,15 +645,17 @@ export const UploadCenter: React.FC = () => {
     if (!currentUser || !profile) return addToast('Please sign in again.', 'error');
     if (!appSettings.upload_center_uploads_enabled) return addToast('Uploads are disabled.', 'error');
     if (!ai || !aiModel?.trim()) {
-      return addToast('No extraction model is configured. Set one in Admin settings before uploading.', 'error');
+      return addToast('The extraction model is unavailable. Please try again.', 'error');
     }
     if (type === 'past_question' && !year?.trim()) {
       return addToast('Choose the exam year before uploading past questions.', 'error');
     }
 
+    const context = resolveUploadContext(deptPath);
+    const effectiveDeptPath = context.deptPath;
     const metadataErrors = validateCourseUploadMetadata({
       course,
-      deptPath,
+      deptPath: effectiveDeptPath,
       courseKey,
       year: type === 'past_question' ? year : undefined,
     });
@@ -603,6 +684,10 @@ export const UploadCenter: React.FC = () => {
 
     const normalizedLevel = normalizeLevel(course.level);
     const effectiveSemester = normalizeSemester(course.semester);
+    const uploadContextLabel = [
+      uploadSubject.trim() ? `Subject/class: ${uploadSubject.trim()}` : '',
+      uploadTopic.trim() ? `Topic: ${uploadTopic.trim()}` : '',
+    ].filter(Boolean).join(', ');
 
     setIsUploadingCourseKey(courseKey);
     setUploadProgress({ status: 'Starting upload...', percent: 5 });
@@ -665,7 +750,7 @@ export const UploadCenter: React.FC = () => {
         setUploadProgress({ status: `AI extracting syllabus topics (${index + 1}/${supportedFiles.length})...`, percent: 35 + (index * 5) });
 
         
-        const textbookPrompt = `Analyze this course outline/document for "${course.course_name}" at "${normalizedLevel}" level.
+        const textbookPrompt = `Analyze this course outline/document for "${course.course_name}" at year group/level "${normalizedLevel}"${uploadContextLabel ? ` (${uploadContextLabel})` : ''}.
 First, determine if this document is ACTUALLY related to the course "${course.course_name}".
 If it is completely unrelated (e.g. a cooking recipe for a Math course), set "is_related" to false and provide an "unrelated_reason" explaining why.
 If it is related, set "is_related" to true and extract a comprehensive syllabus/course outline into a structured JSON array of topics with concise grounding context.
@@ -676,7 +761,7 @@ RULES:
 3. Each topic object must have a non-empty topic_name, plus topic_id, topic_context, start_point, end_point.
 FORMAT: { "is_related": true, "unrelated_reason": "", "syllabus": [ { "topic_name": "...", "topic_id": "...", "topic_context": "...", "start_point": "...", "end_point": "..." } ] }`;
 
-        const pqPrompt = `Analyze this past question document for "${course.course_name}".
+        const pqPrompt = `Analyze this past question document for "${course.course_name}" at year group/level "${normalizedLevel}"${uploadContextLabel ? ` (${uploadContextLabel})` : ''}.
 First, determine if this document is ACTUALLY related to the course "${course.course_name}".
 If it is completely unrelated, set "is_related" to false and provide an "unrelated_reason" explaining why.
 If it is related, set "is_related" to true and extract all the questions and their options.
@@ -784,10 +869,22 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
       phase = 'save';
 
       if (type === 'past_question' && year) {
-          // Save Past Questions
-          const resolvedDeptId = deptPath.split('/').pop() || selectedDepartmentId;
+          // Save Past Questions to both the legacy/catalog bucket and the
+          // student-owned course history.
+          const resolvedDeptId = context.departmentId;
           const pqPath = `past_questions/${resolvedDeptId}/${normalizedLevel}/${course.course_id}/${year}`;
-          await set(dbRef(db, pqPath), extractedQuestions);
+          await update(dbRef(db), {
+            [pqPath]: extractedQuestions,
+            [`user_courses/${currentUser.uid}/past_questions/${courseKey}/${year}`]: {
+              course_key: courseKey,
+              course_name: course.course_name,
+              level: normalizedLevel,
+              semester: effectiveSemester,
+              year,
+              questions: extractedQuestions,
+              uploaded_at: Date.now(),
+            },
+          });
           addToast(`Past Questions for ${year} uploaded successfully.`, 'success');
           await loadCatalog();
           setIsUploadingCourseKey('');
@@ -815,7 +912,7 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
             uploader_uid: currentUser.uid,
           };
 
-          const coursesRef = dbRef(db, `schools_data/${deptPath}/levels/${normalizedLevel}/courses`);
+          const coursesRef = dbRef(db, `schools_data/${effectiveDeptPath}/levels/${normalizedLevel}/courses`);
           const coursesSnapshot = await get(coursesRef);
           const existingCourse = (coursesSnapshot.val() || {})[course.course_id] || {};
           
@@ -826,13 +923,17 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
             textbook_shared_key: courseKey,
           }, mergedSharedSyllabus, mergedSharedPdfUrls);
 
-          // Commit the shared context, the course record, and the uploader
-          // history in one multi-path update. A partial write would leave the
-          // catalog pointing at topics/PDFs that were never saved.
+          // Commit the shared context, the catalog course record, the
+          // student-owned course record, and the uploader history in one
+          // multi-path update.
           const updates: Record<string, unknown> = {
             [`textbook_contexts/shared/${courseKey}`]: sharedContext,
-            [`schools_data/${deptPath}/levels/${normalizedLevel}/courses/${course.course_id}`]: mergedCourse,
+            [`user_courses/${currentUser.uid}/course_list/${course.course_id}`]: mergedCourse,
+            [`schools_data/${effectiveDeptPath}/levels/${normalizedLevel}/courses/${course.course_id}`]: mergedCourse,
           };
+          if (context.isLegacy) {
+            updates[`departments_data/${context.departmentId}/course_list/${course.course_id}`] = mergedCourse;
+          }
 
           const uploadRecordId = push(dbRef(db, `uploaders/${currentUser.uid}/uploads`)).key;
           if (uploadRecordId) {
@@ -841,7 +942,7 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
               course_name: course.course_name,
               level: normalizedLevel,
               semester: effectiveSemester,
-              department_ids: [deptPath],
+              department_ids: [context.isLegacy ? effectiveDeptPath : context.departmentId],
               uploaded_urls: mergedSharedPdfUrls,
               uploaded_at: Date.now(),
             } satisfies UploadRecord;
@@ -916,41 +1017,48 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
   };
 
   const handleAddCourse = async () => {
-    if (!newCourseName.trim() || !newCourseCode.trim()) return addToast('Please enter a course name and code.', 'error');
-    if (!selectedSchoolId || !selectedCollegeId || !selectedDepartmentId) return addToast('Please select a department.', 'error');
-    
+    const resolvedName = newCourseName.trim() || [uploadSubject.trim(), uploadTopic.trim()].filter(Boolean).join(' - ');
+    const resolvedCode = newCourseCode.trim() || toPathSegment(resolvedName, 'course').replace(/_/g, '').toUpperCase().slice(0, 12);
+    if (!resolvedName || !resolvedCode) return addToast('Enter a course name/code or a subject.', 'error');
+
     setIsAddingCourse(true);
     try {
-      const courseId = newCourseCode.trim().toLowerCase().replace(/\s+/g, '');
+      const courseId = resolvedCode.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!courseId) throw new Error('Enter a valid course code.');
+      const inferredSemester = inferSemesterFromCode(resolvedCode);
       const courseData: Partial<Course> = {
         course_id: courseId,
-        course_name: newCourseName.trim(),
-        course_code: newCourseCode.trim().toUpperCase(),
+        course_name: resolvedName,
+        course_code: resolvedCode.toUpperCase(),
         level: selectedLevel,
-
+        ...(inferredSemester ? { semester: inferredSemester } : {}),
         course_status: 'active',
       };
-      
-      if (newCourseType === 'general') {
-         const college = schoolsData[selectedSchoolId]?.colleges?.[selectedCollegeId];
-         if (!college || !college.departments) throw new Error("College data missing");
-         
-         const updates: any = {};
-         Object.keys(college.departments).forEach(deptId => {
-             updates[`schools_data/${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${deptId}/levels/${selectedLevel}/courses/${courseId}`] = courseData;
-         });
-         await update(dbRef(db), updates);
-         addToast(`General course added to ${Object.keys(college.departments).length} departments!`, 'success');
+
+      const updates: Record<string, unknown> = {
+        [`user_courses/${profile.uid}/course_list/${courseId}`]: courseData,
+        [`schools_data/${uploadContext.deptPath}/levels/${selectedLevel}/courses/${courseId}`]: courseData,
+      };
+
+      if (uploadContext.isLegacy) {
+        if (newCourseType === 'general') {
+          const college = schoolsData[selectedSchoolId]?.colleges?.[selectedCollegeId];
+          if (!college?.departments) throw new Error('College data missing');
+          Object.keys(college.departments).forEach(deptId => {
+            updates[`schools_data/${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${deptId}/levels/${selectedLevel}/courses/${courseId}`] = courseData;
+          });
+          addToast(`General course added to ${Object.keys(college.departments).length} departments!`, 'success');
+        } else {
+          updates[`departments_data/${selectedDepartmentId}/course_list/${courseId}`] = courseData;
+          addToast('Private course added successfully!', 'success');
+        }
       } else {
-         const deptPath = `${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${selectedDepartmentId}`;
-         const newCourseRef = dbRef(db, `schools_data/${deptPath}/levels/${selectedLevel}/courses/${courseId}`);
-         await set(newCourseRef, courseData);
-         addToast('Private course added successfully!', 'success');
+        addToast('Subject course added successfully!', 'success');
       }
-      
+
+      await update(dbRef(db), updates);
       setNewCourseName('');
       setNewCourseCode('');
-      setIsAddingCourse(false);
       await loadCatalog();
     } catch (error: any) {
       addToast(error.message || 'Failed to add course', 'error');
@@ -963,7 +1071,7 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
     if (!e.target.files || e.target.files.length === 0) return;
     if (!ai || !aiModel?.trim()) {
       e.target.value = '';
-      return addToast('No extraction model is configured. Set one in Admin settings first.', 'error');
+      return addToast('The extraction model is unavailable. Please try again.', 'error');
     }
 
     const file = e.target.files[0];
@@ -973,7 +1081,7 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
     } catch (error) {
       e.target.value = '';
       return addToast(
-        error instanceof CourseExtractionError ? error.message : 'Choose a valid PDF or image of the course form.',
+        error instanceof CourseExtractionError ? error.message : 'Choose a valid PDF or image of the course list.',
         'error'
       );
     }
@@ -981,13 +1089,17 @@ FORMAT: { "is_related": true, "unrelated_reason": "", "questions": [ { "question
     setIsExtractingCourses(true);
     try {
       const { kind, mimeType } = fileInfo;
-      const prompt = `Analyze this course form, timetable, syllabus, registration slip, or academic document carefully.
-
+      const extractionContext = [
+        uploadSubject.trim() ? `Subject/class: ${uploadSubject.trim()}` : '',
+        uploadTopic.trim() ? `Topic: ${uploadTopic.trim()}` : '',
+      ].filter(Boolean).join('\n');
+      const prompt = `Analyze this school course list, timetable, syllabus, or registration document carefully.
+${extractionContext ? `${extractionContext}\n` : ''}
 Extract EVERY course with:
 - course_name (full title)
 - course_code (e.g. MTH101, CSC101)
-- level: academic year/level as one of: "100lvl", "200lvl", "300lvl", "400lvl", "500lvl". Infer from course code prefix (101-199 → 100lvl, 201-299 → 200lvl, etc.), document headers like "100 Level", "Year 1", "Level 100", or explicit labels. If unclear, omit level.
-- semester: "first" or "second". Detect from labels such as "First Semester", "1st Semester", "Harmattan", "Rain", "Second Semester", "2nd Semester", column headers, or section titles. If the form is clearly one semester only, use that for all courses. If a course is undetermined, omit semester.
+- level: year group/level as one of: "100lvl", "200lvl", "300lvl", "400lvl", "500lvl", "600lvl". Infer from course code prefix (101-199 → 100lvl, 201-299 → 200lvl, etc.), document headers like "Year 7", "Year 8", or explicit labels. If unclear, omit level.
+- semester: "first" or "second". Detect from labels such as "First Semester", "1st Semester", "Second Semester", "2nd Semester", column headers, or section titles. If the form is clearly one semester only, use that for all courses. If a course is undetermined, omit semester.
 
 Group and return only courses that clearly belong on the document. Prefer accuracy over guessing.
 
@@ -1010,7 +1122,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
           if (chunks.length > 1) {
             throw new CourseExtractionError(
               'FILE_TOO_LARGE',
-              'This scanned course form is too large to process in one request. Upload a single-page scan or a clear photo instead.'
+              'This scanned course list is too large to process in one request. Upload a single-page scan or a clear photo instead.'
             );
           }
           userParts = [{ text: prompt }, { inlineData: { mimeType: 'application/pdf', data: chunks[0] } }];
@@ -1075,17 +1187,15 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
   const handleSaveExtractedCourses = async () => {
     const coursesToSave = extractedCourses.filter(c => c.selected && c.course_name.trim() && c.course_code.trim());
     if (coursesToSave.length === 0) return addToast('No valid courses selected.', 'error');
-    if (!selectedSchoolId || !selectedCollegeId || !selectedDepartmentId) {
-      return addToast('Please select a school, college, and department first.', 'error');
-    }
 
     setIsExtractingCourses(true); // Re-use loading state
     try {
-      const updates: any = {};
+      const updates: Record<string, unknown> = {};
       const college = schoolsData[selectedSchoolId]?.colleges?.[selectedCollegeId];
 
       coursesToSave.forEach(course => {
         const courseId = course.course_code.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!courseId) return;
         const courseLevel = normalizeLevel((course as any).level || selectedLevel);
         const courseSemester = normalizeSemester((course as any).semester || inferSemesterFromCode(course.course_code));
         const courseData: Partial<Course> = {
@@ -1097,17 +1207,18 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
           course_status: 'active',
         };
 
-        if (course.type === 'general') {
-           if (college && college.departments) {
-               Object.keys(college.departments).forEach(deptId => {
-                   updates[`schools_data/${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${deptId}/levels/${courseLevel}/courses/${courseId}`] = courseData;
-                   updates[`departments_data/${deptId}/course_list/${courseId}`] = courseData;
-               });
-           }
-        } else {
-           const deptPath = `${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${selectedDepartmentId}`;
-           updates[`schools_data/${deptPath}/levels/${courseLevel}/courses/${courseId}`] = courseData;
-           updates[`departments_data/${selectedDepartmentId}/course_list/${courseId}`] = courseData;
+        updates[`user_courses/${profile.uid}/course_list/${courseId}`] = courseData;
+        updates[`schools_data/${uploadContext.deptPath}/levels/${courseLevel}/courses/${courseId}`] = courseData;
+
+        if (uploadContext.isLegacy) {
+          if (course.type === 'general' && college?.departments) {
+            Object.keys(college.departments).forEach(deptId => {
+              updates[`schools_data/${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${deptId}/levels/${courseLevel}/courses/${courseId}`] = courseData;
+              updates[`departments_data/${deptId}/course_list/${courseId}`] = courseData;
+            });
+          } else {
+            updates[`departments_data/${selectedDepartmentId}/course_list/${courseId}`] = courseData;
+          }
         }
       });
 
@@ -1130,7 +1241,8 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
     const courseId = course.course_id;
     const courseName = course.course_name;
     const courseKey = getCourseMergeKey(course);
-    const deptPath = `${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${selectedDepartmentId}`;
+    const context = resolveUploadContext();
+    const courseLevel = normalizeLevel(course.level || selectedLevel);
 
     if (!window.confirm(`Are you sure you want to delete ${courseName}? This action cannot be undone.`)) return;
     
@@ -1159,12 +1271,17 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
       }
 
       // 3. Delete from Database
-      await remove(dbRef(db, `schools_data/${deptPath}/levels/${selectedLevel}/courses/${courseId}`));
-      
-      // Also remove any shared textbook contexts
-      if (courseKey) {
-        await remove(dbRef(db, `textbook_contexts/shared/${courseKey}`));
+      const deletions: Record<string, null> = {
+        [`user_courses/${profile.uid}/course_list/${courseId}`]: null,
+        [`schools_data/${context.deptPath}/levels/${courseLevel}/courses/${courseId}`]: null,
+      };
+      if (context.isLegacy) {
+        deletions[`departments_data/${context.departmentId}/course_list/${courseId}`] = null;
       }
+      if (courseKey) {
+        deletions[`textbook_contexts/shared/${courseKey}`] = null;
+      }
+      await update(dbRef(db), deletions);
 
       addToast('Course and associated files deleted successfully.', 'success');
       await loadCatalog();
@@ -1181,7 +1298,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
             <p className="text-xs font-black uppercase tracking-[0.3em] text-white/70">Uploader center</p>
             <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">Upload courses, track your work, and request updates.</h1>
             <p className="mt-4 max-w-xl text-sm leading-6 text-white/80">
-              Create an uploader account to manage course materials across all schools, colleges, and departments securely.
+              Create an uploader account to manage course materials for your subjects and classes securely.
             </p>
           </div>
           <div className="rounded-[28px] border border-slate-200 bg-white p-6 md:p-8">
@@ -1245,14 +1362,22 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
   };
 
   const getDepartmentCourses = () => {
-    if (!selectedSchoolId || !selectedCollegeId || !selectedDepartmentId) return [];
-    const dept = schoolsData[selectedSchoolId]?.colleges?.[selectedCollegeId]?.departments?.[selectedDepartmentId];
-    if (!dept) return [];
-    const levelData = dept.levels?.[selectedLevel];
-    if (!levelData?.courses) return [];
-    
-    return Object.values(levelData.courses)
-      .map((c: any) => ({ ...c, level: selectedLevel }));
+    const catalogCourses: any[] = [];
+    if (selectedSchoolId && selectedCollegeId && selectedDepartmentId) {
+      const dept = schoolsData[selectedSchoolId]?.colleges?.[selectedCollegeId]?.departments?.[selectedDepartmentId];
+      const levelData = dept?.levels?.[selectedLevel];
+      if (levelData?.courses) {
+        catalogCourses.push(...Object.values(levelData.courses).map((c: any) => ({ ...c, level: selectedLevel })));
+      }
+    }
+
+    const seenIds = new Set(catalogCourses.map(c => c.course_id || c.course_name));
+    const personalForLevel = personalCourses
+      .filter(c => normalizeLevel(c.level) === selectedLevel)
+      .map(c => ({ ...c, level: selectedLevel }))
+      .filter(c => !seenIds.has(c.course_id || c.course_name));
+
+    return [...catalogCourses, ...personalForLevel];
   };
 
   const getSchoolCourses = () => {
@@ -1318,6 +1443,51 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
   const schoolCourses = getSchoolCourses();
   const schoolDepartments = getSchoolDepartments();
 
+  const renderCatalogSelectors = () => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <select value={selectedSchoolId} onChange={e => setSelectedSchoolId(e.target.value)} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
+          <option value="">All subjects / schools</option>
+          {Object.keys(schoolsData).map(k => (
+            <option key={k} value={k}>{formatCatalogLabel(k, schoolsData[k]?.name)}</option>
+          ))}
+        </select>
+        {selectedSchoolId && (
+          <select value={selectedCollegeId} onChange={e => setSelectedCollegeId(e.target.value)} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
+            <option value="">All groups / colleges</option>
+            {Object.keys(schoolsData[selectedSchoolId]?.colleges || {}).map(k => (
+              <option key={k} value={k}>{formatCatalogLabel(k, schoolsData[selectedSchoolId]?.colleges?.[k]?.name)}</option>
+            ))}
+          </select>
+        )}
+        {selectedCollegeId && (
+          <select value={selectedDepartmentId} onChange={e => setSelectedDepartmentId(e.target.value)} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
+            <option value="">All subjects / departments</option>
+            {Object.keys(schoolsData[selectedSchoolId]?.colleges?.[selectedCollegeId]?.departments || {}).map(k => (
+              <option key={k} value={k}>{formatCatalogLabel(k, schoolsData[selectedSchoolId]?.colleges?.[selectedCollegeId]?.departments?.[k]?.name)}</option>
+            ))}
+          </select>
+        )}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <input
+          type="text"
+          value={uploadSubject}
+          onChange={e => setUploadSubject(e.target.value)}
+          placeholder="Subject / class (e.g. Mathematics)"
+          className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium"
+        />
+        <input
+          type="text"
+          value={uploadTopic}
+          onChange={e => setUploadTopic(e.target.value)}
+          placeholder="Topic (optional)"
+          className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium"
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen flex bg-slate-50  dark:text-white overflow-hidden relative">
       {/* Mobile Menu Overlay */}
@@ -1342,7 +1512,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
         <nav className="flex-1 px-4 space-y-2 overflow-y-auto">
           <button onClick={() => navigate('/upload-center')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeView === 'dashboard' ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'}`}><LayoutDashboard className="w-5 h-5" /> Dashboard</button>
           <button onClick={() => navigate('/upload-center/courses')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeView === 'courses' ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'}`}><BookOpen className="w-5 h-5" /> Course Directory</button>
-          <button onClick={() => navigate('/upload-center/departments')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeView === 'departments' ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'}`}><FolderOpen className="w-5 h-5" /> Departments</button>
+          <button onClick={() => navigate('/upload-center/departments')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeView === 'departments' ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'}`}><FolderOpen className="w-5 h-5" /> Subjects & Catalog</button>
           <button onClick={() => navigate('/upload-center/past-questions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeView === 'past_questions' ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'}`}><FileQuestion className="w-5 h-5" /> Past Questions</button>
           <button onClick={() => navigate('/upload-center/requests')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${activeView === 'requests' ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'}`}><List className="w-5 h-5" /> All Requests</button>
         </nav>
@@ -1413,12 +1583,12 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <select value={selectedSchoolId} onChange={e => setSelectedSchoolId(e.target.value)} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
-                  <option value="">Select School</option>
-                  {Object.keys(schoolsData).map(k => <option key={k} value={k}>{schoolsData[k].name || k}</option>)}
+                  <option value="">All subjects / schools</option>
+                  {Object.keys(schoolsData).map(k => <option key={k} value={k}>{formatCatalogLabel(k, schoolsData[k]?.name)}</option>)}
                 </select>
                 
                 <select value={selectedLevel} onChange={e => setSelectedLevel(e.target.value as any)} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
-                  {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                  {LEVELS.map(l => <option key={l} value={l}>{formatLevelLabel(l)}</option>)}
                 </select>
 
 
@@ -1470,28 +1640,19 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
 
         {activeView === 'departments' && (
           <div className="max-w-6xl space-y-6">
-            <h2 className="text-3xl font-black tracking-tight">Department Directories</h2>
+            <h2 className="text-3xl font-black tracking-tight">Subject & Course Catalog</h2>
             
-            <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+            <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm space-y-4">
               <div>
                  <h3 className="text-xl font-black mb-1">Browse Catalog</h3>
-                 <p className="text-sm text-slate-500 font-medium">Navigate through schools, colleges, and departments.</p>
+                 <p className="text-sm text-slate-500 font-medium">Use the legacy catalog when available, or enter a subject and topic to work without it.</p>
               </div>
-              <div className="w-full md:w-96">
-                  <SchoolHierarchySelector 
-                      schoolId={selectedSchoolId}
-                      setSchoolId={setSelectedSchoolId}
-                      collegeId={selectedCollegeId}
-                      setCollegeId={setSelectedCollegeId}
-                      departmentId={selectedDepartmentId}
-                      setDepartmentId={setSelectedDepartmentId}
-                  />
-              </div>
+              {renderCatalogSelectors()}
             </div>
 
             {selectedSchoolId && !selectedDepartmentId && (
               <div className="space-y-6 animate-fade-in">
-                 <h3 className="text-xl font-black">All Departments</h3>
+                 <h3 className="text-xl font-black">Available Subjects</h3>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {schoolDepartments.map(dept => (
                       <div key={dept.id} onClick={() => { setSelectedCollegeId(dept.collegeId); setSelectedDepartmentId(dept.id); }} className="bg-white border border-slate-200 rounded-[24px] p-6 shadow-sm hover:shadow-md hover:border-sky-200 cursor-pointer transition-all">
@@ -1508,29 +1669,32 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                     ))}
                     {!schoolDepartments.length && (
                         <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-[24px]">
-                           No departments found.
+                           No subjects found.
                         </div>
                     )}
                  </div>
               </div>
             )}
 
-            {selectedDepartmentId && (
-              <div className="space-y-6 animate-fade-in">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => setSelectedDepartmentId('')} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-50 transition">
-                        <ChevronRight className="w-5 h-5 rotate-180 text-slate-600" />
-                    </button>
-                    <h3 className="text-2xl font-black">
-                        {schoolDepartments.find(d => d.id === selectedDepartmentId)?.name || selectedDepartmentId}
-                    </h3>
-                </div>
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex items-center gap-4">
+                  {selectedDepartmentId && (
+                      <button onClick={() => setSelectedDepartmentId('')} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-50 transition">
+                          <ChevronRight className="w-5 h-5 rotate-180 text-slate-600" />
+                      </button>
+                  )}
+                  <h3 className="text-2xl font-black">
+                      {selectedDepartmentId
+                        ? (schoolDepartments.find(d => d.id === selectedDepartmentId)?.name || selectedDepartmentId)
+                        : (uploadSubject.trim() || 'My Courses')}
+                  </h3>
+              </div>
                 
                 <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm flex flex-wrap gap-4 items-end">
                     <div className="flex-1 min-w-[200px]">
                         <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Level</label>
                         <select value={selectedLevel} onChange={e => setSelectedLevel(e.target.value as any)} className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
-                        {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                        {LEVELS.map(l => <option key={l} value={l}>{formatLevelLabel(l)}</option>)}
                         </select>
                     </div>
 
@@ -1592,7 +1756,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                                     }}
                                     className="p-2 text-xs border border-slate-200 rounded outline-none focus:border-sky-400 bg-white"
                                   >
-                                    {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                                    {LEVELS.map(l => <option key={l} value={l}>{formatLevelLabel(l)}</option>)}
                                   </select>
 
                                 </div>
@@ -1610,13 +1774,13 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                         <div className="space-y-8">
                           {/* File Upload Section */}
                           <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5">
-                            <h4 className="font-bold text-[#0F172A] dark:text-white mb-2 flex items-center gap-2"><UploadCloud className="w-4 h-4"/> Extract from Course Form or Syllabus</h4>
-                            <p className="text-xs text-slate-600 mb-4">Upload a course registration form, syllabus, or outline (PDF or photo) to automatically extract course codes and names.</p>
+                            <h4 className="font-bold text-[#0F172A] dark:text-white mb-2 flex items-center gap-2"><UploadCloud className="w-4 h-4"/> Extract from Course List or Syllabus</h4>
+                            <p className="text-xs text-slate-600 mb-4">Upload a school course list, syllabus, or outline (PDF or photo) to automatically extract course codes and names.</p>
                             <label className="flex items-center justify-center w-full py-3 bg-white border border-blue-200 text-[#0066FF] rounded-xl font-bold hover:bg-blue-50 transition cursor-pointer shadow-sm">
                               {isExtractingCourses ? (
                                 <span className="flex items-center gap-2"><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Analyzing Document...</span>
                               ) : (
-                                "Select Course Form (PDF or Photo)"
+                                "Select Course List (PDF or Photo)"
                               )}
                               <input type="file" accept="application/pdf,image/*" className="hidden" onChange={handleExtractCoursesFromPdf} disabled={isExtractingCourses} />
                             </label>
@@ -1641,8 +1805,8 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                               <div className="flex-1">
                                 <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Course Type</label>
                                 <select value={newCourseType} onChange={e => setNewCourseType(e.target.value as any)} className="w-full p-3 rounded-xl border border-slate-200 outline-none focus:ring-2 ring-sky-200 bg-slate-50 text-sm">
-                                    <option value="private">Private (This Dept Only)</option>
-                                    <option value="general">General (Shared across Depts)</option>
+                                    <option value="private">Private (This subject only)</option>
+                                    <option value="general">General (Shared across subjects)</option>
                                 </select>
                               </div>
                             </div>
@@ -1658,7 +1822,7 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                   {departmentCourses.map((course: any) => {
                     const courseKey = getCourseMergeKey(course);
                     const isUploaded = isTextbookUploaded(course);
-                    const deptPath = `${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${selectedDepartmentId}`;
+                    const deptPath = uploadContext.deptPath;
                     return (
                       <div key={course.course_id} className={`bg-white border rounded-[24px] p-6 shadow-sm transition-all ${isUploaded ? 'border-blue-200' : 'border-slate-200'}`}>
                         <div className="flex justify-between items-start mb-2">
@@ -1678,12 +1842,11 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                   })}
                   {!departmentCourses.length && (
                     <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-[24px]">
-                      No courses found in this department for {selectedLevel}.
+                      No courses found for {selectedLevel}. Add a course above or upload a course list.
                     </div>
                   )}
                 </div>
               </div>
-            )}
           </div>
         )}
 
@@ -1692,30 +1855,17 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
             <h2 className="text-3xl font-black tracking-tight">Upload Past Questions</h2>
             
             {/* Context Selector */}
-            <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2"><Layers className="w-4 h-4"/> Select Context</h3>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                 <div className="md:col-span-3">
-                    <SchoolHierarchySelector 
-                        schoolId={selectedSchoolId}
-                        setSchoolId={setSelectedSchoolId}
-                        collegeId={selectedCollegeId}
-                        setCollegeId={setSelectedCollegeId}
-                        departmentId={selectedDepartmentId}
-                        setDepartmentId={setSelectedDepartmentId}
-                    />
-                 </div>
-                
-                <select value={selectedLevel} onChange={e => setSelectedLevel(e.target.value as any)} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
-                  {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm space-y-4">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2"><Layers className="w-4 h-4"/> Select Context</h3>
+              {renderCatalogSelectors()}
+              <div className="max-w-xs">
+                <select value={selectedLevel} onChange={e => setSelectedLevel(e.target.value as any)} className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 ring-sky-100 font-medium">
+                  {LEVELS.map(l => <option key={l} value={l}>{formatLevelLabel(l)}</option>)}
                 </select>
-
-
               </div>
             </div>
 
-            {selectedDepartmentId && (
-              <div className="space-y-6 animate-fade-in">
+            <div className="space-y-6 animate-fade-in">
                 {/* Course List */}
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-black">Courses ({departmentCourses.length})</h3>
@@ -1724,11 +1874,11 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {departmentCourses.map((course: any) => {
                     const courseKey = getCourseMergeKey(course);
-                    const deptPath = `${selectedSchoolId}/colleges/${selectedCollegeId}/departments/${selectedDepartmentId}`;
+                    const deptPath = uploadContext.deptPath;
                     return (
                       <div key={course.course_id} className="bg-white border border-slate-200 rounded-[24px] p-6 shadow-sm transition-all hover:border-amber-200 hover:shadow-md">
                         <div className="flex justify-between items-start mb-2">
-                           {isPQUploaded(course, selectedDepartmentId, pqIndex) ? (
+                           {isPQUploaded(course, uploadContext.departmentId, pqIndex) ? (
                                <span className="text-xs font-black uppercase tracking-wider px-2 py-1 rounded-md bg-blue-50 text-[#002D62] border border-blue-200">
                                   PQ Ready
                                </span>
@@ -1754,12 +1904,11 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                   })}
                   {!departmentCourses.length && (
                     <div className="col-span-full py-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-[24px]">
-                      No courses found in this department for {selectedLevel}.
+                      No courses found for {selectedLevel}. Add a course in the Subjects view first.
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -1808,6 +1957,16 @@ Return JSON: { "courses": [ { "course_name": "...", "course_code": "...", "level
                         <input type="number" className="w-full p-3 rounded-xl border border-slate-200 text-sm font-bold bg-slate-50" value={pqYear} onChange={e => setPqYear(e.target.value)} />
                     </div>
                 )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-xs font-black uppercase text-slate-400 tracking-widest mb-2">Subject / class</label>
+                        <input type="text" className="w-full p-3 rounded-xl border border-slate-200 text-sm font-bold bg-slate-50" value={uploadSubject} onChange={e => setUploadSubject(e.target.value)} placeholder="Mathematics" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-black uppercase text-slate-400 tracking-widest mb-2">Topic (optional)</label>
+                        <input type="text" className="w-full p-3 rounded-xl border border-slate-200 text-sm font-bold bg-slate-50" value={uploadTopic} onChange={e => setUploadTopic(e.target.value)} placeholder="Algebra" />
+                    </div>
+                </div>
             </div>
 
             <input ref={fileInputRef} type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={e => {

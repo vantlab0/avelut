@@ -1,9 +1,9 @@
 /**
  * Path-style realtime DB API backed by Supabase (Postgres + Realtime WebSockets).
- * Used for Messenger, notifications, presence, and typing.
+ * Used for AI tutor chat, notifications, study partners, profiles, and app settings.
  *
- * Typing uses Realtime broadcast channels (no row writes → lower cost).
- * Messages / chats / notifications use tables + postgres_changes WebSockets.
+ * AI conversations/messages are stored in app_kv and mirrored to local SQLite.
+ * Notifications / study partners / profiles use tables + postgres_changes WebSockets.
  */
 
 import { supabase, supabaseAdmin, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from './supabaseClient';
@@ -18,14 +18,11 @@ const channelByPath = new Map<string, ReturnType<typeof supabase.channel>>();
 
 function realtimeChannelName(path: string): string | null {
   const parts = parsePath(path);
-  if ((parts[0] === 'messages' || parts[0] === 'private_messages') && parts.length === 2) return `messages:${parts[1]}`;
   if (parts[0] === 'chat_messages' && parts.length === 2) return `chat_messages:${parts[1]}`;
   if (parts[0] === 'chat_conversations' && parts.length >= 2) return `chat_conversations:${parts[1]}`;
-  if (parts[0] === 'user_chats' && parts.length >= 2) return `user_chats:${parts[1]}`;
   if (parts[0] === 'notifications' && parts.length === 2) return `notifications:${parts[1]}`;
   if (parts[0] === 'study_partners' && parts.length >= 2) return `study_partners:${parts[1]}`;
   if (parts[0] === 'partner_requests' && parts.length >= 2) return `partner_requests:${parts[1]}`;
-  if (parts[0] === 'chat_meta_data' && parts[2] === 'typing') return `typing:${parts[1]}`;
   if (parts[0] === 'users' && parts.length === 2) return `profile:${parts[1]}`;
   if (parts[0] === 'users' && parts.length === 1) return 'profiles:all';
   return null;
@@ -161,285 +158,6 @@ export function serverTimestamp(): number {
 
 export function increment(by: number) {
   return { __op: 'increment', by } as const;
-}
-
-type NormalizedMessage = {
-  id: string;
-  chatId: string;
-  senderId: string;
-  text: string;
-  mediaUrl: string | null;
-  mediaType: string | null;
-  replyTo: string | null;
-  createdAt: string;
-  isDeleted: boolean;
-};
-
-function normalizeTimestamp(value: unknown): string {
-  const date = value instanceof Date
-    ? value
-    : typeof value === 'number'
-      ? new Date(value)
-      : typeof value === 'string'
-        ? new Date(value)
-        : new Date();
-  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
-}
-
-function normalizeMessage(chatId: string, messageId: string, value: Record<string, any>): NormalizedMessage {
-  const senderId = value.sender_id ?? value.senderId;
-  if (!senderId) {
-    throw new Error('A message sender is required.');
-  }
-
-  const rawReplyTo = value.reply_to ?? value.replyTo ?? null;
-  return {
-    id: messageId,
-    chatId,
-    senderId,
-    text: value.text ?? value.message ?? '',
-    mediaUrl: value.media_url ?? value.imageUrl ?? value.fileUrl ?? null,
-    mediaType: value.media_type ?? value.type ?? null,
-    replyTo: typeof rawReplyTo === 'object' ? rawReplyTo?.id ?? null : rawReplyTo,
-    createdAt: normalizeTimestamp(value.created_at ?? value.timestamp),
-    isDeleted: value.is_deleted ?? false,
-  };
-}
-
-async function persistMessage(chatId: string, messageId: string, value: Record<string, any>): Promise<NormalizedMessage> {
-  const senderId = value.sender_id ?? value.senderId;
-  if (!senderId) {
-    throw new Error('A message sender is required.');
-  }
-
-  const rawReplyTo = value.reply_to ?? value.replyTo ?? null;
-  const replyTo = typeof rawReplyTo === 'object' ? rawReplyTo?.id ?? null : rawReplyTo;
-  const mediaType = value.media_type ?? value.type ?? null;
-  const mediaUrl = value.media_url ?? value.imageUrl ?? value.fileUrl ?? null;
-  const text = value.text ?? value.message ?? '';
-  const createdAt = normalizeTimestamp(value.created_at ?? value.timestamp);
-
-  const message: NormalizedMessage = {
-    id: messageId,
-    chatId,
-    senderId,
-    text,
-    mediaUrl,
-    mediaType,
-    replyTo,
-    createdAt,
-    isDeleted: value.is_deleted ?? false,
-  };
-
-  const summary = mediaType === 'voice' ? 'Voice message'
-    : mediaType === 'image' ? 'Image file'
-    : mediaType === 'file' ? 'Document file'
-    : (text || 'Media');
-
-  const messageRecord = {
-    id: messageId,
-    chat_id: chatId,
-    sender_id: senderId,
-    text,
-    media_url: mediaUrl,
-    media_type: mediaType,
-    reply_to: replyTo,
-    created_at: createdAt,
-    is_deleted: false,
-  };
-
-  let sentViaRpc = false;
-  try {
-    const { error: rpcErr } = await supabase.rpc('send_chat_message', {
-      p_chat_id: chatId,
-      p_message_id: messageId,
-      p_sender_id: senderId,
-      p_text: text,
-      p_media_url: mediaUrl,
-      p_media_type: mediaType,
-      p_reply_to: replyTo,
-      p_created_at: createdAt,
-    });
-    if (!rpcErr) {
-      sentViaRpc = true;
-    } else {
-      console.warn('[supabaseRealtimeDb] RPC send_chat_message failed, trying REST fallback:', rpcErr.message);
-    }
-  } catch (rpcErr) {
-    console.warn('[supabaseRealtimeDb] RPC send_chat_message exception:', rpcErr);
-  }
-
-  if (!sentViaRpc) {
-    const client = supabaseAdmin || supabase;
-    const { error: msgErr } = await client.from('messages').insert(messageRecord);
-
-    if (msgErr) {
-      const isDuplicate = msgErr.message?.includes('duplicate key') || (msgErr as any).code === '23505';
-      if (!isDuplicate) {
-        throw new Error(msgErr.message || 'Failed to send message.');
-      }
-    }
-
-    // Fallback: Update sender's member record
-    await client.from('chat_members')
-      .update({
-        last_message_text: summary,
-        last_message_at: createdAt,
-        last_message_sender_id: senderId,
-        last_message_is_read: false,
-        unread_count: 0,
-      })
-      .eq('chat_id', chatId)
-      .eq('user_id', senderId);
-
-    // Update recipient(s) member records
-    const { data: recipientMembers } = await client.from('chat_members')
-      .select('unread_count, user_id')
-      .eq('chat_id', chatId)
-      .neq('user_id', senderId);
-
-    if (recipientMembers && recipientMembers.length > 0) {
-      for (const member of recipientMembers) {
-        await client.from('chat_members')
-          .update({
-            last_message_text: summary,
-            last_message_at: createdAt,
-            last_message_sender_id: senderId,
-            last_message_is_read: false,
-            unread_count: (member.unread_count || 0) + 1,
-          })
-          .eq('chat_id', chatId)
-          .eq('user_id', member.user_id);
-      }
-    }
-  }
-
-  return message;
-}
-
-export async function markChatAsRead(chatId: string, currentUserId: string): Promise<void> {
-  if (!chatId || !currentUserId) return;
-
-  try {
-    const { error: rpcErr } = await supabase.rpc('mark_chat_as_read', {
-      p_chat_id: chatId,
-      p_user_id: currentUserId,
-    });
-    if (!rpcErr) return;
-    console.warn('[supabaseRealtimeDb] RPC mark_chat_as_read failed, using REST fallback:', rpcErr.message);
-  } catch (rpcErr) {
-    console.warn('[supabaseRealtimeDb] RPC mark_chat_as_read exception:', rpcErr);
-  }
-
-  const client = supabaseAdmin || supabase;
-
-  try {
-    // 1. Always clear current user's unread
-    await client
-      .from('chat_members')
-      .update({ unread_count: 0 })
-      .eq('chat_id', chatId)
-      .eq('user_id', currentUserId);
-
-    // 2. Who sent the last message on this user's member row?
-    const { data: myRow } = await client
-      .from('chat_members')
-      .select('last_message_sender_id')
-      .eq('chat_id', chatId)
-      .eq('user_id', currentUserId)
-      .maybeSingle();
-
-    const lastSenderId = myRow?.last_message_sender_id;
-
-    // 3. Only if I am the recipient of the last message:
-    //    - tell the sender their last message was read
-    //    - mark those messages as read
-    if (lastSenderId && lastSenderId !== currentUserId) {
-      await client
-        .from('chat_members')
-        .update({ last_message_is_read: true })
-        .eq('chat_id', chatId)
-        .eq('user_id', lastSenderId);
-
-      await client
-        .from('messages')
-        .update({ is_read: true })
-        .eq('chat_id', chatId)
-        .neq('sender_id', currentUserId)
-        .eq('is_read', false);
-    }
-  } catch (err) {
-    console.warn('[supabaseRealtimeDb] markChatAsRead error:', err);
-  }
-}
-
-export async function ensureDirectChat(otherUserId: string): Promise<string> {
-  if (!otherUserId) {
-    throw new Error('A recipient user ID is required.');
-  }
-
-  // Prefer RPC
-  try {
-    const { data, error } = await supabase.rpc('get_or_create_direct_chat', {
-      p_other_user_id: otherUserId,
-    });
-    if (!error && data && typeof data === 'string' && data.trim().length > 0) {
-      return data;
-    }
-    if (error) {
-      console.warn('[supabaseRealtimeDb] RPC get_or_create_direct_chat failed:', error.message);
-    }
-  } catch (rpcErr) {
-    console.warn('[supabaseRealtimeDb] RPC get_or_create_direct_chat exception:', rpcErr);
-  }
-
-  // Fallback path:
-  const authUserRes = await supabase.auth.getUser();
-  const currentUserId = authUserRes.data.user?.id;
-  if (!currentUserId) {
-    throw new Error('Authentication is required');
-  }
-  if (otherUserId === currentUserId) {
-    throw new Error('A different recipient is required');
-  }
-
-  const client = supabaseAdmin || supabase;
-
-  // 1. Check existing membership in chat_members for current user and target user
-  const { data: existingMember } = await client
-    .from('chat_members')
-    .select('chat_id')
-    .eq('user_id', currentUserId)
-    .eq('other_user_id', otherUserId)
-    .limit(1)
-    .maybeSingle();
-
-  if (existingMember?.chat_id) {
-    return existingMember.chat_id;
-  }
-
-  // 2. Check existing chat by direct_key
-  const directKey = [currentUserId, otherUserId].sort().join(':');
-  const { data: existingChat } = await client
-    .from('chats')
-    .select('id')
-    .eq('direct_key', directKey)
-    .maybeSingle();
-
-  if (existingChat?.id) {
-    // Only upsert the CURRENT user's membership under RLS
-    const { error: memberErr } = await client.from('chat_members').upsert({
-      chat_id: existingChat.id,
-      user_id: currentUserId,
-      other_user_id: otherUserId,
-    });
-    if (!memberErr) {
-      return existingChat.id;
-    }
-  }
-
-  // If RPC failed and no existing chat can be found/reused client-side under RLS:
-  throw new Error('Chat service is updating. Please try again in a moment.');
 }
 
 export function limitToLast(n: number) {
@@ -699,115 +417,6 @@ async function loadPath(path: string): Promise<any> {
       const list = (await loadPath(`chat_messages/${convoId}`)) || {};
       return list[msgId] ?? getLocalCache(path) ?? null;
     }
-  }
-
-  if (parts[0] === 'user_chats' && parts.length === 2) {
-    const userId = parts[1];
-    const { data, error } = await supabase
-      .from('chat_members')
-      .select('*')
-      .eq('user_id', userId)
-      .order('last_message_at', { ascending: false });
-    if (error) throw error;
-
-    const map: Record<string, any> = {};
-    (data || []).forEach((row: any) => {
-      const timestamp = row.last_message_at ? new Date(row.last_message_at).getTime() : Date.now();
-      map[row.chat_id] = {
-        otherUserId: row.other_user_id,
-        timestamp,
-        unreadCount: row.unread_count || 0,
-        last_message: row.last_message_text
-          ? {
-              text: row.last_message_text,
-              senderId: row.last_message_sender_id,
-              isRead: row.last_message_is_read,
-              timestamp,
-            }
-          : null,
-      };
-    });
-    return map;
-  }
-
-  if (parts[0] === 'user_chats' && parts.length === 3) {
-    const [, userId, chatId] = parts;
-    const { data, error } = await supabase
-      .from('chat_members')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('chat_id', chatId)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return null;
-    const timestamp = data.last_message_at ? new Date(data.last_message_at).getTime() : Date.now();
-    return {
-      otherUserId: data.other_user_id,
-      timestamp,
-      unreadCount: data.unread_count || 0,
-      last_message: data.last_message_text
-        ? {
-            text: data.last_message_text,
-            senderId: data.last_message_sender_id,
-            isRead: data.last_message_is_read,
-            timestamp,
-          }
-        : null,
-    };
-  }
-
-  if ((parts[0] === 'messages' || parts[0] === 'private_messages') && parts.length === 2) {
-    const chatId = parts[1];
-    // Fetch the latest 200 messages descending so recent messages always appear
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('chat_id', chatId)
-      .or('is_deleted.eq.false,is_deleted.is.null')
-      .order('created_at', { ascending: false })
-      .limit(200);
-    if (error) {
-      console.warn('[supabaseRealtimeDb] loadPath messages error:', error);
-      const cached = getLocalCache(path);
-      if (cached) return cached;
-      throw error;
-    }
-
-    // Sort ascending by created_at for natural chronological reading order
-    const sorted = (data || []).sort((a: any, b: any) => {
-      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return ta - tb;
-    });
-
-    const rowsById = new Map(sorted.map((row: any) => [row.id, row]));
-    const map: Record<string, any> = {};
-    sorted.forEach((row: any) => {
-      const repliedTo = row.reply_to ? rowsById.get(row.reply_to) : null;
-      const isRead = row.is_read || false;
-      map[row.id] = {
-        id: row.id,
-        senderId: row.sender_id,
-        text: row.text || '',
-        imageUrl: row.media_type === 'image' ? row.media_url : undefined,
-        fileUrl: row.media_type !== 'image' ? row.media_url : undefined,
-        type: row.media_type || 'text',
-        replyTo: repliedTo
-          ? {
-              id: repliedTo.id,
-              text: repliedTo.text || `[${repliedTo.media_type || 'message'}]`,
-              senderId: repliedTo.sender_id,
-              senderName: 'Message',
-            }
-          : null,
-        isDeleted: row.is_deleted || false,
-        isRead,
-        status: isRead ? 'read' : 'sent',
-        timestamp: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
-      };
-    });
-    setLocalCache(path, map);
-    return map;
   }
 
   if (parts[0] === 'notifications' && parts.length === 2) {
@@ -1130,10 +739,6 @@ async function loadPath(path: string): Promise<any> {
     return map;
   }
 
-  if (parts[0] === 'chat_meta_data' && parts[2] === 'typing') {
-    return pathDataCache.get(path) || {};
-  }
-
   // Handle app_settings/* via public.app_settings table
   if (parts[0] === 'app_settings') {
     const client = supabaseAdmin || supabase;
@@ -1246,60 +851,6 @@ export function onValue(
       if (fallback !== null && fallback !== undefined) notify(path, fallback);
     });
 
-  if ((parts[0] === 'messages' || parts[0] === 'private_messages') && parts.length === 2) {
-    const chatId = parts[1];
-    const chName = `messages:${chatId}`;
-    let ch = channelByPath.get(chName);
-    if (!ch) {
-      ch = supabase
-        .channel(chName)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
-          async () => {
-            const v = await loadPath(path);
-            notify(path, v);
-          }
-        )
-        .subscribe();
-      channelByPath.set(chName, ch);
-    }
-  }
-
-  if (parts[0] === 'user_chats' && parts.length >= 2) {
-    const targetUserId = parts[1];
-    const chName = `user_chats:${targetUserId}`;
-    let ch = channelByPath.get(chName);
-    if (!ch) {
-      ch = supabase
-        .channel(chName)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'chat_members', filter: `user_id=eq.${targetUserId}` },
-          async () => {
-            const listPath = `user_chats/${targetUserId}`;
-            notify(listPath, await loadPath(listPath));
-            if (parts.length === 3) {
-              notify(path, await loadPath(path));
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'messages' },
-          async () => {
-            const listPath = `user_chats/${targetUserId}`;
-            notify(listPath, await loadPath(listPath));
-            if (parts.length === 3) {
-              notify(path, await loadPath(path));
-            }
-          }
-        )
-        .subscribe();
-      channelByPath.set(chName, ch);
-    }
-  }
-
   if (parts[0] === 'notifications' && parts.length === 2) {
     const userId = parts[1];
     const chName = `notifications:${userId}`;
@@ -1406,26 +957,6 @@ export function onValue(
     }
   }
 
-  if (parts[0] === 'chat_meta_data' && parts[2] === 'typing') {
-    const chatId = parts[1];
-    const chName = `typing:${chatId}`;
-    let ch = channelByPath.get(chName);
-    if (!ch) {
-      ch = supabase
-        .channel(chName)
-        .on('broadcast', { event: 'typing' }, ({ payload }) => {
-          const current = { ...(pathDataCache.get(path) || {}) };
-          if (payload?.uid) {
-            if (payload.clear) delete current[payload.uid];
-            else current[payload.uid] = payload.state;
-            notify(path, current);
-          }
-        })
-        .subscribe();
-      channelByPath.set(chName, ch);
-    }
-  }
-
   if (parts[0] === 'users' && parts.length === 2) {
     const userId = parts[1];
     const chName = `profile:${userId}`;
@@ -1515,25 +1046,6 @@ export function off(r?: DbRef, _event?: string, callback?: (snap: any) => void) 
 export async function set(r: DbRef, value: any): Promise<void> {
   const parts = parsePath(r.path);
 
-  if (parts[0] === 'chat_meta_data' && parts[2] === 'typing') {
-    const chatId = parts[1];
-    const uid = parts[3];
-    const chName = `typing:${chatId}`;
-    let ch = channelByPath.get(chName);
-    if (!ch) {
-      ch = supabase.channel(chName).subscribe();
-      channelByPath.set(chName, ch);
-    }
-    if (uid) {
-      await ch.send({
-        type: 'broadcast',
-        event: 'typing',
-        payload: value ? { uid, state: value } : { uid, clear: true },
-      });
-    }
-    return;
-  }
-
   if (parts[0] === 'chat_conversations') {
     if (parts.length === 3) {
       const [, userId, convoId] = parts;
@@ -1606,42 +1118,6 @@ export async function set(r: DbRef, value: any): Promise<void> {
       } catch {}
       return;
     }
-  }
-
-  if (parts[0] === 'user_chats' && parts.length >= 3) {
-    const [, userId, chatId, ...fieldPath] = parts;
-    if (parts.length > 3) {
-      const field = fieldPath.join('/');
-      const values = field === 'unreadCount'
-        ? { unreadCount: value }
-        : field === 'last_message/isRead'
-          ? { last_message: { isRead: value } }
-          : { [field]: value };
-      await update(ref(null, `user_chats/${userId}/${chatId}`), values);
-      return;
-    }
-
-    if (value === null) {
-      const { error } = await supabase.from('chat_members').delete().eq('user_id', userId).eq('chat_id', chatId);
-      if (error) throw error;
-      notify(`user_chats/${userId}`, await loadPath(`user_chats/${userId}`));
-      return;
-    }
-
-    const lastMessage = value.last_message ?? {};
-    const { error } = await supabase.from('chat_members').upsert({
-      chat_id: chatId,
-      user_id: userId,
-      other_user_id: value.otherUserId ?? value.other_user_id ?? null,
-      last_message_text: lastMessage.text ?? value.last_message_text ?? null,
-      last_message_at: normalizeTimestamp(value.timestamp ?? lastMessage.timestamp),
-      last_message_sender_id: lastMessage.sender_id ?? lastMessage.senderId ?? value.last_message_sender_id ?? null,
-      last_message_is_read: lastMessage.isRead ?? value.last_message_is_read ?? false,
-      unread_count: value.unreadCount ?? value.unread_count ?? 0,
-    });
-    if (error) throw error;
-    notify(`user_chats/${userId}`, await loadPath(`user_chats/${userId}`));
-    return;
   }
 
   if (parts[0] === 'users' && parts[2] === 'blocked_users' && parts.length === 4) {
@@ -1799,23 +1275,6 @@ export async function set(r: DbRef, value: any): Promise<void> {
       notify(`notifications/${userId}`, await loadPath(`notifications/${userId}`));
       return;
     }
-  }
-
-  if ((parts[0] === 'messages' || parts[0] === 'private_messages') && parts.length === 3) {
-    const chatId = parts[1];
-    const msgId = parts[2];
-    if (value === null) {
-      const { error } = await supabase
-        .from('messages')
-        .update({ is_deleted: true })
-        .eq('id', msgId)
-        .eq('chat_id', chatId);
-      if (error) throw error;
-    } else {
-      await persistMessage(chatId, msgId, value);
-    }
-    notify(`messages/${chatId}`, await loadPath(`messages/${chatId}`));
-    return;
   }
 
   if (parts[0] === 'users' && parts.length === 2) {
@@ -2343,11 +1802,6 @@ export async function update(r: DbRef, values: Record<string, any>): Promise<voi
 
   const parts = parsePath(r.path);
 
-  if (parts[0] === 'chat_meta_data' && parts[2] === 'typing' && parts.length >= 4) {
-    await set(r, values);
-    return;
-  }
-
   if (parts[0] === 'chat_conversations' && parts.length === 3) {
     const [, userId, convoId] = parts;
     const parentList = { ...(getLocalCache(`chat_conversations/${userId}`) || {}) };
@@ -2379,27 +1833,6 @@ export async function update(r: DbRef, values: Record<string, any>): Promise<voi
     return;
   }
 
-  if (parts[0] === 'user_chats' && parts.length === 3) {
-    const [, userId, chatId] = parts;
-    const patch: Record<string, any> = {};
-    if ('unreadCount' in values) patch.unread_count = values.unreadCount;
-    if (values.last_message) {
-      if ('text' in values.last_message) patch.last_message_text = values.last_message.text;
-      if ('sender_id' in values.last_message || 'senderId' in values.last_message) {
-        patch.last_message_sender_id = values.last_message.sender_id ?? values.last_message.senderId;
-      }
-      if ('isRead' in values.last_message) patch.last_message_is_read = values.last_message.isRead;
-      if ('timestamp' in values.last_message) patch.last_message_at = normalizeTimestamp(values.last_message.timestamp);
-    }
-    if ('timestamp' in values) patch.last_message_at = normalizeTimestamp(values.timestamp);
-    if (Object.keys(patch).length > 0) {
-      const { error } = await supabase.from('chat_members').update(patch).eq('user_id', userId).eq('chat_id', chatId);
-      if (error) throw error;
-    }
-    notify(`user_chats/${userId}`, await loadPath(`user_chats/${userId}`));
-    return;
-  }
-
   const current = (await loadPath(r.path)) || {};
   const next = { ...current, ...values };
   await set(r, next);
@@ -2415,13 +1848,7 @@ export function push(r: DbRef, value?: any): DbRef & { key: string; ref: DbRef; 
   let promise: Promise<any>;
 
   if (value !== undefined) {
-    if ((parts[0] === 'messages' || parts[0] === 'private_messages') && parts.length === 2) {
-      const chatId = parts[1];
-      promise = (async () => {
-        await persistMessage(chatId, key, value);
-        notify(path, await loadPath(path));
-      })();
-    } else if (parts[0] === 'notifications' && parts.length === 2) {
+    if (parts[0] === 'notifications' && parts.length === 2) {
       promise = (async () => {
         try {
           const metadata = {

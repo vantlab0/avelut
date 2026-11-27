@@ -8,6 +8,22 @@ const isValidUuid = (id: string | null | undefined): boolean => {
     return typeof id === 'string' && UUID_REGEX.test(id);
 };
 
+// Keep legacy school hierarchy fields optional: general students have none,
+// while older accounts may still carry them.
+const mapLegacyHierarchy = (data: any): Partial<UserProfile> => {
+    const hierarchy: Partial<UserProfile> = {};
+    const schoolId = data?.school_id || data?.schoolId;
+    const collegeId = data?.college_id || data?.collegeId || data?.faculty_id;
+    const departmentId = data?.department_id || data?.departmentId || data?.department;
+    const level = data?.level || data?.academic_level;
+
+    if (schoolId) hierarchy.school_id = schoolId;
+    if (collegeId) hierarchy.college_id = collegeId;
+    if (departmentId) hierarchy.department_id = departmentId;
+    if (level) hierarchy.level = level;
+    return hierarchy;
+};
+
 // In-memory cache for ultra-fast zero-latency lookup
 const profileMemoryCache = new Map<string, UserProfile>();
 
@@ -64,12 +80,10 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
         if (data) {
             const profile: UserProfile = {
                 uid: data.id,
-                display_name: data.full_name || data.username || 'User',
-                photo_url: data.avatar_url || '',
+                display_name: data.full_name || data.username || data.display_name || 'User',
+                photo_url: data.avatar_url || data.photo_url || '',
                 email: data.email || '',
-                school_id: data.school_id,
-                department_id: data.department_id,
-                level: data.level,
+                ...mapLegacyHierarchy(data),
                 xp: data.xp || 0,
                 current_streak: data.streak || 0,
                 last_activity_date: Date.now(),
@@ -118,12 +132,10 @@ export const subscribeUserProfile = (uid: string, callback: (profile: UserProfil
                         const data = payload.new as any;
                         const profile: UserProfile = {
                             uid: data.id,
-                            display_name: data.full_name || data.username || 'User',
-                            photo_url: data.avatar_url || '',
+                            display_name: data.full_name || data.username || data.display_name || 'User',
+                            photo_url: data.avatar_url || data.photo_url || '',
                             email: data.email || '',
-                            school_id: data.school_id,
-                            department_id: data.department_id,
-                            level: data.level,
+                            ...mapLegacyHierarchy(data),
                             xp: data.xp || 0,
                             current_streak: data.streak || 0,
                             last_activity_date: Date.now(),

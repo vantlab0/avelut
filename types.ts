@@ -371,7 +371,7 @@ export interface AppSettings {
 // Type for the new Notification System
 export interface Notification {
   id: string;
-  type: 'study_update' | 'exam_reminder' | 'welcome' | 'study_reminder' | 'study_partner_request' | 'messenger' | 'app_update' | 'general_info' | 'personal';
+  type: 'study_update' | 'exam_reminder' | 'welcome' | 'study_reminder' | 'study_partner_request' | 'app_update' | 'general_info' | 'personal';
   title: string;
   message: string;
   timestamp: number;
@@ -379,7 +379,7 @@ export interface Notification {
   link?: string;
   route?: string; // App-internal route to navigate to
   audience?: 'all' | 'single';
-  category?: 'general_info' | 'personal' | 'study_update' | 'exam_reminder' | 'welcome' | 'study_reminder' | 'study_partner_request' | 'messenger' | 'app_update';
+  category?: 'general_info' | 'personal' | 'study_update' | 'exam_reminder' | 'welcome' | 'study_reminder' | 'study_partner_request' | 'app_update';
   action_buttons?: { label: string; action: string; metadata?: any }[]; // For inline buttons like "Reply", "View"
   sender_id?: string; // Useful for replying directly to a user
 }
@@ -392,56 +392,6 @@ export interface ChatConversation {
   created_at: number;
   last_updated_at: number;
 }
-
-// Types for new Private Messaging System
-export interface PrivateMessage {
-    id: string;
-    chat_id: string;
-    sender_id: string;
-    text?: string;
-    timestamp: number;
-    image_url?: string;
-    audio_url?: string;
-    audio_duration?: number;
-    is_edited?: boolean;
-    is_one_time_view?: boolean;
-    viewed_by?: string[];
-    reply_to?: {
-        message_id: string;
-        text?: string;
-        image_url?: string;
-        audio_url?: string;
-        sender_id: string;
-    };
-    reactions?: Record<string, string>; // user_id -> emoji
-    is_forwarded?: boolean;
-    status?: 'sent' | 'delivered' | 'read';
-}
-
-export interface PrivateChat {
-    id: string;
-    members: string[]; // array of 2 user UIDs
-    member_info: {
-        [uid: string]: {
-            display_name: string;
-            photo_url?: string;
-            is_online?: boolean;
-            last_seen?: number;
-        }
-    };
-    last_message?: {
-        text: string;
-        timestamp: number;
-        sender_id: string;
-        read_by: string[]; // Array of UIDs that have read this message
-        status?: 'sent' | 'delivered' | 'read';
-    };
-    created_at: number;
-    last_activity_timestamp: number;
-    typing?: string[]; // Array of UIDs of users currently typing
-    recording?: string[]; // Array of UIDs of users currently recording voice note
-}
-
 
 // Type for the new Toast Notification System
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
