@@ -1,4 +1,4 @@
-import { getAlibabaApiKey } from '../lib/server/alibabaConfig';
+import { getAlibabaApiKey } from '../lib/server/alibabaConfig.js';
 
 export const maxDuration = 45;
 

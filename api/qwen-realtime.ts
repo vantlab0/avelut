@@ -24,7 +24,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { Socket } from 'net';
-import { getAlibabaApiKey } from '../lib/server/alibabaConfig';
+import { getAlibabaApiKey } from '../lib/server/alibabaConfig.js';
 
 // ── Vercel config: Node.js runtime, 5-min max (Pro tier) ─────────────────────
 export const config = {

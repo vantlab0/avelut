@@ -1,13 +1,13 @@
 import { streamText, convertToModelMessages, stepCountIs } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
-import { webSearchTool } from '../lib/tools/web-search';
+import { webSearchTool } from '../lib/tools/web-search.js';
 import {
   WEB_SEARCH_SYSTEM_INSTRUCTION,
   WEB_SEARCH_UNAVAILABLE_INSTRUCTION,
   isWebSearchConfigured,
-} from '../lib/server/web-search';
-import { getAlibabaApiKey } from '../lib/server/alibabaConfig';
-import { AVELUT_TEXT_MODEL } from '../lib/textModel';
+} from '../lib/server/web-search.js';
+import { getAlibabaApiKey } from '../lib/server/alibabaConfig.js';
+import { AVELUT_TEXT_MODEL } from '../lib/textModel.js';
 
 export const maxDuration = 60;
 

@@ -14,7 +14,8 @@ import {
   clampMaxResults,
   searchWeb,
   type WebSearchResult,
-} from './web-search';
+} from './web-search.js';
+import { AVELUT_TEXT_MODEL } from '../textModel.js';
 
 export const MAX_TOOL_ITERATIONS = 3;
 
@@ -43,7 +44,8 @@ export interface WebSearchLoopOptions {
   /** Chat completions base URL including the version segment. */
   baseUrl: string;
   headers: Record<string, string>;
-  model: string;
+  /** Accepted for compatibility; ignored. All text calls use AVELUT_TEXT_MODEL. */
+  model?: string;
   messages: Array<Record<string, unknown>>;
   temperature?: number;
   maxTokens?: number;
@@ -283,6 +285,8 @@ async function requestCompletion(
 ): Promise<ChatCompletionResponse> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = Math.min(Math.max(options.timeoutMs ?? 90000, 5000), 280000);
+  // Caller-supplied models are ignored so every text request uses one model.
+  void options.model;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -298,7 +302,7 @@ async function requestCompletion(
   try {
     const payload: Record<string, unknown> = {
       ...(options.extraPayload || {}),
-      model: options.model,
+      model: AVELUT_TEXT_MODEL,
       messages,
       stream: false,
       temperature: options.temperature ?? 0.4,
@@ -323,7 +327,7 @@ async function requestCompletion(
       const detail = await response.text().catch(() => '');
       console.error('[web_search_loop] upstream error', {
         status: response.status,
-        model: options.model,
+        model: AVELUT_TEXT_MODEL,
         detail: detail.slice(0, 400),
       });
       throw new WebSearchLoopError(

@@ -5,7 +5,7 @@ import {
   MAX_RESULTS,
   clampMaxResults,
   searchWeb,
-} from '../server/web-search';
+} from '../server/web-search.js';
 
 /**
  * AI SDK tool wrapper around the shared server-side Tavily integration.

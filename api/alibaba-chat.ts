@@ -1,5 +1,5 @@
-import { getAlibabaApiKey } from '../lib/server/alibabaConfig';
-import { AVELUT_TEXT_MODEL } from '../lib/textModel';
+import { getAlibabaApiKey } from '../lib/server/alibabaConfig.js';
+import { AVELUT_TEXT_MODEL } from '../lib/textModel.js';
 
 export const maxDuration = 60;
 
